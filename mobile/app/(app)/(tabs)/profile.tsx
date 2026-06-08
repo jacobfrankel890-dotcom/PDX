@@ -20,6 +20,7 @@ import {
   getBiometricLabel,
   isBiometricHardwareAvailable,
   isBiometricLoginEnabled,
+  isBiometricNativeAvailable,
   promptBiometric,
 } from "../../../lib/biometric-auth";
 import {
@@ -128,7 +129,7 @@ export default function ProfileScreen() {
     const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
     setProfile(data as Profile);
     setBiometricEnabled(await isBiometricLoginEnabled());
-    setBiometricAvailable(await isBiometricHardwareAvailable());
+    setBiometricAvailable(isBiometricNativeAvailable() && (await isBiometricHardwareAvailable()));
     setBiometricLabel(await getBiometricLabel());
     setLoading(false);
   }, []);
