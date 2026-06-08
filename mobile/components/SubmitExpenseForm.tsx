@@ -47,6 +47,7 @@ import { CategoryPicker } from "./CategoryPicker";
 import { CompanyPicker } from "./CompanyPicker";
 import { ReceiptAnalyzingView } from "./ReceiptAnalyzingView";
 import { ScreenHeader } from "./ScreenHeader";
+import { DateField } from "./DateField";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -67,7 +68,6 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const merchantRef = useRef<TextInputType>(null);
   const amountRef = useRef<TextInputType>(null);
-  const dateRef = useRef<TextInputType>(null);
   const purposeRef = useRef<TextInputType>(null);
   const fieldOffsets = useRef<Record<string, number>>({});
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -373,18 +373,13 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
               <View style={styles.formDivider} />
               <CompanyPicker value={company} onChange={setCompany} embedded />
               <View style={styles.formDivider} />
-              <View style={styles.field} onLayout={trackFieldLayout("date")}>
-                <Text style={styles.fieldLabel}>Date</Text>
-                <TextInput
-                  ref={dateRef}
-                  style={styles.fieldInput}
+              <View onLayout={trackFieldLayout("date")}>
+                <DateField
+                  label="Date"
                   value={expenseDate}
-                  onChangeText={setExpenseDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.slate400}
-                  onFocus={() => scrollToField("date")}
-                  returnKeyType="next"
-                  onSubmitEditing={() => purposeRef.current?.focus()}
+                  onChange={setExpenseDate}
+                  embedded
+                  onPress={() => scrollToField("date")}
                 />
               </View>
               <View style={styles.formDivider} />

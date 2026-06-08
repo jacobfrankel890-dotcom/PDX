@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -12,6 +13,8 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
+  type TextInput as TextInputType,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -34,6 +37,7 @@ import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 import { Button } from "../../../components/Button";
 import { CategoryPicker } from "../../../components/CategoryPicker";
 import { CompanyPicker } from "../../../components/CompanyPicker";
+import { DateField } from "../../../components/DateField";
 
 function formatDisplayDate(d: string | null | undefined): string {
   if (!d) return "";
@@ -49,6 +53,10 @@ export default function ExpenseDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const scrollRef = useRef<ScrollView>(null);
+  const purposeRef = useRef<TextInputType>(null);
+  const fieldOffsets = useRef<Record<string, number>>({});
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const [expense, setExpense] = useState<ExpenseEntry | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,7 +64,6 @@ export default function ExpenseDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
   const [imageExpanded, setImageExpanded] = useState(false);
-  const [footerHeight, setFooterHeight] = useState(72);
 
   const [merchantName, setMerchantName] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
@@ -66,6 +73,36 @@ export default function ExpenseDetailScreen() {
   const [relatedTo, setRelatedTo] = useState("");
 
   const editable = expense ? isExpenseEditable(expense) : false;
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const trackFieldLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
+    fieldOffsets.current[key] = e.nativeEvent.layout.y;
+  }, []);
+
+  const scrollToField = useCallback((key: string) => {
+    const scroll = (delay = 0) => {
+      setTimeout(() => {
+        if (key === "purpose" || key === "date") {
+          scrollRef.current?.scrollToEnd({ animated: true });
+          return;
+        }
+        const y = fieldOffsets.current[key] ?? 0;
+        scrollRef.current?.scrollTo({ y: Math.max(0, y - 32), animated: true });
+      }, delay);
+    };
+    requestAnimationFrame(() => scroll(0));
+    scroll(280);
+  }, []);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -174,13 +211,18 @@ export default function ExpenseDetailScreen() {
         ? "Submitted"
         : expense.report_status ?? "";
 
-  const scrollBottomPadding = editable ? footerHeight + spacing.md : spacing.md;
+  const bottomPadding = insets.bottom + spacing.xl + (keyboardVisible ? spacing.lg : 0);
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
+        ref={scrollRef}
+        style={styles.flex}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets
+        showsVerticalScrollIndicator={false}
       >
         {receiptUri ? (
           <Pressable onPress={() => setImageExpanded(true)} style={styles.receiptImageWrap}>
@@ -241,30 +283,37 @@ export default function ExpenseDetailScreen() {
         </View>
 
         {editable ? (
-          <>
-            <CategoryPicker value={category} onChange={setCategory} />
-            <CompanyPicker value={company} onChange={setCompany} />
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Date</Text>
-              <TextInput
-                style={styles.input}
+          <View style={styles.formCard}>
+            <Text style={styles.formSectionLabel}>Details</Text>
+            <CategoryPicker value={category} onChange={setCategory} embedded />
+            <View style={styles.formDivider} />
+            <CompanyPicker value={company} onChange={setCompany} embedded />
+            <View style={styles.formDivider} />
+            <View onLayout={trackFieldLayout("date")}>
+              <DateField
+                label="Date"
                 value={expenseDate}
-                onChangeText={setExpenseDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.slate400}
+                onChange={setExpenseDate}
+                embedded
+                onPress={() => scrollToField("date")}
               />
             </View>
-            <View style={styles.field}>
+            <View style={styles.formDivider} />
+            <View style={styles.field} onLayout={trackFieldLayout("purpose")}>
               <Text style={styles.fieldLabel}>Business purpose</Text>
               <TextInput
-                style={styles.input}
+                ref={purposeRef}
+                style={[styles.input, styles.inputMultiline]}
                 value={relatedTo}
                 onChangeText={setRelatedTo}
                 placeholder="Client, account, or reason"
                 placeholderTextColor={colors.slate400}
+                multiline
+                textAlignVertical="top"
+                onFocus={() => scrollToField("purpose")}
               />
             </View>
-          </>
+          </View>
         ) : (
           <View style={styles.detailsCard}>
             {expense.company ? (
@@ -287,28 +336,20 @@ export default function ExpenseDetailScreen() {
             ) : null}
           </View>
         )}
-      </ScrollView>
 
-      {editable ? (
-        <View
-          style={styles.footer}
-          onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
-        >
-          <Pressable
-            onPress={handleDelete}
-            disabled={deleting}
-            style={({ pressed }) => [styles.footerBtn, styles.deleteBtn, pressed && styles.footerBtnPressed]}
-          >
-            <Text style={styles.deleteText}>{deleting ? "Deleting…" : "Delete"}</Text>
-          </Pressable>
-          <Button
-            title="Save"
-            onPress={handleSave}
-            loading={saving}
-            style={styles.footerBtn}
-          />
-        </View>
-      ) : null}
+        {editable ? (
+          <View style={[styles.footerInline, { paddingBottom: insets.bottom > 0 ? 0 : spacing.sm }]}>
+            <Pressable
+              onPress={handleDelete}
+              disabled={deleting}
+              style={({ pressed }) => [styles.footerBtn, styles.deleteBtn, pressed && styles.footerBtnPressed]}
+            >
+              <Text style={styles.deleteText}>{deleting ? "Deleting…" : "Delete"}</Text>
+            </Pressable>
+            <Button title="Save" onPress={handleSave} loading={saving} style={styles.footerBtn} />
+          </View>
+        ) : null}
+      </ScrollView>
 
       <Modal visible={imageExpanded} transparent animationType="fade" onRequestClose={() => setImageExpanded(false)}>
         <View style={styles.imageModal}>
@@ -333,7 +374,7 @@ function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     flex: { flex: 1, backgroundColor: colors.bg },
     center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg },
-    content: { padding: spacing.md, gap: spacing.md },
+    content: { padding: spacing.md, gap: spacing.md, flexGrow: 1 },
     receiptImageWrap: {
       borderRadius: radius.md,
       overflow: "hidden",
@@ -368,10 +409,10 @@ function makeStyles(colors: ThemeColors) {
     statusRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
     statusPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.full },
     statusPending: { backgroundColor: colors.greenLight },
-    statusLocked: { backgroundColor: "#e0e7ff" },
+    statusLocked: { backgroundColor: colors.greenLight },
     statusText: { fontSize: 12, fontWeight: "700" },
-    statusTextPending: { color: colors.green },
-    statusTextLocked: { color: colors.primaryLight },
+    statusTextPending: { color: colors.primaryDark },
+    statusTextLocked: { color: colors.primaryDark },
     readOnlyHint: { fontSize: 13, color: colors.slate500 },
     card: {
       backgroundColor: colors.surface,
@@ -381,7 +422,25 @@ function makeStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    fieldLabel: { fontSize: 13, fontWeight: "600", color: colors.slate500, marginTop: 4 },
+    formCard: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      gap: spacing.sm,
+    },
+    formSectionLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.textSecondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 2,
+      marginLeft: 2,
+    },
+    formDivider: { height: 1, backgroundColor: colors.border, marginVertical: 2 },
+    fieldLabel: { fontSize: 13, fontWeight: "600", color: colors.textSecondary, marginTop: 4 },
     input: {
       backgroundColor: colors.bg,
       borderWidth: 1,
@@ -392,6 +451,7 @@ function makeStyles(colors: ThemeColors) {
       fontSize: 16,
       color: colors.text,
     },
+    inputMultiline: { minHeight: 88, paddingTop: 12 },
     amountRow: { flexDirection: "row", alignItems: "center" },
     currency: { fontSize: 28, fontWeight: "800", color: colors.primary, marginRight: 4 },
     amountInput: {
@@ -416,19 +476,10 @@ function makeStyles(colors: ThemeColors) {
     detailRow: { gap: 4 },
     detailLabel: { fontSize: 12, fontWeight: "600", color: colors.slate500, textTransform: "uppercase" },
     detailValue: { fontSize: 16, color: colors.text },
-    footer: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
+    footerInline: {
       flexDirection: "row",
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.sm,
-      paddingBottom: 0,
-      backgroundColor: colors.bg,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
       gap: spacing.sm,
+      marginTop: spacing.sm,
     },
     footerBtn: {
       flex: 1,
@@ -450,7 +501,7 @@ function makeStyles(colors: ThemeColors) {
       justifyContent: "center",
     },
     imageModalBackdrop: {
-      ...StyleSheet.absoluteFill,
+      ...StyleSheet.absoluteFillObject,
     },
     imageModalImage: {
       width: "100%",
