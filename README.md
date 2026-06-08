@@ -15,6 +15,10 @@ Expense reporting portal for **Parts Distribution Xpress** regional managers and
 
 ## Quick Start
 
+> **Want TestFlight without running locally?** See **[docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)** — deploy to Vercel + cloud iOS build via Expo EAS.
+
+### Local development (optional)
+
 ### 1. Install dependencies
 
 ```bash
