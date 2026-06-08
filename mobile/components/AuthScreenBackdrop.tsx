@@ -1,13 +1,15 @@
 import { Platform, Image, StyleSheet, View } from "react-native";
 import { BlurView } from "expo-blur";
-import { AUTH_HERO } from "../constants/auth-chrome";
+
+/** Tire photo only — never use the wordmark here. */
+const TIRE_BACKDROP = require("../assets/auth-backdrop-tire.jpg");
 
 /** Full-screen tire photo + blur + one dark shade. Sits behind all auth UI. */
 export function AuthScreenBackdrop() {
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View style={styles.root} pointerEvents="none">
       <Image
-        source={AUTH_HERO}
+        source={TIRE_BACKDROP}
         style={StyleSheet.absoluteFillObject}
         resizeMode="cover"
         accessibilityIgnoresInvertColors
@@ -24,6 +26,10 @@ export function AuthScreenBackdrop() {
 }
 
 const styles = StyleSheet.create({
+  root: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
   shade: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.58)",

@@ -29,7 +29,10 @@ export function WelcomeScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + grid(4) }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + grid(4), flexGrow: 1 },
+        ]}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
@@ -86,7 +89,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AUTH_BG,
   },
-  scroll: { flex: 1 },
+  scroll: { flex: 1, zIndex: 1 },
   scrollContent: {
     flexGrow: 1,
   },
