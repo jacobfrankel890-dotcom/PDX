@@ -7,7 +7,7 @@ import {
   AUTH_GRAY_45,
   AUTH_GRAY_60,
   AUTH_WHITE_90,
-  authHeroOverlap,
+  authContentTopGap,
   authHorizontalPad,
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
@@ -53,7 +53,7 @@ export function LandingSplash() {
       <StatusBar style="light" />
       <AuthHero />
 
-      <Animated.View style={[styles.content, { marginTop: authHeroOverlap, opacity: contentOpacity }]}>
+      <Animated.View style={[styles.content, { marginTop: authContentTopGap, opacity: contentOpacity }]}>
         <Text style={styles.headline}>Your receipts.{"\n"}Submitted.</Text>
         <Text style={styles.subline}>Loading your workspace…</Text>
 

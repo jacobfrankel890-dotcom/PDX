@@ -15,19 +15,14 @@ import {
   AUTH_BG,
   AUTH_GRAY_45,
   AUTH_GRAY_60,
+  AUTH_TRUST_ITEMS,
   AUTH_WHITE_90,
-  authHeroOverlap,
+  authContentTopGap,
   authHorizontalPad,
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
 import { AuthHero } from "./AuthHero";
-
-const TRUST_ITEMS = [
-  { icon: "✓", label: "Scan receipts" },
-  { icon: "◎", label: "Track mileage" },
-  { icon: "▸", label: "Submit fast" },
-] as const;
 
 type Props = {
   title: string;
@@ -84,7 +79,7 @@ export function AuthScreenShell({
       >
         <AuthHero compact={compactHero} />
 
-        <View style={[styles.content, { marginTop: authHeroOverlap }]}>
+        <View style={[styles.content, { marginTop: authContentTopGap }]}>
           {badge ? (
             <View style={styles.badge}>
               <Text style={styles.badgeIcon}>⚡</Text>
@@ -101,7 +96,7 @@ export function AuthScreenShell({
 
           {showTrust ? (
             <View style={styles.trustRow}>
-              {TRUST_ITEMS.map((item) => (
+              {AUTH_TRUST_ITEMS.map((item) => (
                 <View key={item.label} style={styles.trustItem}>
                   <Text style={styles.trustIcon}>{item.icon}</Text>
                   <Text style={styles.trustText}>{item.label}</Text>
@@ -124,7 +119,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: authHorizontalPad,
   },
   content: {
-    gap: grid(1.5),
+    gap: grid(2),
+    paddingTop: grid(0.5),
   },
   badge: {
     flexDirection: "row",
