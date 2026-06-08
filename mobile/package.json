@@ -6,6 +6,9 @@
     "start": "expo start",
     "ios": "expo start --ios",
     "build:ios": "eas build --platform ios --profile preview",
+    "build:android": "eas build --platform android --profile preview",
+    "build:all": "eas build --platform all --profile preview",
+    "update:preview": "eas update --channel preview --message",
     "submit:ios": "eas submit --platform ios --profile preview --latest"
   },
   "dependencies": {
@@ -20,6 +23,7 @@
     "expo-router": "~56.2.9",
     "expo-splash-screen": "~56.0.10",
     "expo-status-bar": "~56.0.4",
+    "expo-updates": "~56.0.18",
     "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-gesture-handler": "~2.31.1",

@@ -8,19 +8,32 @@
       "developmentClient": true,
       "distribution": "internal",
       "autoIncrement": true,
-      "ios": { "simulator": true }
+      "ios": {
+        "simulator": true
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "store",
       "autoIncrement": true,
-      "ios": { "simulator": false },
-      "android": { "buildType": "app-bundle" }
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
       "distribution": "store",
-      "ios": { "simulator": false },
-      "android": { "buildType": "app-bundle" }
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "channel": "production"
     }
   },
   "submit": {

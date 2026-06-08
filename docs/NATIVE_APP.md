@@ -67,6 +67,21 @@ eas submit --platform ios --profile preview --latest
 
 **Build numbers auto-increment:** Each `preview` or `production` build bumps iOS `buildNumber` and Android `versionCode` by 1 via EAS (see `autoIncrement` in `eas.json`). User-facing `version` in `app.json` (e.g. `1.0.0`) only changes when you manually bump it for a store release.
 
+### OTA updates (after one native build with expo-updates)
+
+Once TestFlight/Play builds include `expo-updates` (your **next** native build), push JS/UI fixes without rebuilding:
+
+```bash
+cd mobile
+eas update --channel preview --message "Fix expense form validation"
+```
+
+Testers get the update on next app launch (usually within seconds). Same as Motorly/Reroute workflow.
+
+**OTA works for:** screens, logic, styling, Supabase client code, API calls.
+
+**Requires a new native build for:** app icon, new native modules, permissions, Expo SDK upgrade, or bumping `version` in `app.json` (e.g. 1.0.0 → 1.1.0).
+
 That's it. Same flow as your other apps.
 
 ---
