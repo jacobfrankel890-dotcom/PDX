@@ -1,13 +1,19 @@
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../lib/settings-context";
+import {
+  AUTH_GRAY_60,
+  AUTH_INPUT_BG,
+  AUTH_BORDER,
+  AUTH_WHITE,
+} from "../constants/auth-chrome";
 
 export type PdxLogoSize = "sm" | "md" | "lg" | "xl";
 
 type Props = {
   size?: PdxLogoSize;
-  /** Small grey subtitle under the logo, e.g. "Expense" */
   tagline?: string;
   style?: StyleProp<ViewStyle>;
+  onDark?: boolean;
 };
 
 const SIZES: Record<PdxLogoSize, number> = {
@@ -24,18 +30,20 @@ const TAGLINE: Record<PdxLogoSize, number> = {
   xl: 13,
 };
 
-export function PdxLogo({ size = "md", tagline, style }: Props) {
+export function PdxLogo({ size = "md", tagline, style, onDark }: Props) {
   const { colors } = useTheme();
   const fontSize = SIZES[size];
+  const pdColor = onDark ? AUTH_WHITE : colors.text;
+  const taglineColor = onDark ? AUTH_GRAY_60 : colors.textSecondary;
 
   return (
     <View style={[styles.wrap, style]}>
       <Text style={[styles.logo, { fontSize }]}>
-        <Text style={[styles.pd, { color: colors.text }]}>PD</Text>
+        <Text style={[styles.pd, { color: pdColor }]}>PD</Text>
         <Text style={[styles.x, { color: colors.primary }]}>X</Text>
       </Text>
       {tagline ? (
-        <Text style={[styles.tagline, { fontSize: TAGLINE[size], color: colors.textSecondary }]}>{tagline}</Text>
+        <Text style={[styles.tagline, { fontSize: TAGLINE[size], color: taglineColor }]}>{tagline}</Text>
       ) : null}
     </View>
   );

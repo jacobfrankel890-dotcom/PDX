@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text } from "react-native";
 import { supabase } from "../../lib/supabase";
 import {
   getBiometricLabel,
@@ -8,15 +8,14 @@ import {
   offerBiometricSetupAfterLogin,
   signInWithBiometric,
 } from "../../lib/biometric-auth";
-import { useTheme } from "../../lib/settings-context";
+import { AUTH_GRAY_60 } from "../../constants/auth-chrome";
 import { AuthScreenShell } from "../../components/AuthScreenShell";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
-import { spacing, type ThemeColors } from "../../constants/theme";
+import { spacing } from "../../constants/theme";
 
 export default function LoginScreen() {
-  const { colors } = useTheme();
-  const styles = makeStyles(colors);
+  const styles = makeStyles();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -63,8 +62,11 @@ export default function LoginScreen() {
 
   return (
     <AuthScreenShell
+      sectionLabel="Returning user"
       title="Welcome back"
       subtitle="Sign in to submit and track expenses"
+      showTrust={false}
+      compactHero
       footer={
         <Link href="/(auth)/signup" asChild>
           <Pressable hitSlop={8}>
@@ -88,6 +90,7 @@ export default function LoginScreen() {
 
       <Input
         label="Email"
+        tone="auth"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
@@ -98,6 +101,7 @@ export default function LoginScreen() {
       />
       <Input
         label="Password"
+        tone="auth"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
@@ -111,18 +115,18 @@ export default function LoginScreen() {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles() {
   return StyleSheet.create({
     error: {
-      color: colors.error,
-      backgroundColor: colors.errorBg,
+      color: "#F87171",
+      backgroundColor: "rgba(127,29,29,0.35)",
       padding: 12,
-      borderRadius: 10,
+      borderRadius: 12,
       fontSize: 14,
       overflow: "hidden",
     },
     submitBtn: { marginTop: spacing.xs },
-    footerLink: { color: colors.textSecondary, fontSize: 15 },
-    footerLinkBold: { color: colors.primary, fontWeight: "700" },
+    footerLink: { color: AUTH_GRAY_60, fontSize: 15 },
+    footerLinkBold: { color: "#99C221", fontWeight: "700" },
   });
 }

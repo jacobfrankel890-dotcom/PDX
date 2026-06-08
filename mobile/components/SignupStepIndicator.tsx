@@ -6,11 +6,13 @@ type Props = {
   step: number;
   total: number;
   labels: string[];
+  tone?: "default" | "auth";
 };
 
-export function SignupStepIndicator({ step, total, labels }: Props) {
+export function SignupStepIndicator({ step, total, labels, tone = "default" }: Props) {
   const { colors } = useTheme();
-  const styles = makeStyles(colors);
+  const isAuth = tone === "auth";
+  const styles = makeStyles(colors, isAuth);
 
   return (
     <View style={styles.wrap}>
@@ -26,7 +28,7 @@ export function SignupStepIndicator({ step, total, labels }: Props) {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, isAuth: boolean) {
   return StyleSheet.create({
     wrap: { gap: spacing.sm, marginBottom: spacing.xs },
     track: { flexDirection: "row", gap: 8 },
@@ -34,13 +36,13 @@ function makeStyles(colors: ThemeColors) {
       flex: 1,
       height: 4,
       borderRadius: radius.full,
-      backgroundColor: colors.border,
+      backgroundColor: isAuth ? "rgba(255,255,255,0.15)" : colors.border,
     },
     dotActive: { backgroundColor: colors.primary },
     label: {
       fontSize: 12,
       fontWeight: "600",
-      color: colors.textSecondary,
+      color: isAuth ? "rgba(255,255,255,0.45)" : colors.textSecondary,
       textTransform: "uppercase",
       letterSpacing: 0.4,
     },

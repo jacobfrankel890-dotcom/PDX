@@ -75,7 +75,7 @@ export default function DashboardScreen() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      router.replace("/(auth)/login");
+      router.replace("/(auth)/welcome");
       return;
     }
 

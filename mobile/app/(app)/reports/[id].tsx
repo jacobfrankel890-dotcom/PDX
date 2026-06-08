@@ -17,7 +17,7 @@ export default function ReportScreen() {
     if (!id) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      router.replace("/(auth)/login");
+      router.replace("/(auth)/welcome");
       return;
     }
     const [{ data: r }, { data: p }, { data: li }] = await Promise.all([

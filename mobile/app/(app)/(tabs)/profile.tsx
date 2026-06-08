@@ -125,7 +125,7 @@ export default function ProfileScreen() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      router.replace("/(auth)/login");
+      router.replace("/(auth)/welcome");
       return;
     }
 
@@ -181,7 +181,7 @@ export default function ProfileScreen() {
         onPress: async () => {
           await disableBiometricLogin();
           await supabase.auth.signOut();
-          router.replace("/(auth)/login");
+          router.replace("/(auth)/welcome");
         },
       },
     ]);

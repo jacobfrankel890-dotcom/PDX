@@ -51,5 +51,5 @@ export default function Index() {
     return <LandingSplash />;
   }
 
-  return <Redirect href={session ? "/(app)/(tabs)/dashboard" : "/(auth)/login"} />;
+  return <Redirect href={session ? "/(app)/(tabs)/dashboard" : "/(auth)/welcome"} />;
 }

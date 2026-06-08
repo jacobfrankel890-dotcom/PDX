@@ -9,28 +9,52 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "../lib/settings-context";
-import { radius, spacing, type ThemeColors } from "../constants/theme";
-import { PdxLogo } from "./PdxLogo";
-import { LogisticsHero } from "./LogisticsHero";
+import {
+  AUTH_BG,
+  AUTH_GRAY_45,
+  AUTH_GRAY_60,
+  AUTH_WHITE_90,
+  authHeroOverlap,
+  authHorizontalPad,
+} from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
+import { radius } from "../constants/theme";
+import { AuthHero } from "./AuthHero";
 
-const FEATURES = ["Scan receipts", "Track mileage", "Submit fast"] as const;
+const TRUST_ITEMS = [
+  { icon: "✓", label: "Scan receipts" },
+  { icon: "◎", label: "Track mileage" },
+  { icon: "▸", label: "Submit fast" },
+] as const;
 
 type Props = {
   title: string;
   subtitle?: string;
+  sectionLabel?: string;
+  badge?: string;
   children: ReactNode;
   footer?: ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
   scrollKey?: string | number;
+  showTrust?: boolean;
+  compactHero?: boolean;
 };
 
-export function AuthScreenShell({ title, subtitle, children, footer, contentStyle, scrollKey }: Props) {
+export function AuthScreenShell({
+  title,
+  subtitle,
+  sectionLabel,
+  badge,
+  children,
+  footer,
+  contentStyle,
+  scrollKey,
+  showTrust = true,
+  compactHero,
+}: Props) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const styles = makeStyles(colors);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -44,12 +68,13 @@ export function AuthScreenShell({ title, subtitle, children, footer, contentStyl
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
     >
+      <StatusBar style="light" />
       <ScrollView
         ref={scrollRef}
         style={styles.flex}
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: insets.top + grid(2), paddingBottom: insets.bottom + grid(3) },
+          { paddingBottom: insets.bottom + grid(3) },
           contentStyle,
         ]}
         keyboardShouldPersistTaps="handled"
@@ -57,96 +82,117 @@ export function AuthScreenShell({ title, subtitle, children, footer, contentStyl
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroCard}>
-          <LogisticsHero />
-          <View style={styles.logoOverlay}>
-            <PdxLogo size="md" tagline="Expense" style={styles.logoCenter} />
-          </View>
-        </View>
+        <AuthHero compact={compactHero} />
 
-        <View style={styles.chipRow}>
-          {FEATURES.map((label) => (
-            <View key={label} style={styles.chip}>
-              <Text style={styles.chipText}>{label}</Text>
+        <View style={[styles.content, { marginTop: authHeroOverlap }]}>
+          {badge ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeIcon}>⚡</Text>
+              <Text style={styles.badgeText}>{badge}</Text>
             </View>
-          ))}
-        </View>
+          ) : null}
 
-        <View style={styles.headingBlock}>
+          {sectionLabel ? <Text style={styles.sectionLabel}>{sectionLabel}</Text> : null}
+
           <Text style={styles.title}>{title}</Text>
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+
+          <View style={styles.form}>{children}</View>
+
+          {showTrust ? (
+            <View style={styles.trustRow}>
+              {TRUST_ITEMS.map((item) => (
+                <View key={item.label} style={styles.trustItem}>
+                  <Text style={styles.trustIcon}>{item.icon}</Text>
+                  <Text style={styles.trustText}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {footer ? <View style={styles.footer}>{footer}</View> : null}
         </View>
-
-        <View style={styles.card}>{children}</View>
-
-        {footer ? <View style={styles.footer}>{footer}</View> : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-function makeStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    flex: { flex: 1, backgroundColor: colors.bg },
-    scroll: {
-      flexGrow: 1,
-      paddingHorizontal: grid(3),
-      gap: grid(2),
-    },
-    heroCard: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      overflow: "hidden",
-      paddingTop: grid(2),
-      paddingBottom: grid(1),
-      paddingHorizontal: grid(2),
-      gap: grid(1),
-    },
-    logoOverlay: {
-      alignItems: "center",
-      paddingTop: grid(1),
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-    },
-    logoCenter: { alignItems: "center" },
-    chipRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: grid(1),
-      justifyContent: "center",
-    },
-    chip: {
-      paddingHorizontal: grid(1.5),
-      paddingVertical: grid(0.75),
-      backgroundColor: colors.greenLight,
-      borderRadius: radius.full,
-      borderWidth: 1,
-      borderColor: colors.primary,
-    },
-    chipText: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: colors.text,
-      letterSpacing: 0.3,
-    },
-    headingBlock: { gap: grid(0.5), paddingHorizontal: grid(1) },
-    title: { fontSize: 26, fontWeight: "800", color: colors.text, textAlign: "center" },
-    subtitle: { fontSize: 15, color: colors.textSecondary, textAlign: "center", lineHeight: 22 },
-    card: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: spacing.lg,
-      gap: spacing.md,
-      shadowColor: colors.cardShadow,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.06,
-      shadowRadius: 12,
-      elevation: 2,
-    },
-    footer: { alignItems: "center", paddingTop: grid(1) },
-  });
-}
+const styles = StyleSheet.create({
+  flex: { flex: 1, backgroundColor: AUTH_BG },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: authHorizontalPad,
+  },
+  content: {
+    gap: grid(1.5),
+  },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#99C221",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.full,
+    gap: 4,
+  },
+  badgeIcon: { fontSize: 11, color: AUTH_BG },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: AUTH_BG,
+    letterSpacing: 0.4,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: AUTH_GRAY_45,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginTop: grid(0.5),
+  },
+  title: {
+    fontSize: 34,
+    fontWeight: "800",
+    color: AUTH_WHITE_90,
+    letterSpacing: -0.8,
+    lineHeight: 40,
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: AUTH_GRAY_60,
+    lineHeight: 24,
+    marginBottom: grid(1),
+  },
+  form: {
+    gap: grid(2),
+    marginTop: grid(0.5),
+  },
+  trustRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: grid(2),
+    marginTop: grid(2),
+    columnGap: grid(2),
+    rowGap: grid(1),
+  },
+  trustItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  trustIcon: {
+    fontSize: 13,
+    color: AUTH_GRAY_45,
+  },
+  trustText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: AUTH_GRAY_45,
+  },
+  footer: {
+    alignItems: "center",
+    paddingTop: grid(2),
+  },
+});

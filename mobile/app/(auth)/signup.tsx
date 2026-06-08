@@ -12,12 +12,12 @@ import { Link, router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { REGIONS, ROLES, getDefaultCompanyForRegion, type PdxRegion } from "../../lib/types";
 import { isValidEmail } from "../../lib/utils";
-import { useTheme } from "../../lib/settings-context";
+import { AUTH_GRAY_60 } from "../../constants/auth-chrome";
 import { AuthScreenShell } from "../../components/AuthScreenShell";
 import { SignupStepIndicator } from "../../components/SignupStepIndicator";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
-import { radius, spacing, type ThemeColors } from "../../constants/theme";
+import { radius, spacing } from "../../constants/theme";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -28,8 +28,7 @@ type Step = "account" | "role";
 const STEP_LABELS = ["Your account", "Role & region"];
 
 export default function SignupScreen() {
-  const { colors, isDark } = useTheme();
-  const styles = makeStyles(colors, isDark);
+  const styles = makeStyles();
   const [step, setStep] = useState<Step>("account");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -117,8 +116,12 @@ export default function SignupScreen() {
 
   return (
     <AuthScreenShell
+      sectionLabel="New account"
+      badge="For PDX teams"
       title="Create account"
       subtitle="Join PDX Expense in under a minute"
+      showTrust={false}
+      compactHero
       scrollKey={step}
       footer={
         <Link href="/(auth)/login" asChild>
@@ -130,16 +133,17 @@ export default function SignupScreen() {
         </Link>
       }
     >
-      <SignupStepIndicator step={stepIndex} total={2} labels={STEP_LABELS} />
+      <SignupStepIndicator tone="auth" step={stepIndex} total={2} labels={STEP_LABELS} />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {success ? <Text style={styles.success}>{success}</Text> : null}
 
       {step === "account" ? (
         <View style={styles.step}>
-          <Input label="First name" value={form.firstName} onChangeText={(v) => update("firstName", v)} autoComplete="given-name" />
-          <Input label="Last name" value={form.lastName} onChangeText={(v) => update("lastName", v)} autoComplete="family-name" />
+          <Input tone="auth" label="First name" value={form.firstName} onChangeText={(v) => update("firstName", v)} autoComplete="given-name" />
+          <Input tone="auth" label="Last name" value={form.lastName} onChangeText={(v) => update("lastName", v)} autoComplete="family-name" />
           <Input
+            tone="auth"
             label="Email"
             value={form.email}
             onChangeText={(v) => update("email", v)}
@@ -147,8 +151,9 @@ export default function SignupScreen() {
             keyboardType="email-address"
             autoComplete="email"
           />
-          <Input label="Password" value={form.password} onChangeText={(v) => update("password", v)} secureTextEntry autoComplete="new-password" />
+          <Input tone="auth" label="Password" value={form.password} onChangeText={(v) => update("password", v)} secureTextEntry autoComplete="new-password" />
           <Input
+            tone="auth"
             label="Confirm password"
             value={form.confirmPassword}
             onChangeText={(v) => update("confirmPassword", v)}
@@ -202,38 +207,38 @@ export default function SignupScreen() {
   );
 }
 
-function makeStyles(colors: ThemeColors, isDark: boolean) {
+function makeStyles() {
   return StyleSheet.create({
     step: { gap: spacing.md },
     error: {
-      color: colors.error,
-      backgroundColor: colors.errorBg,
+      color: "#F87171",
+      backgroundColor: "rgba(127,29,29,0.35)",
       padding: 12,
-      borderRadius: 10,
+      borderRadius: 12,
       fontSize: 14,
     },
     success: {
-      color: colors.primary,
-      backgroundColor: isDark ? "#2A3318" : colors.greenLight,
+      color: "#99C221",
+      backgroundColor: "rgba(42,51,24,0.6)",
       padding: 12,
-      borderRadius: 10,
+      borderRadius: 12,
       fontSize: 14,
     },
-    fieldLabel: { fontSize: 14, fontWeight: "600", color: colors.textSecondary, marginBottom: -4 },
+    fieldLabel: { fontSize: 13, fontWeight: "600", color: AUTH_GRAY_60, marginBottom: -4 },
     optionList: { gap: spacing.sm },
     option: {
       padding: 14,
       borderRadius: radius.md,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.bg,
+      borderColor: "rgba(255,255,255,0.18)",
+      backgroundColor: "rgba(255,255,255,0.06)",
     },
-    optionActive: { borderColor: colors.primary, backgroundColor: colors.greenLight },
-    optionText: { color: colors.text, fontSize: 15 },
-    optionTextActive: { color: colors.primary, fontWeight: "600", fontSize: 15 },
+    optionActive: { borderColor: "#99C221", backgroundColor: "rgba(42,51,24,0.5)" },
+    optionText: { color: "rgba(255,255,255,0.85)", fontSize: 15 },
+    optionTextActive: { color: "#99C221", fontWeight: "600", fontSize: 15 },
     row: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
     half: { flex: 1 },
-    footerLink: { color: colors.textSecondary, fontSize: 15 },
-    footerLinkBold: { color: colors.primary, fontWeight: "700" },
+    footerLink: { color: AUTH_GRAY_60, fontSize: 15 },
+    footerLinkBold: { color: "#99C221", fontWeight: "700" },
   });
 }

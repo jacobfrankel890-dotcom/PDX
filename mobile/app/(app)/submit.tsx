@@ -14,7 +14,7 @@ export default function SubmitExpenseScreen() {
     useCallback(() => {
       supabase.auth.getUser().then(async ({ data: { user } }) => {
         if (!user) {
-          router.replace("/(auth)/login");
+          router.replace("/(auth)/welcome");
           return;
         }
         setUserId(user.id);
