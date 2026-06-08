@@ -34,7 +34,7 @@ CREATE TABLE public.profiles (
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
-  phone TEXT NOT NULL UNIQUE,
+  phone TEXT UNIQUE,
   phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
   role user_role NOT NULL,
   region pdx_region NOT NULL,
@@ -236,7 +236,7 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
     COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'phone', ''),
+    NULLIF(TRIM(COALESCE(NEW.raw_user_meta_data->>'phone', '')), ''),
     COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'kam'),
     COALESCE((NEW.raw_user_meta_data->>'region')::pdx_region, 'pdx'),
     COALESCE((NEW.raw_user_meta_data->>'phone_verified')::boolean, false)

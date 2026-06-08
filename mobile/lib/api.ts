@@ -8,6 +8,7 @@ async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T
   return data as T;
 }
 
+// Twilio OTP — disabled in signup UI for now; edge functions kept for re-enable later.
 export async function sendOtp(phone: string) {
   return invoke<{ success: boolean; devMode?: boolean }>("send-otp", { phone });
 }
