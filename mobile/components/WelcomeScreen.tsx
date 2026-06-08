@@ -78,7 +78,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: authHorizontalPad,
     paddingBottom: grid(4),
   },
   badge: {

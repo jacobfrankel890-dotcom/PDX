@@ -107,7 +107,6 @@ export function AuthScreenShell({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   scrollContent: {
-    paddingHorizontal: authHorizontalPad,
     paddingBottom: grid(3),
   },
   badge: {
