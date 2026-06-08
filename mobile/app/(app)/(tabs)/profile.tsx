@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { useSettings, useTheme, type ThemeMode } from "../../../lib/settings-context";
 import { useAppUpdates } from "../../../lib/use-app-updates";
@@ -119,7 +119,7 @@ export default function ProfileScreen() {
   const [biometricLabel, setBiometricLabel] = useState("Biometrics");
   const hasLoadedRef = useRef(false);
 
-  const load = useCallback(async (silent = false) => {
+  const load = useCallback(async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -127,22 +127,27 @@ export default function ProfileScreen() {
       router.replace("/(auth)/login");
       return;
     }
-    if (!silent && !hasLoadedRef.current) setLoading(true);
 
-    const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-    setProfile(data as Profile);
-    setBiometricEnabled(await isBiometricLoginEnabled());
-    setBiometricAvailable(isBiometricNativeAvailable() && (await isBiometricHardwareAvailable()));
-    setBiometricLabel(await getBiometricLabel());
-    hasLoadedRef.current = true;
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      if (error) throw error;
+      setProfile(data as Profile);
+      setBiometricEnabled(await isBiometricLoginEnabled());
+      setBiometricAvailable(isBiometricNativeAvailable() && (await isBiometricHardwareAvailable()));
+      setBiometricLabel(await getBiometricLabel());
+      hasLoadedRef.current = true;
+    } catch {
+      if (!hasLoadedRef.current) {
+        Alert.alert("Could not load profile", "Pull down to try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      load(hasLoadedRef.current);
-    }, [load])
-  );
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function toggleBiometric(enabled: boolean) {
     if (enabled) {
@@ -181,8 +186,6 @@ export default function ProfileScreen() {
     ]);
   }
 
-  const roleLabel = ROLES.find((r) => r.value === profile?.role)?.label ?? profile?.role;
-
   if (loading && !profile) {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
@@ -190,6 +193,20 @@ export default function ProfileScreen() {
       </View>
     );
   }
+
+  if (!profile) {
+    return (
+      <View style={[styles.center, { paddingTop: insets.top, gap: spacing.md }]}>
+        <Text style={styles.pageTitle}>Profile</Text>
+        <Text style={styles.loadError}>Could not load your profile.</Text>
+        <Pressable style={styles.retryBtn} onPress={() => { setLoading(true); load(); }}>
+          <Text style={styles.retryText}>Try again</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const roleLabel = ROLES.find((r) => r.value === profile.role)?.label ?? profile.role;
 
   return (
     <ScrollView
@@ -206,16 +223,16 @@ export default function ProfileScreen() {
 
       <View style={styles.userCard}>
         <View style={styles.avatarLarge}>
-          <Text style={styles.avatarLargeText}>{profile?.first_name?.[0]?.toUpperCase() ?? "?"}</Text>
+          <Text style={styles.avatarLargeText}>{profile.first_name?.[0]?.toUpperCase() ?? "?"}</Text>
         </View>
         <View style={styles.userInfo}>
           <Text style={styles.userName}>
-            {profile?.first_name} {profile?.last_name}
+            {profile.first_name} {profile.last_name}
           </Text>
-          <Text style={styles.userEmail}>{profile?.email}</Text>
+          <Text style={styles.userEmail}>{profile.email}</Text>
           <View style={styles.userMeta}>
-            <Text style={styles.metaPill}>{profile ? getRegionLabel(profile.region) : ""}</Text>
-            <Text style={styles.metaPill}>{profile ? getCompanyLabel(profile.company) : ""}</Text>
+            <Text style={styles.metaPill}>{getRegionLabel(profile.region)}</Text>
+            <Text style={styles.metaPill}>{getCompanyLabel(profile.company)}</Text>
             {roleLabel ? <Text style={styles.metaPill}>{roleLabel}</Text> : null}
           </View>
         </View>
@@ -430,5 +447,13 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     },
     updateBtnText: { color: colors.primary, fontSize: 15, fontWeight: "700" },
     footer: { textAlign: "center", fontSize: 12, color: colors.slate400, marginTop: spacing.sm },
+    loadError: { fontSize: 15, color: colors.textSecondary, textAlign: "center" },
+    retryBtn: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+    },
+    retryText: { color: colors.white, fontSize: 15, fontWeight: "700" },
   });
 }

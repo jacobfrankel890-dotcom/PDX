@@ -50,7 +50,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
                 canPreventDefault: true,
               });
               if (!isFocused && !event.defaultPrevented) {
-                navigation.navigate(route.name);
+                navigation.jumpTo(route.name);
               }
             };
 

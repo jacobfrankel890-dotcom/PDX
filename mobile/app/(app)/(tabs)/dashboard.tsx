@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useNavigation } from "expo-router";
 import { format, parseISO } from "date-fns";
 import { supabase } from "../../../lib/supabase";
 import { EXPENSE_CATEGORIES } from "../../../lib/categories";
@@ -56,6 +56,7 @@ function formatExpenseDate(d: string | null | undefined): string {
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -158,7 +159,7 @@ export default function DashboardScreen() {
   }
 
   function openProfile() {
-    router.navigate("/(app)/(tabs)/profile");
+    (navigation as { jumpTo: (name: string) => void }).jumpTo("profile");
   }
 
   const listHeader = (

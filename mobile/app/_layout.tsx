@@ -3,9 +3,13 @@ import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { enableFreeze } from "react-native-screens";
 import { SettingsProvider, useTheme } from "../lib/settings-context";
 import { AppUpdateGate } from "../components/AppUpdateGate";
 import { initBiometricSessionSync } from "../lib/biometric-auth";
+
+// Screen freezing breaks tab re-renders (blank white scenes after switching tabs).
+enableFreeze(false);
 
 function RootNavigator() {
   const { colors, isDark } = useTheme();
