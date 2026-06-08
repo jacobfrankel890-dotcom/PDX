@@ -89,11 +89,6 @@ const styles = StyleSheet.create({
     gap: grid(2),
     marginTop: grid(2),
     marginBottom: grid(3),
-    padding: grid(1.75),
-    borderRadius: radius.lg,
-    backgroundColor: "rgba(0,0,0,0.34)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
   },
   badge: {
     flexDirection: "row",
@@ -132,11 +127,6 @@ const styles = StyleSheet.create({
   },
   actions: {
     gap: grid(3),
-    padding: grid(1.75),
-    borderRadius: radius.lg,
-    backgroundColor: "rgba(0,0,0,0.36)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
   },
   actionBlock: {
     gap: grid(0.5),
