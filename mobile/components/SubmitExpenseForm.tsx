@@ -71,9 +71,11 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
   const [relatedTo, setRelatedTo] = useState("");
   const [showDetails, setShowDetails] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isManualEntry, setIsManualEntry] = useState(false);
 
   const parsedTotal = parseFloat(totalAmount.replace(/[^0-9.]/g, "")) || 0;
   const itemCount = analysis?.line_items.length ?? 0;
+  const isReviewStep = step === "review" && (Boolean(analysis) || isManualEntry);
 
   const scanReceipt = useCallback(
     async (useCamera: boolean) => {
@@ -93,6 +95,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
 
       const asset = result.assets[0];
       setPreviewUri(asset.uri);
+      setIsManualEntry(false);
       setStep("analyzing");
 
       try {
@@ -134,6 +137,22 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
     [userId]
   );
 
+  function startManualEntry() {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsManualEntry(true);
+    setStep("review");
+    setPreviewUri(null);
+    setAnalysis(null);
+    setReceiptPath(null);
+    setMerchantName("");
+    setTotalAmount("");
+    setCategory("misc");
+    setRelatedTo("");
+    setExpenseDate(format(new Date(), "yyyy-MM-dd"));
+    setCompany(normalizeCompanyValue(profile.company, profile.region));
+    setShowDetails(false);
+  }
+
   function toggleDetails() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setShowDetails((v) => !v);
@@ -144,18 +163,31 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
       Alert.alert("Invalid amount", "Enter a total greater than zero.");
       return;
     }
+    if (!merchantName.trim()) {
+      Alert.alert("Merchant required", "Enter where this expense occurred (store, vendor, or service).");
+      return;
+    }
+    if (isManualEntry && !relatedTo.trim()) {
+      Alert.alert("Business purpose required", "Explain what this expense was for — required when no receipt is attached.");
+      return;
+    }
     setSubmitting(true);
     try {
       await submitExpense(userId, {
         amount: parsedTotal,
         category,
-        description: merchantName.trim() || "Receipt",
+        description: merchantName.trim(),
         expenseDate,
         relatedTo: relatedTo.trim() || undefined,
         receiptUrl: receiptPath,
         company,
       });
-      Alert.alert("Saved!", "Your receipt has been added as one expense.");
+      Alert.alert(
+        "Saved!",
+        isManualEntry
+          ? "Your manual expense has been added."
+          : "Your receipt has been added as one expense."
+      );
       onSubmitted();
     } catch (err) {
       Alert.alert("Could not save", getErrorMessage(err));
@@ -166,6 +198,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
 
   function resetScan() {
     setStep("scan");
+    setIsManualEntry(false);
     setPreviewUri(null);
     setAnalysis(null);
     setMerchantName("");
@@ -183,7 +216,13 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
           <Text style={styles.closeBtn}>✕</Text>
         </Pressable>
         <Text style={styles.headerTitle}>
-          {step === "scan" ? "Scan Receipt" : step === "analyzing" ? "Analyzing…" : "Confirm & Save"}
+          {step === "scan"
+            ? "Scan Receipt"
+            : step === "analyzing"
+              ? "Analyzing…"
+              : isManualEntry
+                ? "Enter Expense"
+                : "Confirm & Save"}
         </Text>
         <View style={{ width: 28 }} />
       </View>
@@ -200,26 +239,52 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
               <Button title="Open Camera" onPress={() => scanReceipt(true)} style={styles.scanBtn} />
               <Button title="Choose from Photos" variant="outline" onPress={() => scanReceipt(false)} style={styles.scanBtn} />
             </View>
+
+            <View style={styles.manualDivider}>
+              <View style={styles.manualDividerLine} />
+              <Text style={styles.manualDividerText}>or</Text>
+              <View style={styles.manualDividerLine} />
+            </View>
+
+            <Pressable style={styles.manualCard} onPress={startManualEntry}>
+              <Text style={styles.manualIcon}>📝</Text>
+              <View style={styles.manualTextWrap}>
+                <Text style={styles.manualTitle}>Lost your receipt?</Text>
+                <Text style={styles.manualSub}>Enter merchant, amount, and details manually</Text>
+              </View>
+              <Text style={styles.manualChevron}>›</Text>
+            </Pressable>
           </View>
         )}
 
         {step === "analyzing" && previewUri ? <ReceiptAnalyzingView imageUri={previewUri} /> : null}
 
-        {step === "review" && analysis ? (
+        {isReviewStep ? (
           <ScrollView
             contentContainerStyle={[styles.reviewContent, { paddingBottom: insets.bottom + 100 }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {isManualEntry ? (
+              <View style={styles.manualBanner}>
+                <Text style={styles.manualBannerTitle}>No receipt attached</Text>
+                <Text style={styles.manualBannerSub}>
+                  Fill in the details below. Business purpose is required for manual entries.
+                </Text>
+              </View>
+            ) : null}
+
             {previewUri ? <Image source={{ uri: previewUri }} style={styles.reviewThumb} /> : null}
 
             <View style={styles.merchantCard}>
+              <Text style={styles.merchantLabel}>{isManualEntry ? "Merchant / vendor" : "Merchant"}</Text>
               <TextInput
                 style={styles.merchantNameInput}
                 value={merchantName}
                 onChangeText={setMerchantName}
-                placeholder="Merchant name"
+                placeholder={isManualEntry ? "e.g. Starbucks, Shell, Amazon" : "Merchant name"}
                 placeholderTextColor={colors.slate400}
+                autoFocus={isManualEntry}
               />
               <View style={styles.totalRow}>
                 <Text style={styles.currencySign}>$</Text>
@@ -253,17 +318,20 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Business purpose</Text>
+              <Text style={styles.fieldLabel}>
+                Business purpose{isManualEntry ? " *" : ""}
+              </Text>
               <TextInput
                 style={styles.fieldInput}
                 value={relatedTo}
                 onChangeText={setRelatedTo}
-                placeholder="Client, account, or reason"
+                placeholder={isManualEntry ? "Client visit, team lunch, supplies for…" : "Client, account, or reason"}
                 placeholderTextColor={colors.slate400}
+                multiline={isManualEntry}
               />
             </View>
 
-            {itemCount > 1 ? (
+            {!isManualEntry && itemCount > 1 ? (
               <View style={styles.detailsSection}>
                 <Pressable onPress={toggleDetails} style={styles.detailsHeader}>
                   <Text style={styles.detailsTitle}>Item details</Text>
@@ -271,7 +339,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
                 </Pressable>
                 {showDetails ? (
                   <View style={styles.detailsList}>
-                    {analysis.line_items.map((item, index) => (
+                    {analysis?.line_items.map((item, index) => (
                       <View key={index} style={styles.detailRow}>
                         <View style={styles.detailLeft}>
                           <Text style={styles.detailDesc} numberOfLines={2}>
@@ -286,7 +354,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
                     ))}
                     <View style={styles.detailTotalRow}>
                       <Text style={styles.detailTotalLabel}>Receipt total</Text>
-                      <Text style={styles.detailTotalAmount}>{formatCurrency(parsedTotal || getAnalysisTotal(analysis))}</Text>
+                      <Text style={styles.detailTotalAmount}>{formatCurrency(parsedTotal || getAnalysisTotal(analysis!))}</Text>
                     </View>
                     <Text style={styles.detailsNote}>For reference only — saves as one expense</Text>
                   </View>
@@ -294,15 +362,26 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
               </View>
             ) : null}
 
-            <Pressable onPress={resetScan}>
-              <Text style={styles.retake}>↻ Retake photo</Text>
-            </Pressable>
+            {isManualEntry ? (
+              <Pressable onPress={resetScan}>
+                <Text style={styles.retake}>← Scan receipt instead</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={resetScan}>
+                <Text style={styles.retake}>↻ Retake photo</Text>
+              </Pressable>
+            )}
           </ScrollView>
         ) : null}
 
-        {step === "review" ? (
+        {isReviewStep ? (
           <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-            <Button title="Save Expense" onPress={handleSave} loading={submitting} style={styles.saveBtn} />
+            <Button
+              title={isManualEntry ? "Save Manual Expense" : "Save Expense"}
+              onPress={handleSave}
+              loading={submitting}
+              style={styles.saveBtn}
+            />
           </View>
         ) : null}
       </KeyboardAvoidingView>
@@ -338,6 +417,39 @@ const styles = StyleSheet.create({
   heroSub: { fontSize: 15, color: colors.slate500, textAlign: "center", lineHeight: 22 },
   scanActions: { gap: spacing.sm },
   scanBtn: { paddingVertical: 16 },
+  manualDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginVertical: spacing.xs,
+  },
+  manualDividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  manualDividerText: { fontSize: 13, fontWeight: "600", color: colors.slate400, textTransform: "uppercase" },
+  manualCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+  },
+  manualIcon: { fontSize: 28 },
+  manualTextWrap: { flex: 1, gap: 2 },
+  manualTitle: { fontSize: 16, fontWeight: "700", color: colors.primary },
+  manualSub: { fontSize: 13, color: colors.slate500, lineHeight: 18 },
+  manualChevron: { fontSize: 24, fontWeight: "300", color: colors.slate400 },
+  manualBanner: {
+    backgroundColor: "#fef3c7",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "#fcd34d",
+    padding: spacing.md,
+    gap: 4,
+  },
+  manualBannerTitle: { fontSize: 14, fontWeight: "700", color: "#92400e" },
+  manualBannerSub: { fontSize: 13, color: "#a16207", lineHeight: 18 },
   reviewContent: { padding: spacing.md, gap: spacing.md },
   reviewThumb: { width: "100%", height: 120, borderRadius: radius.md, resizeMode: "cover" },
   merchantCard: {
@@ -352,6 +464,7 @@ const styles = StyleSheet.create({
     elevation: 2,
     gap: 8,
   },
+  merchantLabel: { fontSize: 13, fontWeight: "600", color: colors.slate500, alignSelf: "flex-start" },
   merchantNameInput: {
     fontSize: 20,
     fontWeight: "700",
