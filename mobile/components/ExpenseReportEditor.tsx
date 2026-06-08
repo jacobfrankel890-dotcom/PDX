@@ -17,7 +17,7 @@ import {
   type ExpenseReport,
   type Profile,
 } from "../lib/types";
-import { colors } from "../constants/theme";
+import { getErrorMessage, toIsoDate } from "../lib/utils";
 import { Button } from "./Button";
 import { Card } from "./Card";
 import { ReceiptScanner } from "./ReceiptScanner";
@@ -112,49 +112,60 @@ export function ExpenseReportEditor({
   async function save(submit = false) {
     setSaving(true);
     try {
+      const payPeriodStart = toIsoDate(payStart);
+      const payPeriodEnd = toIsoDate(payEnd);
+      if (!payPeriodStart || !payPeriodEnd) {
+        throw new Error("Pay period dates must be valid (YYYY-MM-DD)");
+      }
+      if (payPeriodEnd < payPeriodStart) {
+        throw new Error("Pay period end must be on or after the start date");
+      }
+
+      const filled = items
+        .map((item, i) => ({ ...item, sort_order: i }))
+        .filter(hasContent)
+        .map((item) => ({
+          report_id: report.id,
+          sort_order: item.sort_order,
+          expense_date: toIsoDate(item.expense_date),
+          description: item.description || null,
+          related_to: item.related_to || null,
+          travel_lodging: item.travel_lodging || 0,
+          tolls_parking: item.tolls_parking || 0,
+          miles: item.miles || 0,
+          mileage_calc: item.mileage_calc || 0,
+          office_supplies: item.office_supplies || 0,
+          meals_entertainment: item.meals_entertainment || 0,
+          vehicle_maintenance: item.vehicle_maintenance || 0,
+          marketing: item.marketing || 0,
+          misc: item.misc || 0,
+          row_total: item.row_total || 0,
+          receipt_url: item.receipt_url || null,
+        }));
+
+      const { error: de } = await supabase.from("expense_line_items").delete().eq("report_id", report.id);
+      if (de) throw de;
+
+      if (filled.length > 0) {
+        const { error: ie } = await supabase.from("expense_line_items").insert(filled);
+        if (ie) throw ie;
+      }
+
       const { error: re } = await supabase
         .from("expense_reports")
         .update({
-          pay_period_start: payStart,
-          pay_period_end: payEnd,
+          pay_period_start: payPeriodStart,
+          pay_period_end: payPeriodEnd,
           status: submit ? "submitted" : report.status,
           submitted_at: submit ? new Date().toISOString() : report.submitted_at,
         })
         .eq("id", report.id);
       if (re) throw re;
 
-      const filled = items.map((item, i) => ({ ...item, sort_order: i })).filter(hasContent);
-
-      await supabase.from("expense_line_items").delete().eq("report_id", report.id);
-
-      if (filled.length > 0) {
-        const { error: ie } = await supabase.from("expense_line_items").insert(
-          filled.map((item) => ({
-            report_id: report.id,
-            sort_order: item.sort_order,
-            expense_date: item.expense_date || null,
-            description: item.description || null,
-            related_to: item.related_to || null,
-            travel_lodging: item.travel_lodging || 0,
-            tolls_parking: item.tolls_parking || 0,
-            miles: item.miles || 0,
-            mileage_calc: item.mileage_calc || 0,
-            office_supplies: item.office_supplies || 0,
-            meals_entertainment: item.meals_entertainment || 0,
-            vehicle_maintenance: item.vehicle_maintenance || 0,
-            marketing: item.marketing || 0,
-            misc: item.misc || 0,
-            row_total: item.row_total || 0,
-            receipt_url: item.receipt_url || null,
-          }))
-        );
-        if (ie) throw ie;
-      }
-
       Alert.alert("Success", submit ? "Report submitted!" : "Draft saved.");
       onSaved();
     } catch (err) {
-      Alert.alert("Error", err instanceof Error ? err.message : "Save failed");
+      Alert.alert("Error", getErrorMessage(err));
     } finally {
       setSaving(false);
     }

@@ -17,15 +17,25 @@ const ROLES: Record<string, string> = {
 
 function buildPrompt(ctx: { userRegion: string; userRole: string; payPeriodStart: string; payPeriodEnd: string }) {
   return `You are an expense report assistant for Parts Distribution Xpress (PDX).
-Analyze this receipt and return JSON only:
+Analyze this receipt and return JSON only. Every line item MUST use exactly one category key from this list:
+- travel_lodging: TRV / LOD (travel, hotels, lodging, airfare)
+- tolls_parking: Toll/Parking (tolls, parking fees, garage)
+- office_supplies: OFF. SUP & EQP (office supplies and equipment)
+- meals_entertainment: Meals & Enter. (meals, restaurants, client entertainment)
+- vehicle_maintenance: Cell & / M (cell phone, mobile plans, telecom)
+- marketing: Marketing (advertising, promotional materials)
+- misc: Misc. (anything that does not fit above)
+
+Do NOT invent category names. Pick the closest match from the keys above.
+
 {
   "merchant_name": "string",
   "expense_date": "YYYY-MM-DD or null",
   "description": "string",
-  "related_to": "client/account/business purpose",
+  "related_to": "client/account/business purpose for RELATED TO column",
   "total_amount": number,
-  "primary_category": "travel_lodging|tolls_parking|office_supplies|meals_entertainment|vehicle_maintenance|marketing|misc",
-  "line_items": [{ "description": "string", "amount": number, "category": "same keys" }],
+  "primary_category": "one of the keys above",
+  "line_items": [{ "description": "string", "amount": number, "category": "one of the keys above" }],
   "confidence": 0-1,
   "notes": "optional"
 }

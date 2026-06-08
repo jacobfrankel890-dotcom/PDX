@@ -2,7 +2,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Link, router } from "expo-router";
 import { supabase } from "../../lib/supabase";
-import { REGIONS, ROLES } from "../../lib/types";
+import { REGIONS, ROLES, getDefaultCompanyForRegion, type PdxRegion } from "../../lib/types";
 import { isValidEmail } from "../../lib/utils";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
@@ -68,6 +68,7 @@ export default function SignupScreen() {
           last_name: form.lastName.trim(),
           role: form.role,
           region: form.region,
+          company: getDefaultCompanyForRegion(form.region as PdxRegion),
           phone_verified: false,
         },
       },

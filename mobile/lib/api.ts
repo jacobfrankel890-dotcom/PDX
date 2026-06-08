@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { ReceiptAnalysisResult } from "./receipt-analysis";
+import { normalizeAnalysis } from "./receipt-analysis";
 
 async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke(name, { body });
@@ -23,11 +23,16 @@ export async function analyzeReceipt(params: {
   mimeType: string;
   fileName: string;
 }) {
-  return invoke<{
+  const data = await invoke<{
     success: boolean;
     storagePath: string;
     previewUrl: string | null;
     fileName: string;
-    analysis: ReceiptAnalysisResult;
+    analysis: unknown;
   }>("analyze-receipt", params);
+
+  return {
+    ...data,
+    analysis: normalizeAnalysis(data.analysis),
+  };
 }

@@ -66,16 +66,17 @@ export interface ExpenseLineItem {
   misc: number;
   row_total: number;
   receipt_url: string | null;
+  company?: string | null;
 }
 
 export const EXPENSE_FIELDS = [
-  { key: "travel_lodging" as const, label: "Travel & Lodging" },
-  { key: "tolls_parking" as const, label: "Tolls / Parking" },
-  { key: "office_supplies" as const, label: "Office Supplies" },
-  { key: "meals_entertainment" as const, label: "Meals & Entertainment" },
-  { key: "vehicle_maintenance" as const, label: "Vehicle Maintenance" },
+  { key: "travel_lodging" as const, label: "TRV / LOD" },
+  { key: "tolls_parking" as const, label: "Toll/Parking" },
+  { key: "office_supplies" as const, label: "OFF. SUP & EQP" },
+  { key: "meals_entertainment" as const, label: "Meals & Enter." },
+  { key: "vehicle_maintenance" as const, label: "Cell & / M" },
   { key: "marketing" as const, label: "Marketing" },
-  { key: "misc" as const, label: "Miscellaneous" },
+  { key: "misc" as const, label: "Misc." },
 ];
 
 export const DEFAULT_MILEAGE_RATE = 0.67;
@@ -127,4 +128,22 @@ export function getRegionLabel(region: PdxRegion): string {
 
 export function getRoleLabel(role: UserRole): string {
   return ROLES.find((r) => r.value === role)?.label ?? role;
+}
+
+export const COMPANIES = [
+  { value: "Parts Distribution Xpress", label: "PDX — Parts Distribution Xpress" },
+  { value: "All Parts Xpress", label: "APX — All Parts Xpress" },
+  { value: "CPX", label: "CPX — Canada" },
+] as const;
+
+export type CompanyValue = (typeof COMPANIES)[number]["value"];
+
+export function getDefaultCompanyForRegion(region: PdxRegion): CompanyValue {
+  if (region === "cpx") return "CPX";
+  if (region === "apx" || region === "apx_california") return "All Parts Xpress";
+  return "Parts Distribution Xpress";
+}
+
+export function getCompanyLabel(company: string): string {
+  return COMPANIES.find((c) => c.value === company)?.label ?? company;
 }

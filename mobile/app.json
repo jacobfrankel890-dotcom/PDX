@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "scheme": "pdxexpense",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -36,7 +36,15 @@
       ]
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-updates",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1e3a5f"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -54,7 +62,9 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/eb537577-569e-4201-8396-5f4a679dbc71"
+      "url": "https://u.expo.dev/eb537577-569e-4201-8396-5f4a679dbc71",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }

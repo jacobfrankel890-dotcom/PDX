@@ -103,6 +103,7 @@ CREATE TABLE public.expense_line_items (
   misc NUMERIC(12, 2) NOT NULL DEFAULT 0,
   row_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
   receipt_url TEXT,
+  company TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -234,7 +235,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, first_name, last_name, email, phone, role, region, phone_verified)
+  INSERT INTO public.profiles (id, first_name, last_name, email, phone, role, region, company, phone_verified)
   VALUES (
     NEW.id,
     COALESCE(NULLIF(TRIM(NEW.raw_user_meta_data->>'first_name'), ''), 'User'),
@@ -243,6 +244,7 @@ BEGIN
     NULLIF(TRIM(COALESCE(NEW.raw_user_meta_data->>'phone', '')), ''),
     COALESCE((NEW.raw_user_meta_data->>'role')::public.user_role, 'kam'::public.user_role),
     COALESCE((NEW.raw_user_meta_data->>'region')::public.pdx_region, 'pdx'::public.pdx_region),
+    COALESCE(NULLIF(TRIM(NEW.raw_user_meta_data->>'company'), ''), 'Parts Distribution Xpress'),
     COALESCE((NEW.raw_user_meta_data->>'phone_verified')::boolean, false)
   );
   RETURN NEW;
