@@ -5,7 +5,6 @@ import { useTheme } from "../lib/settings-context";
 import {
   TAB_BAR_BOTTOM_GAP,
   TAB_BAR_HEIGHT,
-  TAB_BAR_SIDE_INSET,
 } from "../lib/tab-bar-layout";
 
 const TAB_ICONS: Record<string, string> = {
@@ -147,19 +146,22 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: TAB_BAR_SIDE_INSET,
   },
   glassSurface: {
-    height: TAB_BAR_HEIGHT,
-    borderRadius: 22,
     overflow: "hidden",
-    flexDirection: "row",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
     shadowColor: "#0f172a",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 18,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
     elevation: 12,
+  },
+  tabRow: {
+    height: TAB_BAR_HEIGHT,
+    flexDirection: "row",
   },
   tab: {
     flex: 1,

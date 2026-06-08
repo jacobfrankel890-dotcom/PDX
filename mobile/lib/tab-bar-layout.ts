@@ -13,8 +13,8 @@ export const TAB_BAR_BOTTOM_GAP = 0;
 /** Height of the Add Receipt bar sitting on the tab bar. */
 export const FAB_HEIGHT = 50;
 
-/** Small gap between FAB and tab bar top. */
-export const FAB_TAB_GAP = 0;
+/** Gap between Add Receipt button and tab bar. */
+export const FAB_TAB_GAP = 8;
 
 export function getTabBarStackHeight(insets: EdgeInsets): number {
   return TAB_BAR_HEIGHT + insets.bottom + TAB_BAR_BOTTOM_GAP;
