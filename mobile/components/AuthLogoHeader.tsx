@@ -1,16 +1,18 @@
 import { Image, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AUTH_LOGO, AUTH_LOGO_ASPECT, AUTH_GRAY_60, authHorizontalPad } from "../constants/auth-chrome";
+import { AUTH_GRAY_60, AUTH_LOGO_ASPECT, authHorizontalPad } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
+
+/** Fresh require path so OTA/cache cannot swap this with the hero image. */
+const PDX_WORDMARK = require("../assets/pdx-wordmark.png");
 
 type Props = {
   compact?: boolean;
 };
 
-/** Official PDX wordmark + Expense tagline over the auth backdrop. */
 export function AuthLogoHeader({ compact }: Props) {
   const insets = useSafeAreaInsets();
-  const logoWidth = compact ? 96 : 112;
+  const logoWidth = compact ? 120 : 136;
   const logoHeight = Math.round(logoWidth * AUTH_LOGO_ASPECT);
 
   return (
@@ -20,12 +22,12 @@ export function AuthLogoHeader({ compact }: Props) {
         {
           paddingTop: insets.top + 10,
           paddingHorizontal: authHorizontalPad,
-          paddingBottom: grid(3),
+          paddingBottom: grid(2),
         },
       ]}
     >
       <Image
-        source={AUTH_LOGO}
+        source={PDX_WORDMARK}
         style={{ width: logoWidth, height: logoHeight }}
         resizeMode="contain"
         accessibilityLabel="PDX Expense"
@@ -38,7 +40,7 @@ export function AuthLogoHeader({ compact }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "flex-start",
-    gap: 4,
+    gap: 6,
   },
   tagline: {
     fontSize: 11,
