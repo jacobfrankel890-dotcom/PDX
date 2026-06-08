@@ -1,4 +1,5 @@
 import { Tabs } from "expo-router";
+import { View } from "react-native";
 import { GlassTabBar } from "../../../components/GlassTabBar";
 import { useTheme } from "../../../lib/settings-context";
 
@@ -6,7 +7,8 @@ export default function TabsLayout() {
   const { colors } = useTheme();
 
   return (
-    <Tabs
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Tabs
       tabBar={(props) => <GlassTabBar {...props} />}
       screenOptions={{
         headerShown: false,
@@ -27,5 +29,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="dashboard" options={{ title: "Home" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>
+    </View>
   );
 }

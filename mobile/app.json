@@ -14,6 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "backgroundColor": "#FFFFFF",
       "bundleIdentifier": "com.partsdistributionxpress.expense",
       "infoPlist": {
         "NSCameraUsageDescription": "PDX Expense needs camera access to photograph receipts for expense reports.",
@@ -25,6 +26,7 @@
     },
     "android": {
       "package": "com.partsdistributionxpress.expense",
+      "backgroundColor": "#FFFFFF",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/android-icon-foreground.png",
