@@ -33,14 +33,17 @@
       },
       "permissions": ["CAMERA", "READ_MEDIA_IMAGES"]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
     },
     "extra": {
-      "appUrl": "",
+      "supabaseUrl": "",
+      "supabaseAnonKey": "",
       "eas": {
         "projectId": "REPLACE_AFTER_EAS_INIT"
-      }
+      },
+      "router": {}
     }
   }
 }

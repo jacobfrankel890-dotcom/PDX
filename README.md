@@ -15,7 +15,9 @@ Expense reporting portal for **Parts Distribution Xpress** regional managers and
 
 ## Quick Start
 
-> **Want TestFlight without running locally?** See **[docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)** — deploy to Vercel + cloud iOS build via Expo EAS.
+> **Native iOS app (TestFlight, no Vercel):** See **[docs/NATIVE_APP.md](docs/NATIVE_APP.md)** — Expo + Supabase, same pattern as Motorly/Reroute.
+
+> **Legacy web + WebView approach:** See [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md) (not recommended).
 
 ### Local development (optional)
 
