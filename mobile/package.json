@@ -9,22 +9,22 @@
     "submit:ios": "eas submit --platform ios --profile preview --latest"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "2.1.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.49.8",
     "date-fns": "^4.1.0",
     "expo": "~56.0.9",
     "expo-constants": "~56.0.17",
     "expo-file-system": "~56.0.3",
-    "expo-image-picker": "~17.0.10",
-    "expo-linking": "~8.0.11",
-    "expo-router": "~6.0.14",
+    "expo-image-picker": "~56.0.16",
+    "expo-linking": "~56.0.13",
+    "expo-router": "~56.2.9",
     "expo-splash-screen": "~56.0.10",
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
     "react-native": "0.85.3",
-    "react-native-gesture-handler": "~2.24.0",
-    "react-native-safe-area-context": "~5.4.0",
-    "react-native-screens": "~4.11.0"
+    "react-native-gesture-handler": "~2.31.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.25.2"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",

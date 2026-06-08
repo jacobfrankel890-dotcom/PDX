@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { startOfWeek, endOfWeek, format } from "date-fns";
-import { supabase } from "../../lib/supabase";
-import { Button } from "../../components/Button";
-import { Input } from "../../components/Input";
-import { colors } from "../../constants/theme";
+import { supabase } from "../../../lib/supabase";
+import { Button } from "../../../components/Button";
+import { Input } from "../../../components/Input";
+import { colors } from "../../../constants/theme";
 
 export default function NewReportScreen() {
   const today = new Date();
