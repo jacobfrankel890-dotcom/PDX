@@ -17,12 +17,12 @@ import {
   AUTH_GRAY_60,
   AUTH_TRUST_ITEMS,
   AUTH_WHITE_90,
-  authHeroOverlap,
   authHorizontalPad,
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
-import { AuthHero } from "./AuthHero";
+import { AuthScreenBackdrop } from "./AuthScreenBackdrop";
+import { AuthLogoHeader } from "./AuthLogoHeader";
 
 type Props = {
   title: string;
@@ -60,6 +60,8 @@ export function AuthScreenShell({
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}>
       <StatusBar style="light" />
+      <AuthScreenBackdrop />
+
       <ScrollView
         ref={scrollRef}
         style={styles.flex}
@@ -69,9 +71,9 @@ export function AuthScreenShell({
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       >
-        <AuthHero compact={compactHero} />
+        <AuthLogoHeader compact={compactHero} />
 
-        <View style={[styles.content, { marginTop: authHeroOverlap }]}>
+        <View style={styles.content}>
           {badge ? (
             <View style={styles.badge}>
               <Text style={styles.badgeIcon}>⚡</Text>
@@ -108,10 +110,10 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: AUTH_BG },
   scroll: {
     flexGrow: 1,
-    paddingHorizontal: authHorizontalPad,
   },
   content: {
     gap: grid(2),
+    paddingHorizontal: authHorizontalPad,
   },
   badge: {
     flexDirection: "row",
