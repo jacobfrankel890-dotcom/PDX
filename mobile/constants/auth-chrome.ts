@@ -10,6 +10,10 @@ export const AUTH_BORDER = "rgba(255,255,255,0.18)";
 export const AUTH_INPUT_BG = "rgba(255,255,255,0.06)";
 
 export const AUTH_HERO = require("../assets/hero-tire.png");
+export const AUTH_LOGO = require("../assets/pdx-logo.png");
+
+/** Official wordmark aspect (400×131 source). */
+export const AUTH_LOGO_ASPECT = 131 / 400;
 
 export const AUTH_TRUST_ITEMS = [
   { icon: "✓", label: "Scan receipts" },
@@ -29,8 +33,5 @@ export function authHeroHeight(compact?: boolean): number {
 }
 
 export const authHorizontalPad = grid(3.5);
-
-/** Pulls the black content panel up into the hero fade (not over the tire). */
-export const authHeroOverlap = -grid(9);
 
 export { SCREEN_WIDTH, SCREEN_HEIGHT };

@@ -17,12 +17,12 @@ import {
   AUTH_GRAY_60,
   AUTH_TRUST_ITEMS,
   AUTH_WHITE_90,
-  authHeroOverlap,
   authHorizontalPad,
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
-import { AuthHero } from "./AuthHero";
+import { AuthBackdrop } from "./AuthBackdrop";
+import { AuthLogoHeader } from "./AuthLogoHeader";
 
 type Props = {
   title: string;
@@ -58,28 +58,22 @@ export function AuthScreenShell({
   }, [scrollKey]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
-    >
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}>
       <StatusBar style="light" />
+      <AuthBackdrop compact={compactHero} />
+
       <ScrollView
         ref={scrollRef}
         style={styles.flex}
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingBottom: insets.bottom + grid(3) },
-          contentStyle,
-        ]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + grid(3) }, contentStyle]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       >
-        <AuthHero compact={compactHero} />
+        <AuthLogoHeader compact={compactHero} />
 
-        <View style={[styles.content, { marginTop: authHeroOverlap }]}>
+        <View style={styles.content}>
           {badge ? (
             <View style={styles.badge}>
               <Text style={styles.badgeIcon}>⚡</Text>
@@ -120,7 +114,6 @@ const styles = StyleSheet.create({
   },
   content: {
     gap: grid(2),
-    paddingTop: grid(0.5),
   },
   badge: {
     flexDirection: "row",
@@ -145,7 +138,6 @@ const styles = StyleSheet.create({
     color: AUTH_GRAY_45,
     letterSpacing: 0.8,
     textTransform: "uppercase",
-    marginTop: grid(0.5),
   },
   title: {
     fontSize: 34,
