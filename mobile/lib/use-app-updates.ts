@@ -1,5 +1,5 @@
 import * as Updates from "expo-updates";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type UpdateStatus = "idle" | "checking" | "downloading" | "ready" | "error" | "dev";
 
@@ -22,13 +22,14 @@ function buildInfo(): Pick<UpdateInfo, "channel" | "runtimeVersion" | "updateId"
 }
 
 export function useAppUpdates(autoCheck = true) {
+  const checkedRef = useRef(false);
   const [info, setInfo] = useState<UpdateInfo>(() => ({
     status: __DEV__ ? "dev" : "idle",
     message: __DEV__ ? "Updates disabled in development" : "",
     ...buildInfo(),
   }));
 
-  const checkForUpdate = useCallback(async (reloadIfReady = true) => {
+  const checkForUpdate = useCallback(async (reloadIfReady = false) => {
     if (__DEV__) {
       setInfo({
         status: "dev",
@@ -65,7 +66,7 @@ export function useAppUpdates(autoCheck = true) {
 
       setInfo({
         status: "ready",
-        message: "Update downloaded",
+        message: reloadIfReady ? "Applying update…" : "Update ready — tap Check for updates to apply",
         ...buildInfo(),
       });
 
@@ -85,10 +86,11 @@ export function useAppUpdates(autoCheck = true) {
   }, []);
 
   useEffect(() => {
-    if (!autoCheck || __DEV__) return;
+    if (!autoCheck || __DEV__ || checkedRef.current) return;
+    checkedRef.current = true;
 
-    // Check once on launch only — avoid reload loops when returning from background.
-    checkForUpdate(true);
+    // Download silently on launch — never auto-reload (prevents crash loops from bad OTAs).
+    checkForUpdate(false);
   }, [autoCheck, checkForUpdate]);
 
   return { info, checkForUpdate };
