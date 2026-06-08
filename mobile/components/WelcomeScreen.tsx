@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   subheadline: {
     fontSize: 15,
     fontWeight: "500",
-    color: "rgba(255,255,255,0.78)",
+    color: "rgba(255,255,255,0.88)",
     lineHeight: 22,
     maxWidth: 320,
   },
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: 13,
-    color: "rgba(255,255,255,0.52)",
+    color: "rgba(255,255,255,0.68)",
     lineHeight: 18,
     marginTop: grid(0.5),
   },
@@ -151,11 +151,11 @@ const styles = StyleSheet.create({
   },
   trustIcon: {
     fontSize: 11,
-    color: "rgba(255,255,255,0.48)",
+    color: "rgba(255,255,255,0.62)",
   },
   trustText: {
     fontSize: 12,
     fontWeight: "500",
-    color: "rgba(255,255,255,0.48)",
+    color: "rgba(255,255,255,0.62)",
   },
 });

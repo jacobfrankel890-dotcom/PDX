@@ -16,7 +16,7 @@ export function AuthScreenLayout({ children }: Props) {
     <ImageBackground source={TIRE_BG} style={styles.root} resizeMode="cover">
       <StatusBar style="light" />
       <BlurView
-        intensity={Platform.OS === "ios" ? 48 : 60}
+        intensity={Platform.OS === "ios" ? 54 : 68}
         tint="dark"
         style={StyleSheet.absoluteFillObject}
         pointerEvents="none"
@@ -35,7 +35,7 @@ const styles = StyleSheet.create({
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.72)",
+    backgroundColor: "rgba(0,0,0,0.78)",
   },
   content: {
     flex: 1,
