@@ -11,8 +11,6 @@ import {
 } from "react-native";
 import {
   AUTH_BG,
-  AUTH_GRAY_45,
-  AUTH_GRAY_60,
   AUTH_TRUST_ITEMS,
   AUTH_WHITE_90,
   authHorizontalPad,
@@ -70,34 +68,36 @@ export function AuthScreenShell({
           automaticallyAdjustKeyboardInsets
           showsVerticalScrollIndicator={false}
         >
-          <AuthLogoHeader compact={compactHero} />
+          <View style={styles.page}>
+            <AuthLogoHeader compact={compactHero} />
 
-          {badge ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeIcon}>⚡</Text>
-              <Text style={styles.badgeText}>{badge}</Text>
-            </View>
-          ) : null}
+            {badge ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeIcon}>⚡</Text>
+                <Text style={styles.badgeText}>{badge}</Text>
+              </View>
+            ) : null}
 
-          {sectionLabel ? <Text style={styles.sectionLabel}>{sectionLabel}</Text> : null}
+            {sectionLabel ? <Text style={styles.sectionLabel}>{sectionLabel}</Text> : null}
 
-          <Text style={styles.title}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+            <Text style={styles.title}>{title}</Text>
+            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
 
-          <View style={styles.form}>{children}</View>
+            <View style={styles.form}>{children}</View>
 
-          {showTrust ? (
-            <View style={styles.trustRow}>
-              {AUTH_TRUST_ITEMS.map((item) => (
-                <View key={item.label} style={styles.trustItem}>
-                  <Text style={styles.trustIcon}>{item.icon}</Text>
-                  <Text style={styles.trustText}>{item.label}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
+            {showTrust ? (
+              <View style={styles.trustRow}>
+                {AUTH_TRUST_ITEMS.map((item) => (
+                  <View key={item.label} style={styles.trustItem}>
+                    <Text style={styles.trustIcon}>{item.icon}</Text>
+                    <Text style={styles.trustText}>{item.label}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
-          {footer ? <View style={styles.footer}>{footer}</View> : null}
+            {footer ? <View style={styles.footer}>{footer}</View> : null}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </AuthScreenLayout>
@@ -107,6 +107,11 @@ export function AuthScreenShell({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   scrollContent: {
+    flexGrow: 1,
+  },
+  page: {
+    flexGrow: 1,
+    paddingHorizontal: authHorizontalPad,
     paddingBottom: grid(3),
   },
   badge: {
@@ -114,41 +119,42 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "flex-start",
     backgroundColor: "#99C221",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
     borderRadius: radius.full,
     gap: 4,
     marginBottom: grid(2),
   },
   badgeIcon: { fontSize: 11, color: AUTH_BG },
   badgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     color: AUTH_BG,
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: AUTH_GRAY_45,
-    letterSpacing: 0.8,
+    color: "rgba(255,255,255,0.52)",
+    letterSpacing: 1,
     textTransform: "uppercase",
     marginBottom: grid(1),
   },
   title: {
-    fontSize: 34,
+    fontSize: 30,
     fontWeight: "800",
     color: AUTH_WHITE_90,
-    letterSpacing: -0.8,
-    lineHeight: 40,
+    letterSpacing: -0.6,
+    lineHeight: 36,
     marginBottom: grid(1),
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "500",
-    color: AUTH_GRAY_60,
-    lineHeight: 24,
-    marginBottom: grid(2),
+    color: "rgba(255,255,255,0.78)",
+    lineHeight: 22,
+    marginBottom: grid(2.5),
+    maxWidth: 320,
   },
   form: {
     gap: grid(2),
@@ -156,23 +162,23 @@ const styles = StyleSheet.create({
   trustRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: grid(2),
-    columnGap: grid(2),
+    marginTop: grid(3),
+    columnGap: grid(2.5),
     rowGap: grid(1),
   },
   trustItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
   },
   trustIcon: {
-    fontSize: 13,
-    color: AUTH_GRAY_45,
+    fontSize: 11,
+    color: "rgba(255,255,255,0.48)",
   },
   trustText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "500",
-    color: AUTH_GRAY_45,
+    color: "rgba(255,255,255,0.48)",
   },
   footer: {
     alignItems: "center",
