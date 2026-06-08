@@ -37,14 +37,14 @@
   "submit": {
     "preview": {
       "ios": {
-        "appleTeamId": "YOUR_APPLE_TEAM_ID",
-        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID"
+        "appleTeamId": "8G5Y85C7V2",
+        "ascAppId": "6778115293"
       }
     },
     "production": {
       "ios": {
-        "appleTeamId": "YOUR_APPLE_TEAM_ID",
-        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID"
+        "appleTeamId": "8G5Y85C7V2",
+        "ascAppId": "6778115293"
       }
     }
   }
