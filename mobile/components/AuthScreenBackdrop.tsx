@@ -1,24 +1,17 @@
-import { Platform, Image, StyleSheet, View } from "react-native";
-import { BlurView } from "expo-blur";
+import { Image, Platform, StyleSheet, View } from "react-native";
 
-/** Tire photo only — never use the wordmark here. */
-const TIRE_BACKDROP = require("../assets/auth-backdrop-tire.jpg");
+/** Only image on auth screens — tire photo, full bleed. */
+const WELCOME_TIRE_BG = require("../assets/welcome-bg-tire-v2.jpg");
 
-/** Full-screen tire photo + blur + one dark shade. Sits behind all auth UI. */
 export function AuthScreenBackdrop() {
   return (
     <View style={styles.root} pointerEvents="none">
       <Image
-        source={TIRE_BACKDROP}
+        source={WELCOME_TIRE_BG}
         style={StyleSheet.absoluteFillObject}
         resizeMode="cover"
+        blurRadius={Platform.OS === "ios" ? 18 : 12}
         accessibilityIgnoresInvertColors
-      />
-      <BlurView
-        intensity={Platform.OS === "ios" ? 28 : 42}
-        tint="dark"
-        style={StyleSheet.absoluteFillObject}
-        pointerEvents="none"
       />
       <View style={styles.shade} />
     </View>
@@ -32,6 +25,6 @@ const styles = StyleSheet.create({
   },
   shade: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.58)",
+    backgroundColor: "rgba(0,0,0,0.62)",
   },
 });

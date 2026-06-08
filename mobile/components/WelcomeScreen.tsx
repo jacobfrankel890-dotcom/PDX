@@ -1,6 +1,8 @@
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as Updates from "expo-updates";
+import { useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AUTH_BG,
@@ -22,6 +24,20 @@ export function WelcomeScreen() {
   const { height } = useWindowDimensions();
   const compact = height < 740;
 
+  useEffect(() => {
+    if (__DEV__ || !Updates.isEnabled) return;
+    (async () => {
+      try {
+        const check = await Updates.checkForUpdateAsync();
+        if (!check.isAvailable) return;
+        await Updates.fetchUpdateAsync();
+        await Updates.reloadAsync();
+      } catch {
+        // ignore — user can check manually from profile when signed in
+      }
+    })();
+  }, []);
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -31,7 +47,7 @@ export function WelcomeScreen() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + grid(4), flexGrow: 1 },
+          { paddingBottom: insets.bottom + grid(4) },
         ]}
         showsVerticalScrollIndicator={false}
         bounces={false}
@@ -92,6 +108,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, zIndex: 1 },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: "flex-start",
   },
   content: {
     gap: grid(1.5),
