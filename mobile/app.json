@@ -40,9 +40,6 @@
     "extra": {
       "supabaseUrl": "",
       "supabaseAnonKey": "",
-      "eas": {
-        "projectId": "REPLACE_AFTER_EAS_INIT"
-      },
       "router": {}
     }
   }
