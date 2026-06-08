@@ -1,7 +1,7 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { COMPANIES, type CompanyValue } from "../lib/types";
+import { COMPANIES, getCompanyLabel, normalizeCompanyValue, type CompanyValue } from "../lib/types";
 import { colors, radius, spacing } from "../constants/theme";
 
 type Props = {
@@ -12,14 +12,14 @@ type Props = {
 export function CompanyPicker({ value, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();
-  const selected = COMPANIES.find((c) => c.value === value);
+  const normalizedValue = normalizeCompanyValue(String(value));
 
   return (
     <>
       <Pressable style={styles.trigger} onPress={() => setOpen(true)}>
         <Text style={styles.triggerLabel}>Company</Text>
         <Text style={styles.triggerValue} numberOfLines={1}>
-          {selected?.label ?? value}
+          {getCompanyLabel(String(value))}
         </Text>
         <Text style={styles.chevron}>▾</Text>
       </Pressable>
@@ -30,7 +30,7 @@ export function CompanyPicker({ value, onChange }: Props) {
           <Text style={styles.sheetTitle}>Select company</Text>
           <ScrollView>
             {COMPANIES.map((c) => {
-              const active = c.value === value;
+              const active = c.value === normalizedValue;
               return (
                 <Pressable
                   key={c.value}
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     padding: spacing.md,
-    maxHeight: "50%",
+    maxHeight: "72%",
   },
   sheetTitle: { fontSize: 18, fontWeight: "700", color: colors.primary, marginBottom: spacing.md },
   option: {

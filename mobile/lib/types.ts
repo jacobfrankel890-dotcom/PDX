@@ -130,20 +130,43 @@ export function getRoleLabel(role: UserRole): string {
   return ROLES.find((r) => r.value === role)?.label ?? role;
 }
 
-export const COMPANIES = [
-  { value: "Parts Distribution Xpress", label: "PDX — Parts Distribution Xpress" },
-  { value: "All Parts Xpress", label: "APX — All Parts Xpress" },
-  { value: "CPX", label: "CPX — Canada" },
-] as const;
+export const COMPANIES = REGIONS.map((r) => ({
+  value: r.value,
+  label: `${r.label} — ${r.description}`,
+}));
 
-export type CompanyValue = (typeof COMPANIES)[number]["value"];
+export type CompanyValue = PdxRegion;
+
+/** Map legacy stored company names to region keys */
+const LEGACY_COMPANY_VALUES: Record<string, PdxRegion> = {
+  "Parts Distribution Xpress": "pdx",
+  "All Parts Xpress": "apx",
+  CPX: "cpx",
+};
 
 export function getDefaultCompanyForRegion(region: PdxRegion): CompanyValue {
-  if (region === "cpx") return "CPX";
-  if (region === "apx" || region === "apx_california") return "All Parts Xpress";
-  return "Parts Distribution Xpress";
+  return region;
+}
+
+export function normalizeCompanyValue(
+  company: string | null | undefined,
+  fallbackRegion: PdxRegion = "pdx"
+): CompanyValue {
+  if (!company) return fallbackRegion;
+  if (COMPANIES.some((c) => c.value === company)) return company as CompanyValue;
+  if (LEGACY_COMPANY_VALUES[company]) return LEGACY_COMPANY_VALUES[company];
+  return fallbackRegion;
 }
 
 export function getCompanyLabel(company: string): string {
-  return COMPANIES.find((c) => c.value === company)?.label ?? company;
+  const match = COMPANIES.find((c) => c.value === company);
+  if (match) return match.label;
+  const region = REGIONS.find((r) => r.value === company);
+  if (region) return `${region.label} — ${region.description}`;
+  const legacy = Object.entries(LEGACY_COMPANY_VALUES).find(([, v]) => v === company);
+  if (legacy) {
+    const r = REGIONS.find((reg) => reg.value === legacy[1]);
+    if (r) return `${r.label} — ${r.description}`;
+  }
+  return company;
 }

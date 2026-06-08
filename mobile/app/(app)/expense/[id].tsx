@@ -27,7 +27,7 @@ import {
   type ExpenseEntry,
 } from "../../../lib/expenses";
 import { useTheme } from "../../../lib/settings-context";
-import { formatCurrency, getCompanyLabel, type CompanyValue } from "../../../lib/types";
+import { formatCurrency, getCompanyLabel, normalizeCompanyValue, type CompanyValue } from "../../../lib/types";
 import { getErrorMessage } from "../../../lib/utils";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 import { Button } from "../../../components/Button";
@@ -57,7 +57,7 @@ export default function ExpenseDetailScreen() {
   const [merchantName, setMerchantName] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [category, setCategory] = useState<ExpenseCategoryKey>("misc");
-  const [company, setCompany] = useState<CompanyValue>("Parts Distribution Xpress");
+  const [company, setCompany] = useState<CompanyValue>("pdx");
   const [expenseDate, setExpenseDate] = useState("");
   const [relatedTo, setRelatedTo] = useState("");
 
@@ -78,7 +78,7 @@ export default function ExpenseDetailScreen() {
       setMerchantName(item.description ?? "");
       setTotalAmount(String(item.row_total ?? 0));
       setCategory(getCategoryFromItem(item));
-      setCompany((item.company as CompanyValue) || "Parts Distribution Xpress");
+      setCompany(normalizeCompanyValue(item.company));
       setExpenseDate(item.expense_date ?? "");
       setRelatedTo(item.related_to ?? "");
 

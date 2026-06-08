@@ -32,6 +32,7 @@ import {
 import {
   formatCurrency,
   getDefaultCompanyForRegion,
+  normalizeCompanyValue,
   type CompanyValue,
   type Profile,
 } from "../lib/types";
@@ -63,7 +64,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
   const [totalAmount, setTotalAmount] = useState("");
   const [category, setCategory] = useState<ExpenseCategoryKey>("misc");
   const [company, setCompany] = useState<CompanyValue>(
-    (profile.company as CompanyValue) || getDefaultCompanyForRegion(profile.region)
+    normalizeCompanyValue(profile.company, profile.region)
   );
   const [expenseDate, setExpenseDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [relatedTo, setRelatedTo] = useState("");

@@ -30,9 +30,8 @@ import {
 import { formatCurrency, getCompanyLabel, getRegionLabel, type Profile } from "../../../lib/types";
 import { getErrorMessage } from "../../../lib/utils";
 import { useTheme } from "../../../lib/settings-context";
+import { getFabBottom, getHomeListBottomPadding, tabBarLayout } from "../../../lib/tab-bar-layout";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
-
-const TAB_BAR_HEIGHT = 49;
 
 function StatusBadge({ status, colors }: { status?: string; colors: ThemeColors }) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -243,7 +242,7 @@ export default function DashboardScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id!}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: getHomeListBottomPadding(insets) }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} />
         }
@@ -296,7 +295,11 @@ export default function DashboardScreen() {
       />
 
       <Pressable
-        style={[styles.fab, { bottom: TAB_BAR_HEIGHT + 12 }]}
+        style={[
+          styles.fab,
+          tabBarLayout.fabShadow,
+          { bottom: getFabBottom(insets), shadowColor: colors.primary },
+        ]}
         onPress={() => router.push("/(app)/submit")}
       >
         <Text style={styles.fabIcon}>+</Text>
@@ -348,7 +351,7 @@ function makeStyles(colors: ThemeColors) {
     borderRadius: radius.full,
   },
   submitWeekText: { color: colors.primary, fontWeight: "700", fontSize: 14 },
-  list: { padding: spacing.md, paddingBottom: 120, gap: spacing.sm },
+  list: { padding: spacing.md, gap: spacing.sm },
   listHeader: { gap: spacing.sm, marginBottom: spacing.sm },
   listTitle: { fontSize: 13, fontWeight: "600", color: colors.slate500, textTransform: "uppercase", letterSpacing: 0.5 },
   searchBox: {
@@ -426,15 +429,10 @@ function makeStyles(colors: ThemeColors) {
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: radius.lg,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
   },
-  fabIcon: { color: colors.white, fontSize: 24, fontWeight: "300", lineHeight: 26 },
-  fabText: { color: colors.white, fontSize: 17, fontWeight: "700" },
+  fabIcon: { color: colors.white, fontSize: 22, fontWeight: "300", lineHeight: 24 },
+  fabText: { color: colors.white, fontSize: 16, fontWeight: "700" },
   });
 }

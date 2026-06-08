@@ -29,6 +29,7 @@ import {
   type Profile,
 } from "../../../lib/types";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
+import { getTabBarStackHeight } from "../../../lib/tab-bar-layout";
 
 function Section({
   title,
@@ -189,7 +190,13 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={styles.flex}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xl }]}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingTop: insets.top + spacing.md,
+          paddingBottom: getTabBarStackHeight(insets) + spacing.lg,
+        },
+      ]}
     >
       <Text style={styles.pageTitle}>Profile</Text>
 
