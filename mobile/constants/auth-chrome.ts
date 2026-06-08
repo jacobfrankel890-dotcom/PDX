@@ -10,7 +10,6 @@ export const AUTH_BORDER = "rgba(255,255,255,0.18)";
 export const AUTH_INPUT_BG = "rgba(255,255,255,0.06)";
 
 export const AUTH_HERO = require("../assets/hero-tire.png");
-export const AUTH_LOGO = require("../assets/pdx-logo.png");
 
 export const AUTH_TRUST_ITEMS = [
   { icon: "✓", label: "Scan receipts" },
@@ -23,13 +22,15 @@ export const AUTH_TAGLINE =
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
+/** Top ~half of the screen — tire photo lives here (Reroute-style). */
 export function authHeroHeight(compact?: boolean): number {
-  if (compact) return Math.round(Math.min(300, Math.max(240, SCREEN_HEIGHT * 0.34)));
-  return Math.round(Math.min(380, Math.max(280, SCREEN_HEIGHT * 0.42)));
+  const ratio = compact ? 0.44 : 0.48;
+  return Math.round(SCREEN_HEIGHT * ratio);
 }
 
 export const authHorizontalPad = grid(3.5);
-/** Space between hero photo and content block — keeps copy off the tire image. */
-export const authContentTopGap = grid(3);
 
-export { SCREEN_WIDTH };
+/** Pulls the black content panel up into the hero fade (not over the tire). */
+export const authHeroOverlap = -grid(9);
+
+export { SCREEN_WIDTH, SCREEN_HEIGHT };

@@ -10,7 +10,7 @@ import {
   AUTH_TAGLINE,
   AUTH_TRUST_ITEMS,
   AUTH_WHITE_90,
-  authContentTopGap,
+  authHeroOverlap,
   authHorizontalPad,
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
@@ -33,7 +33,7 @@ export function WelcomeScreen() {
       >
         <AuthHero compact={compact} />
 
-        <View style={[styles.content, { marginTop: authContentTopGap }]}>
+        <View style={[styles.content, { marginTop: authHeroOverlap }]}>
           <View style={styles.badge}>
             <Text style={styles.badgeIcon}>⚡</Text>
             <Text style={styles.badgeText}>For PDX teams</Text>

@@ -17,7 +17,7 @@ import {
   AUTH_GRAY_60,
   AUTH_TRUST_ITEMS,
   AUTH_WHITE_90,
-  authContentTopGap,
+  authHeroOverlap,
   authHorizontalPad,
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
@@ -79,7 +79,7 @@ export function AuthScreenShell({
       >
         <AuthHero compact={compactHero} />
 
-        <View style={[styles.content, { marginTop: authContentTopGap }]}>
+        <View style={[styles.content, { marginTop: authHeroOverlap }]}>
           {badge ? (
             <View style={styles.badge}>
               <Text style={styles.badgeIcon}>⚡</Text>
