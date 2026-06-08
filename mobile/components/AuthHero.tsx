@@ -44,7 +44,7 @@ export function AuthHero({ compact, style }: Props) {
       />
 
       <BlurView
-        intensity={Platform.OS === "ios" ? 16 : 28}
+        intensity={Platform.OS === "ios" ? 24 : 36}
         tint="dark"
         style={{ position: "absolute", top: 0, width: SCREEN_WIDTH, height }}
         pointerEvents="none"
