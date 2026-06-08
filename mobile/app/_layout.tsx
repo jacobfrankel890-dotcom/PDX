@@ -18,13 +18,14 @@ function RootNavigator() {
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
       <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: colors.primary },
-          headerTintColor: colors.white,
-          headerTitleStyle: { fontWeight: "600" },
-          headerBackButtonDisplayMode: "minimal",
-          headerBackTitle: "",
-        }}
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.surface },
+        headerTintColor: colors.primary,
+        headerTitleStyle: { fontWeight: "700", color: colors.text },
+        headerShadowVisible: false,
+        headerBackButtonDisplayMode: "minimal",
+        headerBackTitle: "",
+      }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />

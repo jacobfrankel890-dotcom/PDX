@@ -31,6 +31,7 @@ import {
 } from "../../../lib/types";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 import { getTabBarStackHeight } from "../../../lib/tab-bar-layout";
+import { PdxLogo } from "../../../components/PdxLogo";
 
 function Section({
   title,
@@ -219,7 +220,10 @@ export default function ProfileScreen() {
         },
       ]}
     >
-      <Text style={styles.pageTitle}>Profile</Text>
+      <View style={styles.pageHeader}>
+        <PdxLogo size="lg" tagline="Expense" style={styles.logoCenter} />
+        <Text style={styles.pageTitle}>Profile</Text>
+      </View>
 
       <View style={styles.userCard}>
         <View style={styles.avatarLarge}>
@@ -354,7 +358,7 @@ export default function ProfileScreen() {
         </Pressable>
       </Section>
 
-      <Text style={styles.footer}>PDX Expense · v1.0.0</Text>
+      <Text style={styles.footer}>PDX Expense · Parts Distribution Xpress</Text>
     </ScrollView>
   );
 }
@@ -364,7 +368,9 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     flex: { flex: 1, backgroundColor: colors.bg },
     center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg },
     content: { paddingHorizontal: spacing.md, gap: spacing.lg },
-    pageTitle: { fontSize: 28, fontWeight: "800", color: colors.text, marginBottom: spacing.xs },
+    pageHeader: { alignItems: "center", gap: spacing.xs, marginBottom: spacing.xs },
+    logoCenter: { alignItems: "center" },
+    pageTitle: { fontSize: 22, fontWeight: "800", color: colors.text, textAlign: "center" },
     userCard: {
       flexDirection: "row",
       alignItems: "center",
@@ -379,11 +385,13 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
       width: 64,
       height: 64,
       borderRadius: 32,
-      backgroundColor: colors.primary,
+      backgroundColor: colors.greenLight,
       alignItems: "center",
       justifyContent: "center",
+      borderWidth: 2,
+      borderColor: colors.primary,
     },
-    avatarLargeText: { color: colors.white, fontSize: 26, fontWeight: "700" },
+    avatarLargeText: { color: colors.text, fontSize: 26, fontWeight: "800" },
     userInfo: { flex: 1, gap: 4 },
     userName: { fontSize: 20, fontWeight: "700", color: colors.text },
     userEmail: { fontSize: 14, color: colors.textSecondary },
@@ -391,8 +399,8 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     metaPill: {
       fontSize: 12,
       fontWeight: "600",
-      color: colors.primary,
-      backgroundColor: isDark ? "#334155" : "#e8eef5",
+      color: colors.primaryDark,
+      backgroundColor: colors.greenLight,
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: radius.full,
@@ -436,7 +444,7 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     },
     themeChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
     themeChipText: { fontSize: 14, fontWeight: "600", color: colors.textSecondary },
-    themeChipTextActive: { color: colors.white },
+    themeChipTextActive: { color: colors.onPrimary },
     signOutBtn: { padding: spacing.md, alignItems: "center" },
     signOutText: { color: colors.error, fontSize: 16, fontWeight: "700" },
     updateBtn: {

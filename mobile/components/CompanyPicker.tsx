@@ -2,7 +2,8 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COMPANIES, getCompanyLabel, normalizeCompanyValue, type CompanyValue } from "../lib/types";
-import { colors, radius, spacing } from "../constants/theme";
+import { useTheme } from "../lib/settings-context";
+import { radius, spacing } from "../constants/theme";
 
 type Props = {
   value: CompanyValue | string;
@@ -13,6 +14,8 @@ type Props = {
 export function CompanyPicker({ value, onChange, embedded }: Props) {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const normalizedValue = normalizeCompanyValue(String(value));
 
   return (
@@ -53,7 +56,8 @@ export function CompanyPicker({ value, onChange, embedded }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
   trigger: {
     flexDirection: "row",
     alignItems: "center",
@@ -92,8 +96,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     marginBottom: 4,
   },
-  optionActive: { backgroundColor: "#e8eef5" },
+  optionActive: { backgroundColor: colors.greenLight },
   optionText: { flex: 1, fontSize: 16, color: colors.slate800 },
   optionTextActive: { color: colors.primary, fontWeight: "600" },
   check: { color: colors.primary, fontWeight: "700", fontSize: 16 },
-});
+  });
+}

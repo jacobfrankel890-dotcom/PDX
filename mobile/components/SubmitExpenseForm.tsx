@@ -40,11 +40,13 @@ import {
   type Profile,
 } from "../lib/types";
 import { getErrorMessage, toIsoDate } from "../lib/utils";
-import { colors, radius, spacing } from "../constants/theme";
+import { useTheme } from "../lib/settings-context";
+import { radius, spacing, type ThemeColors } from "../constants/theme";
 import { Button } from "./Button";
 import { CategoryPicker } from "./CategoryPicker";
 import { CompanyPicker } from "./CompanyPicker";
 import { ReceiptAnalyzingView } from "./ReceiptAnalyzingView";
+import { ScreenHeader } from "./ScreenHeader";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -60,6 +62,8 @@ type Props = {
 
 export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const scrollRef = useRef<ScrollView>(null);
   const merchantRef = useRef<TextInputType>(null);
   const amountRef = useRef<TextInputType>(null);
@@ -249,22 +253,19 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
     setShowDetails(false);
   }
 
+  const headerTitle =
+    step === "scan"
+      ? "Scan Receipt"
+      : step === "analyzing"
+        ? "Analyzing…"
+        : isManualEntry
+          ? "Enter Expense"
+          : "Confirm & Save";
+
   return (
-    <View style={[styles.flex, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={styles.closeBtn}>✕</Text>
-        </Pressable>
-        <Text style={styles.headerTitle}>
-          {step === "scan"
-            ? "Scan Receipt"
-            : step === "analyzing"
-              ? "Analyzing…"
-              : isManualEntry
-                ? "Enter Expense"
-                : "Confirm & Save"}
-        </Text>
-        <View style={{ width: 28 }} />
+    <View style={styles.flex}>
+      <View style={{ paddingTop: insets.top, backgroundColor: colors.surface }}>
+        <ScreenHeader title={headerTitle} onClose={() => router.back()} />
       </View>
 
       <KeyboardAvoidingView
@@ -459,24 +460,15 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.primary,
-  },
-  closeBtn: { color: colors.white, fontSize: 22, fontWeight: "300", width: 28 },
-  headerTitle: { color: colors.white, fontSize: 17, fontWeight: "700" },
   scanStep: { flex: 1, padding: spacing.lg, justifyContent: "center", gap: spacing.lg },
   heroScan: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.primary,
     borderStyle: "dashed",
     padding: spacing.xl,
     alignItems: "center",
@@ -499,7 +491,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
@@ -527,7 +519,7 @@ const styles = StyleSheet.create({
   reviewContent: { padding: spacing.md, gap: spacing.md, flexGrow: 1 },
   reviewThumb: { width: "100%", height: 120, borderRadius: radius.lg, resizeMode: "cover" },
   merchantCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.lg,
     alignItems: "center",
@@ -576,7 +568,7 @@ const styles = StyleSheet.create({
   },
   metaHint: { fontSize: 13, color: colors.slate500, marginTop: 2, alignSelf: "center" },
   formCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
@@ -612,7 +604,7 @@ const styles = StyleSheet.create({
   },
   fieldInputMultiline: { minHeight: 96, paddingTop: 13 },
   detailsSection: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -646,4 +638,5 @@ const styles = StyleSheet.create({
   retake: { color: colors.primary, fontWeight: "600", textAlign: "center" },
   altAction: { alignItems: "center", paddingVertical: spacing.xs },
   saveBtnInline: { paddingVertical: 16, borderRadius: radius.lg, marginTop: spacing.xs },
-});
+  });
+}

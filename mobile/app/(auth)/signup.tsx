@@ -214,7 +214,7 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     },
     success: {
       color: colors.primary,
-      backgroundColor: isDark ? "#334155" : "#e8eef5",
+      backgroundColor: isDark ? "#2A3318" : colors.greenLight,
       padding: 12,
       borderRadius: 10,
       fontSize: 14,
@@ -228,7 +228,7 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
       borderColor: colors.border,
       backgroundColor: colors.bg,
     },
-    optionActive: { borderColor: colors.primary, backgroundColor: isDark ? "#334155" : "#e8eef5" },
+    optionActive: { borderColor: colors.primary, backgroundColor: colors.greenLight },
     optionText: { color: colors.text, fontSize: 15 },
     optionTextActive: { color: colors.primary, fontWeight: "600", fontSize: 15 },
     row: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },

@@ -1,13 +1,13 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  EXPENSE_CATEGORIES,
+import { EXPENSE_CATEGORIES,
   EXPENSE_CATEGORY_LABELS,
   normalizeCategory,
   type ExpenseCategoryKey,
 } from "../lib/categories";
-import { colors, radius, spacing } from "../constants/theme";
+import { useTheme } from "../lib/settings-context";
+import { radius, spacing } from "../constants/theme";
 
 type Props = {
   value: ExpenseCategoryKey | string;
@@ -18,6 +18,8 @@ type Props = {
 export function CategoryPicker({ value, onChange, embedded }: Props) {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const selected = normalizeCategory(String(value));
 
   return (
@@ -62,7 +64,8 @@ export function CategoryPicker({ value, onChange, embedded }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
   trigger: {
     flexDirection: "row",
     alignItems: "center",
@@ -102,11 +105,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     gap: 12,
   },
-  optionActive: { backgroundColor: "#e8eef5" },
+  optionActive: { backgroundColor: colors.greenLight },
   optionEmoji: { fontSize: 22, width: 28, textAlign: "center" },
   optionTextWrap: { flex: 1, gap: 2 },
   optionText: { fontSize: 16, color: colors.slate800 },
   optionTextActive: { color: colors.primary, fontWeight: "600" },
   optionShort: { fontSize: 12, color: colors.slate500 },
   check: { color: colors.primary, fontWeight: "700", fontSize: 16 },
-});
+  });
+}

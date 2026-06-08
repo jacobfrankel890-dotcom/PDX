@@ -14,9 +14,9 @@ const TAB_ICONS: Record<string, string> = {
 
 export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useTheme();
-  const surfaceBg = isDark ? "rgba(30,41,59,0.96)" : "rgba(255,255,255,0.96)";
-  const borderColor = isDark ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.08)";
+  const { colors } = useTheme();
+  const surfaceBg = colors.tabBar;
+  const borderColor = colors.tabBarBorder;
 
   return (
     <View pointerEvents="box-none" style={styles.wrapper}>
@@ -62,7 +62,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
                 onPress={onPress}
                 style={styles.tab}
               >
-                <View style={[styles.iconWrap, isFocused && { backgroundColor: `${colors.primary}22` }]}>
+                <View style={[styles.iconWrap, isFocused && { backgroundColor: colors.greenLight }]}>
                   <Text style={[styles.icon, isFocused && styles.iconFocused]}>{icon}</Text>
                 </View>
                 <Text style={[styles.label, { color: isFocused ? colors.primary : colors.slate500 }]}>
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     borderTopWidth: StyleSheet.hairlineWidth,
-    shadowColor: "#0f172a",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,

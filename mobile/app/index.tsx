@@ -3,9 +3,11 @@ import { ActivityIndicator, View } from "react-native";
 import { Redirect } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { isBiometricLoginEnabled, signInWithBiometric } from "../lib/biometric-auth";
-import { colors } from "../constants/theme";
+import { useTheme } from "../lib/settings-context";
+import { PdxLogo } from "../components/PdxLogo";
 
 export default function Index() {
+  const { colors } = useTheme();
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<boolean | null>(null);
 
@@ -50,7 +52,16 @@ export default function Index() {
 
   if (!ready) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: colors.bg,
+          gap: 24,
+        }}
+      >
+        <PdxLogo size="xl" tagline="Expense" style={{ alignItems: "center" }} />
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );

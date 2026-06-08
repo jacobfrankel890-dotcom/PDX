@@ -44,7 +44,7 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const systemScheme = useColorScheme();
-  const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
+  const [themeMode, setThemeModeState] = useState<ThemeMode>("light");
   const [notifications, setNotifications] = useState<NotificationSettings>(defaultNotifications);
   const [pushToken, setPushToken] = useState<string | null>(null);
   useEffect(() => {

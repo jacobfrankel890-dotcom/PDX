@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from "react-native";
-import { colors } from "../constants/theme";
+import { useTheme } from "../lib/settings-context";
 
 type Props = {
   title: string;
@@ -11,8 +11,10 @@ type Props = {
 };
 
 export function Button({ title, onPress, loading, variant = "primary", disabled, style }: Props) {
+  const { colors } = useTheme();
   const isOutline = variant === "outline";
   const isGhost = variant === "ghost";
+  const isPrimary = !isOutline && !isGhost;
 
   return (
     <Pressable
@@ -20,6 +22,8 @@ export function Button({ title, onPress, loading, variant = "primary", disabled,
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.base,
+        isPrimary && { backgroundColor: colors.primary },
+        isOutline && { borderColor: colors.primary },
         isOutline && styles.outline,
         isGhost && styles.ghost,
         (disabled || loading) && styles.disabled,
@@ -28,9 +32,17 @@ export function Button({ title, onPress, loading, variant = "primary", disabled,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={isOutline || isGhost ? colors.primary : colors.white} />
+        <ActivityIndicator color={isPrimary ? colors.onPrimary : colors.primary} />
       ) : (
-        <Text style={[styles.text, (isOutline || isGhost) && styles.textOutline]}>{title}</Text>
+        <Text
+          style={[
+            styles.text,
+            isPrimary && { color: colors.onPrimary },
+            (isOutline || isGhost) && { color: colors.primary },
+          ]}
+        >
+          {title}
+        </Text>
       )}
     </Pressable>
   );
@@ -38,7 +50,6 @@ export function Button({ title, onPress, loading, variant = "primary", disabled,
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: colors.primary,
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 12,
@@ -47,13 +58,11 @@ const styles = StyleSheet.create({
   outline: {
     backgroundColor: "transparent",
     borderWidth: 2,
-    borderColor: colors.primary,
   },
   ghost: {
     backgroundColor: "transparent",
   },
   disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.85 },
-  text: { color: colors.white, fontWeight: "600", fontSize: 16 },
-  textOutline: { color: colors.primary },
+  pressed: { opacity: 0.88 },
+  text: { fontWeight: "700", fontSize: 16 },
 });

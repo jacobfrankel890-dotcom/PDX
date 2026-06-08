@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../lib/settings-context";
 import { radius, spacing, type ThemeColors } from "../constants/theme";
+import { PdxLogo } from "./PdxLogo";
 
 type Props = {
   title: string;
@@ -54,9 +55,7 @@ export function AuthScreenShell({ title, subtitle, children, footer, contentStyl
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.hero}>
-          <View style={styles.logoMark}>
-            <Text style={styles.logoText}>PDX</Text>
-          </View>
+          <PdxLogo size="xl" tagline="Expense" style={styles.logoCenter} />
           <Text style={styles.title}>{title}</Text>
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         </View>
@@ -78,16 +77,7 @@ function makeStyles(colors: ThemeColors) {
       justifyContent: "center",
     },
     hero: { alignItems: "center", marginBottom: spacing.lg, gap: spacing.sm },
-    logoMark: {
-      width: 56,
-      height: 56,
-      borderRadius: 16,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: spacing.xs,
-    },
-    logoText: { color: colors.white, fontSize: 18, fontWeight: "800", letterSpacing: 1 },
+    logoCenter: { alignItems: "center" },
     title: { fontSize: 26, fontWeight: "800", color: colors.text, textAlign: "center" },
     subtitle: { fontSize: 15, color: colors.textSecondary, textAlign: "center", lineHeight: 22 },
     card: {

@@ -31,6 +31,7 @@ import { formatCurrency, getCompanyLabel, getRegionLabel, type Profile } from ".
 import { getErrorMessage } from "../../../lib/utils";
 import { useTheme } from "../../../lib/settings-context";
 import { getFabBottom, getHomeListBottomPadding, tabBarLayout } from "../../../lib/tab-bar-layout";
+import { PdxLogo } from "../../../components/PdxLogo";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 
 function StatusBadge({ status, colors }: { status?: string; colors: ThemeColors }) {
@@ -216,9 +217,12 @@ export default function DashboardScreen() {
     <View style={styles.flex}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.greeting}>Hi, {profile?.first_name} 👋</Text>
-            <Text style={styles.region}>{profile ? getRegionLabel(profile.region) : ""}</Text>
+          <View style={styles.headerLeft}>
+            <PdxLogo size="md" tagline="Expense" />
+            <View style={styles.greetingWrap}>
+              <Text style={styles.greeting}>Hi, {profile?.first_name} 👋</Text>
+              <Text style={styles.region}>{profile ? getRegionLabel(profile.region) : ""}</Text>
+            </View>
           </View>
           <Pressable onPress={openProfile} style={styles.avatar}>
             <Text style={styles.avatarText}>{profile?.first_name?.[0]?.toUpperCase() ?? "?"}</Text>
@@ -324,42 +328,55 @@ function makeStyles(colors: ThemeColors) {
   flex: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.lg,
-    borderBottomLeftRadius: radius.lg,
-    borderBottomRightRadius: radius.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md },
-  greeting: { fontSize: 22, fontWeight: "700", color: colors.white },
-  region: { fontSize: 14, color: "rgba(255,255,255,0.75)", marginTop: 2 },
+  headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: spacing.md },
+  headerLeft: { flex: 1, gap: spacing.sm },
+  greetingWrap: { gap: 2 },
+  greeting: { fontSize: 20, fontWeight: "700", color: colors.text },
+  region: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: colors.greenLight,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
-  avatarText: { color: colors.white, fontWeight: "700", fontSize: 16 },
+  avatarText: { color: colors.text, fontWeight: "800", fontSize: 16 },
   summaryCard: {
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+    shadowColor: colors.cardShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  summaryLabel: { fontSize: 12, fontWeight: "600", color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: 0.5 },
-  summaryAmount: { fontSize: 28, fontWeight: "800", color: colors.white, marginTop: 2 },
-  summarySub: { fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 2 },
+  summaryLabel: { fontSize: 12, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.5 },
+  summaryAmount: { fontSize: 28, fontWeight: "800", color: colors.text, marginTop: 2 },
+  summarySub: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   submitWeekBtn: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: radius.full,
   },
-  submitWeekText: { color: colors.primary, fontWeight: "700", fontSize: 14 },
+  submitWeekText: { color: colors.onPrimary, fontWeight: "700", fontSize: 14 },
   list: { padding: spacing.md, gap: spacing.sm },
   listHeader: { gap: spacing.sm, marginBottom: spacing.sm },
   listTitle: { fontSize: 13, fontWeight: "600", color: colors.slate500, textTransform: "uppercase", letterSpacing: 0.5 },
@@ -390,7 +407,7 @@ function makeStyles(colors: ThemeColors) {
   filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   filterEmoji: { fontSize: 14 },
   filterText: { fontSize: 13, fontWeight: "600", color: colors.slate700 },
-  filterTextActive: { color: colors.white },
+  filterTextActive: { color: colors.onPrimary },
   resultCount: { fontSize: 12, color: colors.slate500 },
   empty: { alignItems: "center", paddingTop: 48, gap: 8 },
   emptyEmoji: { fontSize: 48 },
@@ -411,7 +428,7 @@ function makeStyles(colors: ThemeColors) {
   categoryStripe: {
     width: 44,
     alignSelf: "stretch",
-    backgroundColor: colors.border,
+    backgroundColor: colors.greenLight,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -419,16 +436,16 @@ function makeStyles(colors: ThemeColors) {
   expenseMain: { flex: 1, padding: spacing.md, paddingLeft: 10 },
   expenseDesc: { fontSize: 16, fontWeight: "600", color: colors.slate800 },
   expenseMeta: { fontSize: 13, color: colors.slate500, marginTop: 3 },
-  relatedTo: { fontSize: 12, color: colors.primaryLight, marginTop: 2, fontStyle: "italic" },
+  relatedTo: { fontSize: 12, color: colors.primaryDark, marginTop: 2, fontStyle: "italic" },
   expenseRight: { alignItems: "flex-end", padding: spacing.md, paddingLeft: 0, gap: 4 },
   expenseAmount: { fontSize: 17, fontWeight: "700", color: colors.primary },
   chevron: { fontSize: 22, color: colors.slate400, fontWeight: "300", marginTop: 2 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full },
   badgeDraft: { backgroundColor: colors.greenLight },
-  badgeSubmitted: { backgroundColor: "#e0e7ff" },
+  badgeSubmitted: { backgroundColor: colors.greenLight },
   badgeText: { fontSize: 11, fontWeight: "600" },
-  badgeTextDraft: { color: colors.green },
-  badgeTextSubmitted: { color: colors.primaryLight },
+  badgeTextDraft: { color: colors.greenDark },
+  badgeTextSubmitted: { color: colors.primaryDark },
   fab: {
     position: "absolute",
     left: spacing.md,
@@ -441,7 +458,7 @@ function makeStyles(colors: ThemeColors) {
     paddingVertical: 14,
     borderRadius: radius.lg,
   },
-  fabIcon: { color: colors.white, fontSize: 22, fontWeight: "300", lineHeight: 24 },
-  fabText: { color: colors.white, fontSize: 16, fontWeight: "700" },
+  fabIcon: { color: colors.onPrimary, fontSize: 22, fontWeight: "300", lineHeight: 24 },
+  fabText: { color: colors.onPrimary, fontSize: 16, fontWeight: "700" },
   });
 }
