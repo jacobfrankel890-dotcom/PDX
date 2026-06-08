@@ -1,16 +1,35 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  UIManager,
+  View,
+} from "react-native";
 import { Link, router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { REGIONS, ROLES, getDefaultCompanyForRegion, type PdxRegion } from "../../lib/types";
 import { isValidEmail } from "../../lib/utils";
+import { useTheme } from "../../lib/settings-context";
+import { AuthScreenShell } from "../../components/AuthScreenShell";
+import { SignupStepIndicator } from "../../components/SignupStepIndicator";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
-import { colors } from "../../constants/theme";
+import { radius, spacing, type ThemeColors } from "../../constants/theme";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type Step = "account" | "role";
 
+const STEP_LABELS = ["Your account", "Role & region"];
+
 export default function SignupScreen() {
+  const { colors, isDark } = useTheme();
+  const styles = makeStyles(colors, isDark);
   const [step, setStep] = useState<Step>("account");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -30,6 +49,11 @@ export default function SignupScreen() {
     setForm((p) => ({ ...p, [field]: value }));
     setError("");
     setSuccess("");
+  }
+
+  function goToStep(next: Step) {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setStep(next);
   }
 
   function validateAccount(): boolean {
@@ -85,49 +109,63 @@ export default function SignupScreen() {
       return;
     }
 
-    setStep("account");
+    goToStep("account");
     setSuccess("Account created! Check your email to confirm, then sign in.");
   }
 
+  const stepIndex = step === "account" ? 0 : 1;
+
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Parts Distribution Xpress</Text>
+    <AuthScreenShell
+      title="Create account"
+      subtitle="Join PDX Expense in under a minute"
+      scrollKey={step}
+      footer={
+        <Link href="/(auth)/login" asChild>
+          <Pressable hitSlop={8}>
+            <Text style={styles.footerLink}>
+              Already have an account? <Text style={styles.footerLinkBold}>Sign in</Text>
+            </Text>
+          </Pressable>
+        </Link>
+      }
+    >
+      <SignupStepIndicator step={stepIndex} total={2} labels={STEP_LABELS} />
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {success ? <Text style={styles.success}>{success}</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {success ? <Text style={styles.success}>{success}</Text> : null}
 
-        {step === "account" && (
-          <>
-            <Input label="First Name" value={form.firstName} onChangeText={(v) => update("firstName", v)} />
-            <Input label="Last Name" value={form.lastName} onChangeText={(v) => update("lastName", v)} />
-            <Input
-              label="Email"
-              value={form.email}
-              onChangeText={(v) => update("email", v)}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-            <Input label="Password" value={form.password} onChangeText={(v) => update("password", v)} secureTextEntry />
-            <Input
-              label="Confirm Password"
-              value={form.confirmPassword}
-              onChangeText={(v) => update("confirmPassword", v)}
-              secureTextEntry
-            />
-            <Button
-              title="Continue"
-              onPress={() => {
-                if (validateAccount()) setStep("role");
-              }}
-            />
-          </>
-        )}
-
-        {step === "role" && (
-          <>
-            <Text style={styles.label}>Your Role</Text>
+      {step === "account" ? (
+        <View style={styles.step}>
+          <Input label="First name" value={form.firstName} onChangeText={(v) => update("firstName", v)} autoComplete="given-name" />
+          <Input label="Last name" value={form.lastName} onChangeText={(v) => update("lastName", v)} autoComplete="family-name" />
+          <Input
+            label="Email"
+            value={form.email}
+            onChangeText={(v) => update("email", v)}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+          />
+          <Input label="Password" value={form.password} onChangeText={(v) => update("password", v)} secureTextEntry autoComplete="new-password" />
+          <Input
+            label="Confirm password"
+            value={form.confirmPassword}
+            onChangeText={(v) => update("confirmPassword", v)}
+            secureTextEntry
+            autoComplete="new-password"
+          />
+          <Button
+            title="Continue"
+            onPress={() => {
+              if (validateAccount()) goToStep("role");
+            }}
+          />
+        </View>
+      ) : (
+        <View style={styles.step}>
+          <Text style={styles.fieldLabel}>Your role</Text>
+          <View style={styles.optionList}>
             {ROLES.map((r) => (
               <Pressable
                 key={r.value}
@@ -137,7 +175,10 @@ export default function SignupScreen() {
                 <Text style={form.role === r.value ? styles.optionTextActive : styles.optionText}>{r.label}</Text>
               </Pressable>
             ))}
-            <Text style={styles.label}>Your Region</Text>
+          </View>
+
+          <Text style={styles.fieldLabel}>Your region</Text>
+          <View style={styles.optionList}>
             {REGIONS.map((r) => (
               <Pressable
                 key={r.value}
@@ -149,36 +190,50 @@ export default function SignupScreen() {
                 </Text>
               </Pressable>
             ))}
-            <View style={styles.row}>
-              <Button title="Back" variant="ghost" onPress={() => setStep("account")} style={styles.half} />
-              <Button title="Create Account" onPress={handleSignup} loading={loading} style={styles.half} />
-            </View>
-          </>
-        )}
+          </View>
 
-        <Link href="/(auth)/login" asChild>
-          <Pressable>
-            <Text style={styles.link}>Already have an account? Sign in</Text>
-          </Pressable>
-        </Link>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <View style={styles.row}>
+            <Button title="Back" variant="ghost" onPress={() => goToStep("account")} style={styles.half} />
+            <Button title="Create account" onPress={handleSignup} loading={loading} style={styles.half} />
+          </View>
+        </View>
+      )}
+    </AuthScreenShell>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg },
-  container: { padding: 24, gap: 12, paddingBottom: 40 },
-  title: { fontSize: 24, fontWeight: "700", color: colors.primary, textAlign: "center" },
-  subtitle: { fontSize: 14, color: colors.slate500, textAlign: "center", marginBottom: 8 },
-  error: { color: colors.error, backgroundColor: colors.errorBg, padding: 12, borderRadius: 8 },
-  success: { color: colors.primary, backgroundColor: "#e8eef5", padding: 12, borderRadius: 8 },
-  label: { fontSize: 14, fontWeight: "600", color: colors.slate700, marginTop: 8 },
-  option: { padding: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white },
-  optionActive: { borderColor: colors.primary, backgroundColor: "#e8eef5" },
-  optionText: { color: colors.slate700 },
-  optionTextActive: { color: colors.primary, fontWeight: "600" },
-  row: { flexDirection: "row", gap: 10, marginTop: 8 },
-  half: { flex: 1 },
-  link: { color: colors.primary, textAlign: "center", fontWeight: "600", marginTop: 16 },
-});
+function makeStyles(colors: ThemeColors, isDark: boolean) {
+  return StyleSheet.create({
+    step: { gap: spacing.md },
+    error: {
+      color: colors.error,
+      backgroundColor: colors.errorBg,
+      padding: 12,
+      borderRadius: 10,
+      fontSize: 14,
+    },
+    success: {
+      color: colors.primary,
+      backgroundColor: isDark ? "#334155" : "#e8eef5",
+      padding: 12,
+      borderRadius: 10,
+      fontSize: 14,
+    },
+    fieldLabel: { fontSize: 14, fontWeight: "600", color: colors.textSecondary, marginBottom: -4 },
+    optionList: { gap: spacing.sm },
+    option: {
+      padding: 14,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+    },
+    optionActive: { borderColor: colors.primary, backgroundColor: isDark ? "#334155" : "#e8eef5" },
+    optionText: { color: colors.text, fontSize: 15 },
+    optionTextActive: { color: colors.primary, fontWeight: "600", fontSize: 15 },
+    row: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
+    half: { flex: 1 },
+    footerLink: { color: colors.textSecondary, fontSize: 15 },
+    footerLinkBold: { color: colors.primary, fontWeight: "700" },
+  });
+}

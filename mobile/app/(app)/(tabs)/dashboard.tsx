@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -66,8 +66,9 @@ export default function DashboardScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | "all">("all");
+  const hasLoadedRef = useRef(false);
 
-  const load = useCallback(async (isRefresh = false) => {
+  const load = useCallback(async (silent = false) => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -76,8 +77,7 @@ export default function DashboardScreen() {
       return;
     }
 
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+    if (!silent && !hasLoadedRef.current) setLoading(true);
 
     try {
       const [{ data: p }, items, draft] = await Promise.all([
@@ -89,6 +89,7 @@ export default function DashboardScreen() {
       setProfile(p as Profile);
       setExpenses(items);
       setDraftReportId(draft?.id ?? null);
+      hasLoadedRef.current = true;
     } catch (err) {
       Alert.alert("Could not load", getErrorMessage(err));
     } finally {
@@ -99,7 +100,7 @@ export default function DashboardScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      load();
+      load(hasLoadedRef.current);
     }, [load])
   );
 
@@ -156,8 +157,8 @@ export default function DashboardScreen() {
     );
   }
 
-  async function openProfile() {
-    router.push("/(app)/(tabs)/profile");
+  function openProfile() {
+    router.navigate("/(app)/(tabs)/profile");
   }
 
   const listHeader = (
@@ -202,7 +203,7 @@ export default function DashboardScreen() {
     </View>
   );
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -244,7 +245,14 @@ export default function DashboardScreen() {
         keyExtractor={(item) => item.id!}
         contentContainerStyle={[styles.list, { paddingBottom: getHomeListBottomPadding(insets) }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load(true);
+            }}
+            tintColor={colors.primary}
+          />
         }
         ListHeaderComponent={listHeader}
         ListEmptyComponent={

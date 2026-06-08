@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Link, router } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { supabase } from "../../lib/supabase";
 import {
   getBiometricLabel,
@@ -8,11 +8,15 @@ import {
   offerBiometricSetupAfterLogin,
   signInWithBiometric,
 } from "../../lib/biometric-auth";
+import { useTheme } from "../../lib/settings-context";
+import { AuthScreenShell } from "../../components/AuthScreenShell";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
-import { colors } from "../../constants/theme";
+import { spacing, type ThemeColors } from "../../constants/theme";
 
 export default function LoginScreen() {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -58,41 +62,67 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.brand}>Parts Distribution Xpress</Text>
-        <Text style={styles.sub}>Expense Report Portal</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        {showBiometric ? (
-          <Button
-            title={`Sign in with ${biometricLabel}`}
-            variant="outline"
-            onPress={handleBiometricLogin}
-            loading={biometricLoading}
-            style={styles.biometricBtn}
-          />
-        ) : null}
-
-        <Input label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry />
-        <Button title="Sign In" onPress={handleLogin} loading={loading} />
+    <AuthScreenShell
+      title="Welcome back"
+      subtitle="Sign in to submit and track expenses"
+      footer={
         <Link href="/(auth)/signup" asChild>
-          <Pressable>
-            <Text style={styles.link}>Create an account</Text>
+          <Pressable hitSlop={8}>
+            <Text style={styles.footerLink}>
+              New here? <Text style={styles.footerLinkBold}>Create an account</Text>
+            </Text>
           </Pressable>
         </Link>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      }
+    >
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {showBiometric ? (
+        <Button
+          title={`Sign in with ${biometricLabel}`}
+          variant="outline"
+          onPress={handleBiometricLogin}
+          loading={biometricLoading}
+        />
+      ) : null}
+
+      <Input
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        keyboardType="email-address"
+        autoComplete="email"
+        textContentType="emailAddress"
+        returnKeyType="next"
+      />
+      <Input
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        autoComplete="password"
+        textContentType="password"
+        returnKeyType="done"
+        onSubmitEditing={handleLogin}
+      />
+      <Button title="Sign In" onPress={handleLogin} loading={loading} style={styles.submitBtn} />
+    </AuthScreenShell>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg },
-  container: { padding: 24, gap: 16, flexGrow: 1, justifyContent: "center" },
-  brand: { fontSize: 22, fontWeight: "700", color: colors.primary, textAlign: "center" },
-  sub: { fontSize: 14, color: colors.slate500, textAlign: "center", marginBottom: 16 },
-  error: { color: colors.error, backgroundColor: colors.errorBg, padding: 12, borderRadius: 8 },
-  biometricBtn: { marginBottom: 4 },
-  link: { color: colors.primary, textAlign: "center", fontWeight: "600", marginTop: 8 },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    error: {
+      color: colors.error,
+      backgroundColor: colors.errorBg,
+      padding: 12,
+      borderRadius: 10,
+      fontSize: 14,
+      overflow: "hidden",
+    },
+    submitBtn: { marginTop: spacing.xs },
+    footerLink: { color: colors.textSecondary, fontSize: 15 },
+    footerLinkBold: { color: colors.primary, fontWeight: "700" },
+  });
+}

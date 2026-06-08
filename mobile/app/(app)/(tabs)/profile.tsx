@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -117,8 +117,9 @@ export default function ProfileScreen() {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState("Biometrics");
+  const hasLoadedRef = useRef(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -126,18 +127,20 @@ export default function ProfileScreen() {
       router.replace("/(auth)/login");
       return;
     }
+    if (!silent && !hasLoadedRef.current) setLoading(true);
+
     const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
     setProfile(data as Profile);
     setBiometricEnabled(await isBiometricLoginEnabled());
     setBiometricAvailable(isBiometricNativeAvailable() && (await isBiometricHardwareAvailable()));
     setBiometricLabel(await getBiometricLabel());
+    hasLoadedRef.current = true;
     setLoading(false);
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
-      load();
+      load(hasLoadedRef.current);
     }, [load])
   );
 
@@ -180,7 +183,7 @@ export default function ProfileScreen() {
 
   const roleLabel = ROLES.find((r) => r.value === profile?.role)?.label ?? profile?.role;
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <ActivityIndicator size="large" color={colors.primary} />

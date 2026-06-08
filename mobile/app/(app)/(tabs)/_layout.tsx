@@ -1,12 +1,19 @@
 import { Tabs } from "expo-router";
 import { GlassTabBar } from "../../../components/GlassTabBar";
+import { useTheme } from "../../../lib/settings-context";
 
 export default function TabsLayout() {
+  const { colors } = useTheme();
+
   return (
     <Tabs
       tabBar={(props) => <GlassTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        lazy: true,
+        freezeOnBlur: true,
+        animation: "fade",
+        sceneStyle: { backgroundColor: colors.bg },
         tabBarStyle: {
           position: "absolute",
           left: 0,
