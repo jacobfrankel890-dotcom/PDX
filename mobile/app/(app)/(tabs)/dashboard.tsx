@@ -165,14 +165,30 @@ export default function DashboardScreen() {
 
   const listHeader = (
     <View style={styles.listHeader}>
-      <Text style={styles.listTitle}>Your receipts</Text>
+      <View style={styles.statsStrip}>
+        <View style={styles.statBlock}>
+          <Text style={styles.statValue}>{formatCurrency(weekTotal)}</Text>
+          <Text style={styles.statLabel}>This week</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statBlock}>
+          <Text style={styles.statValue}>{draftCount}</Text>
+          <Text style={styles.statLabel}>Pending</Text>
+        </View>
+        {draftCount > 0 ? (
+          <Pressable style={styles.submitWeekBtn} onPress={submitWeek} disabled={submitting}>
+            <Text style={styles.submitWeekText}>{submitting ? "…" : "Submit all"}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
       <View style={styles.searchBox}>
         <Text style={styles.searchIcon}>🔍</Text>
         <TextInput
           style={styles.searchInput}
           value={search}
           onChangeText={setSearch}
-          placeholder="Search merchant, category, company…"
+          placeholder="Search receipts…"
           placeholderTextColor={colors.slate400}
           clearButtonMode="while-editing"
         />
@@ -197,11 +213,11 @@ export default function DashboardScreen() {
           </Pressable>
         ))}
       </ScrollView>
-      {filtered.length !== expenses.length && (
+      {filtered.length !== expenses.length ? (
         <Text style={styles.resultCount}>
           {filtered.length} of {expenses.length} receipt{expenses.length === 1 ? "" : "s"}
         </Text>
-      )}
+      ) : null}
     </View>
   );
 
@@ -215,34 +231,21 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.flex}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerLeft}>
-            <PdxLogo size="md" tagline="Expense" />
-            <View style={styles.greetingWrap}>
-              <Text style={styles.greeting}>Hi, {profile?.first_name} 👋</Text>
-              <Text style={styles.region}>{profile ? getRegionLabel(profile.region) : ""}</Text>
-            </View>
-          </View>
-          <Pressable onPress={openProfile} style={styles.avatar}>
-            <Text style={styles.avatarText}>{profile?.first_name?.[0]?.toUpperCase() ?? "?"}</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.summaryCard}>
-          <View>
-            <Text style={styles.summaryLabel}>This week</Text>
-            <Text style={styles.summaryAmount}>{formatCurrency(weekTotal)}</Text>
-            <Text style={styles.summarySub}>
-              {draftCount} receipt{draftCount === 1 ? "" : "s"} pending
+      <View style={[styles.topBar, { paddingTop: insets.top + spacing.xs }]}>
+        <PdxLogo size="sm" tagline="Expense" />
+        <View style={styles.topBarCenter}>
+          <Text style={styles.greetingCompact} numberOfLines={1}>
+            Hi, {profile?.first_name}
+          </Text>
+          {profile ? (
+            <Text style={styles.regionCompact} numberOfLines={1}>
+              {getRegionLabel(profile.region)}
             </Text>
-          </View>
-          {draftCount > 0 && (
-            <Pressable style={styles.submitWeekBtn} onPress={submitWeek} disabled={submitting}>
-              <Text style={styles.submitWeekText}>{submitting ? "…" : "Submit all"}</Text>
-            </Pressable>
-          )}
+          ) : null}
         </View>
+        <Pressable onPress={openProfile} style={styles.avatar}>
+          <Text style={styles.avatarText}>{profile?.first_name?.[0]?.toUpperCase() ?? "?"}</Text>
+        </Pressable>
       </View>
 
       <FlatList
@@ -301,8 +304,8 @@ export default function DashboardScreen() {
             <View style={styles.expenseRight}>
               <Text style={styles.expenseAmount}>{formatCurrency(item.row_total)}</Text>
               <StatusBadge status={item.report_status} colors={colors} />
-              <Text style={styles.chevron}>›</Text>
             </View>
+            <Text style={styles.chevron}>›</Text>
           </Pressable>
         )}
       />
@@ -327,59 +330,53 @@ function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: {
-    backgroundColor: colors.surface,
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.lg,
-    borderBottomWidth: 1,
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+    gap: spacing.sm,
   },
-  headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: spacing.md },
-  headerLeft: { flex: 1, gap: spacing.sm },
-  greetingWrap: { gap: 2 },
-  greeting: { fontSize: 20, fontWeight: "700", color: colors.text },
-  region: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
+  topBarCenter: { flex: 1, minWidth: 0 },
+  greetingCompact: { fontSize: 16, fontWeight: "700", color: colors.text },
+  regionCompact: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.greenLight,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.primary,
   },
-  avatarText: { color: colors.text, fontWeight: "800", fontSize: 16 },
-  summaryCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
+  avatarText: { color: colors.text, fontWeight: "800", fontSize: 14 },
+  statsStrip: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: colors.greenLight,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
   },
-  summaryLabel: { fontSize: 12, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.5 },
-  summaryAmount: { fontSize: 28, fontWeight: "800", color: colors.text, marginTop: 2 },
-  summarySub: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  statBlock: { flex: 1, minWidth: 0 },
+  statValue: { fontSize: 20, fontWeight: "800", color: colors.text },
+  statLabel: { fontSize: 11, fontWeight: "600", color: colors.textSecondary, marginTop: 1, textTransform: "uppercase", letterSpacing: 0.3 },
+  statDivider: { width: 1, height: 32, backgroundColor: colors.border },
   submitWeekBtn: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: radius.full,
+    flexShrink: 0,
   },
-  submitWeekText: { color: colors.onPrimary, fontWeight: "700", fontSize: 14 },
-  list: { padding: spacing.md, gap: spacing.sm },
+  submitWeekText: { color: colors.onPrimary, fontWeight: "700", fontSize: 13 },
+  list: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.sm },
   listHeader: { gap: spacing.sm, marginBottom: spacing.sm },
-  listTitle: { fontSize: 13, fontWeight: "600", color: colors.slate500, textTransform: "uppercase", letterSpacing: 0.5 },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -390,61 +387,58 @@ function makeStyles(colors: ThemeColors) {
     paddingHorizontal: 12,
     gap: 8,
   },
-  searchIcon: { fontSize: 16 },
-  searchInput: { flex: 1, paddingVertical: 12, fontSize: 16, color: colors.slate800 },
-  filterRow: { gap: 8, paddingVertical: 2 },
+  searchIcon: { fontSize: 15 },
+  searchInput: { flex: 1, paddingVertical: 10, fontSize: 15, color: colors.text },
+  filterRow: { gap: 6, paddingVertical: 0 },
   filterChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
   filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterEmoji: { fontSize: 14 },
-  filterText: { fontSize: 13, fontWeight: "600", color: colors.slate700 },
+  filterEmoji: { fontSize: 13 },
+  filterText: { fontSize: 12, fontWeight: "600", color: colors.slate700 },
   filterTextActive: { color: colors.onPrimary },
-  resultCount: { fontSize: 12, color: colors.slate500 },
-  empty: { alignItems: "center", paddingTop: 48, gap: 8 },
-  emptyEmoji: { fontSize: 48 },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: colors.slate800 },
-  emptySub: { fontSize: 14, color: colors.slate500, textAlign: "center", paddingHorizontal: 24 },
+  resultCount: { fontSize: 11, color: colors.slate500 },
+  empty: { alignItems: "center", paddingTop: 40, gap: 6 },
+  emptyEmoji: { fontSize: 40 },
+  emptyTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
+  emptySub: { fontSize: 14, color: colors.textSecondary, textAlign: "center", paddingHorizontal: 24 },
   expenseCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.surface,
     borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
     overflow: "hidden",
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
   },
   categoryStripe: {
-    width: 44,
+    width: 40,
     alignSelf: "stretch",
     backgroundColor: colors.greenLight,
     alignItems: "center",
     justifyContent: "center",
   },
-  stripeEmoji: { fontSize: 20 },
-  expenseMain: { flex: 1, padding: spacing.md, paddingLeft: 10 },
-  expenseDesc: { fontSize: 16, fontWeight: "600", color: colors.slate800 },
-  expenseMeta: { fontSize: 13, color: colors.slate500, marginTop: 3 },
-  relatedTo: { fontSize: 12, color: colors.primaryDark, marginTop: 2, fontStyle: "italic" },
-  expenseRight: { alignItems: "flex-end", padding: spacing.md, paddingLeft: 0, gap: 4 },
-  expenseAmount: { fontSize: 17, fontWeight: "700", color: colors.primary },
-  chevron: { fontSize: 22, color: colors.slate400, fontWeight: "300", marginTop: 2 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full },
-  badgeDraft: { backgroundColor: colors.greenLight },
+  stripeEmoji: { fontSize: 18 },
+  expenseMain: { flex: 1, paddingVertical: 10, paddingHorizontal: 10, minWidth: 0 },
+  expenseDesc: { fontSize: 15, fontWeight: "600", color: colors.text },
+  expenseMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  relatedTo: { fontSize: 11, color: colors.primaryDark, marginTop: 2, fontStyle: "italic" },
+  expenseRight: { alignItems: "flex-end", paddingVertical: 10, paddingRight: 4, gap: 4, flexShrink: 0 },
+  expenseAmount: { fontSize: 16, fontWeight: "800", color: colors.primary },
+  chevron: { fontSize: 20, color: colors.slate400, fontWeight: "300", paddingRight: 10 },
+  badge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.full },
+  badgeDraft: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary },
   badgeSubmitted: { backgroundColor: colors.greenLight },
-  badgeText: { fontSize: 11, fontWeight: "600" },
-  badgeTextDraft: { color: colors.greenDark },
+  badgeText: { fontSize: 10, fontWeight: "700" },
+  badgeTextDraft: { color: colors.primaryDark },
   badgeTextSubmitted: { color: colors.primaryDark },
   fab: {
     position: "absolute",
@@ -455,10 +449,10 @@ function makeStyles(colors: ThemeColors) {
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 14,
+    paddingVertical: 13,
     borderRadius: radius.lg,
   },
-  fabIcon: { color: colors.onPrimary, fontSize: 22, fontWeight: "300", lineHeight: 24 },
-  fabText: { color: colors.onPrimary, fontSize: 16, fontWeight: "700" },
+  fabIcon: { color: colors.onPrimary, fontSize: 20, fontWeight: "400", lineHeight: 22 },
+  fabText: { color: colors.onPrimary, fontSize: 15, fontWeight: "700" },
   });
 }
