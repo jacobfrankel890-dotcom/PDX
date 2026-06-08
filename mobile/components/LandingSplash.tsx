@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AUTH_BG, AUTH_GRAY_60, AUTH_WHITE_90, authHeroOverlap, authHorizontalPad } from "../constants/auth-chrome";
+import { AUTH_BG, AUTH_GRAY_60, AUTH_WHITE_90, authHorizontalPad } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
-import { AuthHero } from "./AuthHero";
+import { AuthScreenBackdrop } from "./AuthScreenBackdrop";
+import { AuthLogoHeader } from "./AuthLogoHeader";
 
 export function LandingSplash() {
   const insets = useSafeAreaInsets();
@@ -44,9 +45,10 @@ export function LandingSplash() {
   return (
     <View style={[styles.root, { paddingBottom: insets.bottom + grid(3) }]}>
       <StatusBar style="light" />
-      <AuthHero />
+      <AuthScreenBackdrop />
+      <AuthLogoHeader />
 
-      <Animated.View style={[styles.content, { marginTop: authHeroOverlap, opacity: contentOpacity }]}>
+      <Animated.View style={[styles.content, { opacity: contentOpacity }]}>
         <Text style={styles.headline}>Your receipts.{"\n"}Submitted.</Text>
         <Text style={styles.subline}>Loading your workspace…</Text>
 
@@ -63,11 +65,11 @@ function makeStyles() {
     root: {
       flex: 1,
       backgroundColor: AUTH_BG,
-      paddingHorizontal: authHorizontalPad,
     },
     content: {
       gap: grid(1.5),
-      paddingHorizontal: grid(0.5),
+      paddingHorizontal: authHorizontalPad + grid(0.5),
+      marginTop: grid(1),
     },
     headline: {
       fontSize: 32,
