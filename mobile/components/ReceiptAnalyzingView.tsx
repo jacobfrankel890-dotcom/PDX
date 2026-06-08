@@ -166,7 +166,7 @@ export function ReceiptAnalyzingView({ imageUri }: Props) {
       </View>
 
       <Text style={[styles.footer, { color: colors.textSecondary }]}>
-        Powered by AI · This usually takes a few seconds
+        This usually takes a few seconds
       </Text>
     </View>
   );

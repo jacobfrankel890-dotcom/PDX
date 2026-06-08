@@ -105,7 +105,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
           fileName: asset.fileName ?? `receipt-${Date.now()}.jpg`,
         });
 
-        if (!data?.analysis) throw new Error("AI returned no analysis");
+        if (!data?.analysis) throw new Error("Could not read this receipt");
 
         const normalized = normalizeAnalysis(data.analysis);
         const total = getAnalysisTotal(normalized);
@@ -197,7 +197,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
             <Pressable style={styles.heroScan} onPress={() => scanReceipt(true)}>
               <Text style={styles.heroEmoji}>📷</Text>
               <Text style={styles.heroTitle}>Take a photo of your receipt</Text>
-              <Text style={styles.heroSub}>AI reads it and fills in one expense total for you</Text>
+              <Text style={styles.heroSub}>We'll read it and fill in one expense total for you</Text>
             </Pressable>
             <View style={styles.scanActions}>
               <Button title="Open Camera" onPress={() => scanReceipt(true)} style={styles.scanBtn} />
@@ -239,10 +239,9 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
                 <Text style={styles.categoryPillText}>{EXPENSE_CATEGORY_LABELS[category]}</Text>
                 <Text style={styles.categoryPillTap}> ▾ tap to change</Text>
               </Pressable>
-              <Text style={styles.confidence}>
-                AI confidence: {Math.round((analysis.confidence ?? 0) * 100)}%
-                {itemCount > 1 ? ` · ${itemCount} items detected` : ""}
-              </Text>
+              {itemCount > 1 ? (
+                <Text style={styles.metaHint}>{itemCount} line items detected</Text>
+              ) : null}
             </View>
 
             <CompanyPicker value={company} onChange={setCompany} />
@@ -387,7 +386,7 @@ const styles = StyleSheet.create({
   },
   categoryPillText: { fontSize: 13, fontWeight: "700", color: colors.primary },
   categoryPillTap: { fontSize: 11, color: colors.slate500 },
-  confidence: { fontSize: 13, color: colors.slate500, marginTop: 2 },
+  metaHint: { fontSize: 13, color: colors.slate500, marginTop: 2 },
   field: { gap: 6 },
   fieldLabel: { fontSize: 13, fontWeight: "600", color: colors.slate500 },
   fieldInput: {

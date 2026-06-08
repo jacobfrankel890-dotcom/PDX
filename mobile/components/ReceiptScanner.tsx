@@ -93,8 +93,8 @@ export function ReceiptScanner({ reportId, disabled, onApply }: Props) {
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.heading}>AI Receipt Scanner</Text>
-      <Text style={styles.sub}>Take or upload a photo — AI categorizes it for you</Text>
+      <Text style={styles.heading}>Scan Receipt</Text>
+      <Text style={styles.sub}>Take or upload a photo — we'll categorize it for you</Text>
 
       <View style={styles.row}>
         <Button title="Camera" onPress={() => pickImage(true)} disabled={disabled || loading} style={styles.half} />
@@ -120,9 +120,6 @@ export function ReceiptScanner({ reportId, disabled, onApply }: Props) {
           <Text style={styles.merchant}>{analysis.merchant_name}</Text>
           <Text style={styles.total}>{formatCurrency(analysis.total_amount)}</Text>
           <Text style={styles.meta}>Related to: {analysis.related_to}</Text>
-          <Text style={styles.meta}>
-            Confidence: {Math.round(analysis.confidence * 100)}%
-          </Text>
           {analysis.line_items.map((item, i) => (
             <Text key={i} style={styles.lineItem}>
               • {item.description} — {formatCurrency(item.amount)} (
