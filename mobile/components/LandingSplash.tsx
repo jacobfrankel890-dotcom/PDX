@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
-import { StatusBar } from "expo-status-bar";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { AUTH_GRAY_60, AUTH_WHITE_90, authHorizontalPad } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
-import { AuthScreenBackdrop } from "./AuthScreenBackdrop";
+import { AuthScreenLayout } from "./AuthScreenLayout";
 import { AuthLogoHeader } from "./AuthLogoHeader";
 
 export function LandingSplash() {
   const barWidth = useRef(new Animated.Value(grid(3))).current;
-  const contentOpacity = useRef(new Animated.Value(1)).current;
   const trackWidth = useRef(grid(35));
 
   useEffect(() => {
@@ -35,47 +32,28 @@ export function LandingSplash() {
   const styles = useMemo(() => makeStyles(), []);
 
   return (
-    <View style={styles.root}>
-      <StatusBar style="light" />
+    <AuthScreenLayout>
+      <AuthLogoHeader />
 
-      <View style={styles.background} pointerEvents="none">
-        <AuthScreenBackdrop />
+      <View style={styles.content}>
+        <Text style={styles.headline}>Your receipts.{"\n"}Submitted.</Text>
+        <Text style={styles.subline}>Loading your workspace…</Text>
+
+        <View style={styles.loaderTrack}>
+          <Animated.View style={[styles.loaderFill, { width: barWidth }]} />
+        </View>
       </View>
-
-      <SafeAreaView style={styles.foreground} edges={["top", "bottom"]}>
-        <AuthLogoHeader />
-
-        <Animated.View style={[styles.content, { opacity: contentOpacity }]}>
-          <Text style={styles.headline}>Your receipts.{"\n"}Submitted.</Text>
-          <Text style={styles.subline}>Loading your workspace…</Text>
-
-          <View style={styles.loaderTrack}>
-            <Animated.View style={[styles.loaderFill, { width: barWidth }]} />
-          </View>
-        </Animated.View>
-      </SafeAreaView>
-    </View>
+    </AuthScreenLayout>
   );
 }
 
 function makeStyles() {
   return StyleSheet.create({
-    root: {
+    content: {
       flex: 1,
-    },
-    background: {
-      ...StyleSheet.absoluteFillObject,
-      zIndex: 0,
-    },
-    foreground: {
-      ...StyleSheet.absoluteFillObject,
-      zIndex: 1,
+      gap: grid(1.5),
       paddingHorizontal: authHorizontalPad,
       paddingBottom: grid(3),
-    },
-    content: {
-      gap: grid(1.5),
-      marginTop: grid(1),
     },
     headline: {
       fontSize: 32,
