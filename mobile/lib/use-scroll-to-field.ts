@@ -1,5 +1,5 @@
-import { useCallback, useRef, type RefObject } from "react";
-import type { LayoutChangeEvent, ScrollView } from "react-native";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
+import { Keyboard, Platform, type LayoutChangeEvent, type ScrollView } from "react-native";
 
 const SCROLL_INSET = 56;
 
@@ -7,11 +7,50 @@ const SCROLL_INSET = 56;
 const END_FIELDS = new Set(["purpose", "date"]);
 
 /**
- * Single animated scroll per focus — avoids the slow double-scroll from rAF + delayed timeout.
+ * One animated scroll per focus — synced with the keyboard on iOS so the motion
+ * feels swift instead of a slow double-scroll (rAF + delayed timeout).
  */
 export function useScrollToField(scrollRef: RefObject<ScrollView | null>) {
   const fieldOffsets = useRef<Record<string, number>>({});
-  const scrollingRef = useRef(false);
+  const pendingKey = useRef<string | null>(null);
+  const keyboardUp = useRef(false);
+
+  const performScroll = useCallback(
+    (key: string) => {
+      if (END_FIELDS.has(key)) {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      } else {
+        const y = fieldOffsets.current[key] ?? 0;
+        scrollRef.current?.scrollTo({
+          y: Math.max(0, y - SCROLL_INSET),
+          animated: true,
+        });
+      }
+    },
+    [scrollRef]
+  );
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, () => {
+      keyboardUp.current = true;
+      const key = pendingKey.current;
+      if (key) {
+        performScroll(key);
+        pendingKey.current = null;
+      }
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      keyboardUp.current = false;
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [performScroll]);
 
   const trackFieldLayout = useCallback(
     (key: string) => (e: LayoutChangeEvent) => {
@@ -22,27 +61,28 @@ export function useScrollToField(scrollRef: RefObject<ScrollView | null>) {
 
   const scrollToField = useCallback(
     (key: string) => {
-      if (scrollingRef.current) return;
-      scrollingRef.current = true;
+      if (key === "date") {
+        performScroll(key);
+        return;
+      }
 
-      const run = () => {
-        if (END_FIELDS.has(key)) {
-          scrollRef.current?.scrollToEnd({ animated: true });
-        } else {
-          const y = fieldOffsets.current[key] ?? 0;
-          scrollRef.current?.scrollTo({
-            y: Math.max(0, y - SCROLL_INSET),
-            animated: true,
-          });
-        }
-        setTimeout(() => {
-          scrollingRef.current = false;
-        }, 320);
-      };
+      if (keyboardUp.current) {
+        performScroll(key);
+        return;
+      }
 
-      requestAnimationFrame(run);
+      pendingKey.current = key;
+
+      if (Platform.OS === "android") {
+        requestAnimationFrame(() => {
+          if (pendingKey.current === key) {
+            performScroll(key);
+            pendingKey.current = null;
+          }
+        });
+      }
     },
-    [scrollRef]
+    [performScroll]
   );
 
   return { trackFieldLayout, scrollToField };

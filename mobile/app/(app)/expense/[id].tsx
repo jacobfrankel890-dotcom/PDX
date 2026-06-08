@@ -13,7 +13,6 @@ import {
   Text,
   TextInput,
   View,
-  type LayoutChangeEvent,
   type TextInput as TextInputType,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,6 +32,7 @@ import {
 import { useTheme } from "../../../lib/settings-context";
 import { formatCurrency, getCompanyLabel, normalizeCompanyValue, type CompanyValue } from "../../../lib/types";
 import { getErrorMessage } from "../../../lib/utils";
+import { useScrollToField } from "../../../lib/use-scroll-to-field";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 import { Button } from "../../../components/Button";
 import { CategoryPicker } from "../../../components/CategoryPicker";
@@ -55,7 +55,7 @@ export default function ExpenseDetailScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const scrollRef = useRef<ScrollView>(null);
   const purposeRef = useRef<TextInputType>(null);
-  const fieldOffsets = useRef<Record<string, number>>({});
+  const { trackFieldLayout, scrollToField } = useScrollToField(scrollRef);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const [expense, setExpense] = useState<ExpenseEntry | null>(null);
@@ -83,25 +83,6 @@ export default function ExpenseDetailScreen() {
       showSub.remove();
       hideSub.remove();
     };
-  }, []);
-
-  const trackFieldLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
-    fieldOffsets.current[key] = e.nativeEvent.layout.y;
-  }, []);
-
-  const scrollToField = useCallback((key: string) => {
-    const scroll = (delay = 0) => {
-      setTimeout(() => {
-        if (key === "purpose" || key === "date") {
-          scrollRef.current?.scrollToEnd({ animated: true });
-          return;
-        }
-        const y = fieldOffsets.current[key] ?? 0;
-        scrollRef.current?.scrollTo({ y: Math.max(0, y - 32), animated: true });
-      }, delay);
-    };
-    requestAnimationFrame(() => scroll(0));
-    scroll(280);
   }, []);
 
   const load = useCallback(async () => {

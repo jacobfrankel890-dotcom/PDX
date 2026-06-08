@@ -13,6 +13,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../lib/settings-context";
 import { radius, spacing, type ThemeColors } from "../constants/theme";
 import { PdxLogo } from "./PdxLogo";
+import { LogisticsHero } from "./LogisticsHero";
+import { grid } from "../lib/grid";
 
 type Props = {
   title: string;
@@ -55,7 +57,10 @@ export function AuthScreenShell({ title, subtitle, children, footer, contentStyl
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.hero}>
-          <PdxLogo size="xl" tagline="Expense" style={styles.logoCenter} />
+          <PdxLogo size="lg" tagline="Expense" style={styles.logoCenter} />
+          <View style={styles.heroAnim}>
+            <LogisticsHero compact />
+          </View>
           <Text style={styles.title}>{title}</Text>
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         </View>
@@ -73,12 +78,21 @@ function makeStyles(colors: ThemeColors) {
     flex: { flex: 1, backgroundColor: colors.bg },
     scroll: {
       flexGrow: 1,
-      paddingHorizontal: spacing.lg,
+      paddingHorizontal: grid(3),
       justifyContent: "center",
     },
-    hero: { alignItems: "center", marginBottom: spacing.lg, gap: spacing.sm },
+    hero: { alignItems: "center", marginBottom: grid(2), gap: grid(2) },
+    heroAnim: {
+      width: "100%",
+      alignItems: "center",
+      paddingVertical: grid(1),
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
     logoCenter: { alignItems: "center" },
-    title: { fontSize: 26, fontWeight: "800", color: colors.text, textAlign: "center" },
+    title: { fontSize: 24, fontWeight: "800", color: colors.text, textAlign: "center" },
     subtitle: { fontSize: 15, color: colors.textSecondary, textAlign: "center", lineHeight: 22 },
     card: {
       backgroundColor: colors.surface,

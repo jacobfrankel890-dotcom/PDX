@@ -13,7 +13,6 @@ import {
   TextInput,
   UIManager,
   View,
-  type LayoutChangeEvent,
   type TextInput as TextInputType,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -40,6 +39,7 @@ import {
   type Profile,
 } from "../lib/types";
 import { getErrorMessage, toIsoDate } from "../lib/utils";
+import { useScrollToField } from "../lib/use-scroll-to-field";
 import { useTheme } from "../lib/settings-context";
 import { radius, spacing, type ThemeColors } from "../constants/theme";
 import { Button } from "./Button";
@@ -69,7 +69,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
   const merchantRef = useRef<TextInputType>(null);
   const amountRef = useRef<TextInputType>(null);
   const purposeRef = useRef<TextInputType>(null);
-  const fieldOffsets = useRef<Record<string, number>>({});
+  const { trackFieldLayout, scrollToField } = useScrollToField(scrollRef);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [step, setStep] = useState<Step>("scan");
   const [previewUri, setPreviewUri] = useState<string | null>(null);
@@ -100,25 +100,6 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
       showSub.remove();
       hideSub.remove();
     };
-  }, []);
-
-  const trackFieldLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
-    fieldOffsets.current[key] = e.nativeEvent.layout.y;
-  }, []);
-
-  const scrollToField = useCallback((key: string) => {
-    const scroll = (delay = 0) => {
-      setTimeout(() => {
-        if (key === "purpose" || key === "date") {
-          scrollRef.current?.scrollToEnd({ animated: true });
-          return;
-        }
-        const y = fieldOffsets.current[key] ?? 0;
-        scrollRef.current?.scrollTo({ y: Math.max(0, y - 32), animated: true });
-      }, delay);
-    };
-    requestAnimationFrame(() => scroll(0));
-    scroll(280);
   }, []);
 
   const scanReceipt = useCallback(
