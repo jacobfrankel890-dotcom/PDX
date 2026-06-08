@@ -1,7 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { SafeAreaView } from "react-native-safe-area-context";
 import {
   AUTH_BG,
   AUTH_BORDER,
@@ -14,7 +12,7 @@ import {
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
-import { AuthScreenBackdrop } from "./AuthScreenBackdrop";
+import { AuthScreenLayout } from "./AuthScreenLayout";
 import { AuthLogoHeader } from "./AuthLogoHeader";
 
 export function WelcomeScreen() {
@@ -22,79 +20,60 @@ export function WelcomeScreen() {
   const compact = height < 740;
 
   return (
-    <View style={styles.root}>
-      <StatusBar style="light" />
+    <AuthScreenLayout>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <AuthLogoHeader compact={compact} />
 
-      <View style={styles.background} pointerEvents="none">
-        <AuthScreenBackdrop />
-      </View>
+        <View style={styles.badge}>
+          <Text style={styles.badgeIcon}>⚡</Text>
+          <Text style={styles.badgeText}>For PDX teams</Text>
+        </View>
 
-      <SafeAreaView style={styles.foreground} edges={["top", "bottom"]}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-        >
-          <AuthLogoHeader compact={compact} />
+        <Text style={[styles.headline, compact && styles.headlineCompact]}>
+          Your receipts.{"\n"}Submitted.
+        </Text>
+        <Text style={styles.subheadline}>{AUTH_TAGLINE}</Text>
 
-          <View style={styles.badge}>
-            <Text style={styles.badgeIcon}>⚡</Text>
-            <Text style={styles.badgeText}>For PDX teams</Text>
-          </View>
+        <View style={styles.actions}>
+          <Text style={styles.sectionLabel}>New account</Text>
+          <Pressable
+            style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}
+            onPress={() => router.push("/(auth)/signup")}
+          >
+            <Text style={styles.primaryBtnText}>Create account</Text>
+            <Text style={styles.primaryBtnIcon}>+</Text>
+          </Pressable>
+          <Text style={styles.hint}>First time here? Free to join — takes about a minute.</Text>
 
-          <Text style={[styles.headline, compact && styles.headlineCompact]}>
-            Your receipts.{"\n"}Submitted.
-          </Text>
-          <Text style={styles.subheadline}>{AUTH_TAGLINE}</Text>
+          <Text style={[styles.sectionLabel, styles.sectionLabelGap]}>Returning user</Text>
+          <Pressable
+            style={({ pressed }) => [styles.outlineBtn, pressed && styles.btnPressed]}
+            onPress={() => router.push("/(auth)/login")}
+          >
+            <Text style={styles.outlineBtnIcon}>→</Text>
+            <Text style={styles.outlineBtnText}>Sign in</Text>
+          </Pressable>
+        </View>
 
-          <View style={styles.actions}>
-            <Text style={styles.sectionLabel}>New account</Text>
-            <Pressable
-              style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}
-              onPress={() => router.push("/(auth)/signup")}
-            >
-              <Text style={styles.primaryBtnText}>Create account</Text>
-              <Text style={styles.primaryBtnIcon}>+</Text>
-            </Pressable>
-            <Text style={styles.hint}>First time here? Free to join — takes about a minute.</Text>
-
-            <Text style={[styles.sectionLabel, styles.sectionLabelGap]}>Returning user</Text>
-            <Pressable
-              style={({ pressed }) => [styles.outlineBtn, pressed && styles.btnPressed]}
-              onPress={() => router.push("/(auth)/login")}
-            >
-              <Text style={styles.outlineBtnIcon}>→</Text>
-              <Text style={styles.outlineBtnText}>Sign in</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.trustRow}>
-            {AUTH_TRUST_ITEMS.map((item) => (
-              <View key={item.label} style={styles.trustItem}>
-                <Text style={styles.trustIcon}>{item.icon}</Text>
-                <Text style={styles.trustText}>{item.label}</Text>
-              </View>
-            ))}
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </View>
+        <View style={styles.trustRow}>
+          {AUTH_TRUST_ITEMS.map((item) => (
+            <View key={item.label} style={styles.trustItem}>
+              <Text style={styles.trustIcon}>{item.icon}</Text>
+              <Text style={styles.trustText}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </AuthScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  background: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 0,
-  },
-  foreground: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1,
-  },
   scroll: {
     flex: 1,
   },

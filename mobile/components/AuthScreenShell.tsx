@@ -9,8 +9,6 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
-import { SafeAreaView } from "react-native-safe-area-context";
 import {
   AUTH_BG,
   AUTH_GRAY_45,
@@ -21,7 +19,7 @@ import {
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
-import { AuthScreenBackdrop } from "./AuthScreenBackdrop";
+import { AuthScreenLayout } from "./AuthScreenLayout";
 import { AuthLogoHeader } from "./AuthLogoHeader";
 
 type Props = {
@@ -57,21 +55,15 @@ export function AuthScreenShell({
   }, [scrollKey]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
-    >
-      <StatusBar style="light" />
-
-      <View style={styles.background} pointerEvents="none">
-        <AuthScreenBackdrop />
-      </View>
-
-      <SafeAreaView style={styles.foreground} edges={["top", "bottom"]}>
+    <AuthScreenLayout>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
+      >
         <ScrollView
           ref={scrollRef}
-          style={styles.scroll}
+          style={styles.flex}
           contentContainerStyle={[styles.scrollContent, contentStyle]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
@@ -107,22 +99,13 @@ export function AuthScreenShell({
 
           {footer ? <View style={styles.footer}>{footer}</View> : null}
         </ScrollView>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </AuthScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  background: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 0,
-  },
-  foreground: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1,
-  },
-  scroll: { flex: 1 },
+  flex: { flex: 1 },
   scrollContent: {
     paddingHorizontal: authHorizontalPad,
     paddingBottom: grid(3),
