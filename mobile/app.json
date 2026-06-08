@@ -15,7 +15,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.partsdistributionxpress.expense",
-      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "PDX Expense needs camera access to photograph receipts for expense reports.",
         "NSPhotoLibraryUsageDescription": "PDX Expense needs photo library access to upload receipt images.",

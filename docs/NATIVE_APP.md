@@ -65,6 +65,8 @@ eas build --platform ios --profile preview
 eas submit --platform ios --profile preview --latest
 ```
 
+**Build numbers auto-increment:** Each `preview` or `production` build bumps iOS `buildNumber` and Android `versionCode` by 1 via EAS (see `autoIncrement` in `eas.json`). User-facing `version` in `app.json` (e.g. `1.0.0`) only changes when you manually bump it for a store release.
+
 That's it. Same flow as your other apps.
 
 ---
