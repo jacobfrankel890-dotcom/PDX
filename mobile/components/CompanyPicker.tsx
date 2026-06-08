@@ -7,16 +7,17 @@ import { colors, radius, spacing } from "../constants/theme";
 type Props = {
   value: CompanyValue | string;
   onChange: (value: CompanyValue) => void;
+  embedded?: boolean;
 };
 
-export function CompanyPicker({ value, onChange }: Props) {
+export function CompanyPicker({ value, onChange, embedded }: Props) {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const normalizedValue = normalizeCompanyValue(String(value));
 
   return (
     <>
-      <Pressable style={styles.trigger} onPress={() => setOpen(true)}>
+      <Pressable style={[styles.trigger, embedded && styles.triggerEmbedded]} onPress={() => setOpen(true)}>
         <Text style={styles.triggerLabel}>Company</Text>
         <Text style={styles.triggerValue} numberOfLines={1}>
           {getCompanyLabel(String(value))}
@@ -63,6 +64,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 8,
+  },
+  triggerEmbedded: {
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    borderRadius: 0,
+    paddingHorizontal: 2,
+    paddingVertical: 10,
   },
   triggerLabel: { fontSize: 13, fontWeight: "600", color: colors.slate500 },
   triggerValue: { flex: 1, fontSize: 15, fontWeight: "600", color: colors.slate800, textAlign: "right" },

@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
   Platform,
@@ -12,6 +13,8 @@ import {
   TextInput,
   UIManager,
   View,
+  type LayoutChangeEvent,
+  type TextInput as TextInputType,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { format } from "date-fns";
@@ -57,6 +60,13 @@ type Props = {
 
 export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const merchantRef = useRef<TextInputType>(null);
+  const amountRef = useRef<TextInputType>(null);
+  const dateRef = useRef<TextInputType>(null);
+  const purposeRef = useRef<TextInputType>(null);
+  const fieldOffsets = useRef<Record<string, number>>({});
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [step, setStep] = useState<Step>("scan");
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [receiptPath, setReceiptPath] = useState<string | null>(null);
@@ -76,6 +86,36 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
   const parsedTotal = parseFloat(totalAmount.replace(/[^0-9.]/g, "")) || 0;
   const itemCount = analysis?.line_items.length ?? 0;
   const isReviewStep = step === "review" && (Boolean(analysis) || isManualEntry);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const trackFieldLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
+    fieldOffsets.current[key] = e.nativeEvent.layout.y;
+  }, []);
+
+  const scrollToField = useCallback((key: string) => {
+    const scroll = (delay = 0) => {
+      setTimeout(() => {
+        if (key === "purpose" || key === "date") {
+          scrollRef.current?.scrollToEnd({ animated: true });
+          return;
+        }
+        const y = fieldOffsets.current[key] ?? 0;
+        scrollRef.current?.scrollTo({ y: Math.max(0, y - 32), animated: true });
+      }, delay);
+    };
+    requestAnimationFrame(() => scroll(0));
+    scroll(280);
+  }, []);
 
   const scanReceipt = useCallback(
     async (useCamera: boolean) => {
@@ -227,7 +267,11 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
         <View style={{ width: 28 }} />
       </View>
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      >
         {step === "scan" && (
           <View style={[styles.scanStep, { paddingBottom: insets.bottom + spacing.lg }]}>
             <Pressable style={styles.heroScan} onPress={() => scanReceipt(true)}>
@@ -261,40 +305,60 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
 
         {isReviewStep ? (
           <ScrollView
-            contentContainerStyle={[styles.reviewContent, { paddingBottom: insets.bottom + 100 }]}
+            ref={scrollRef}
+            style={styles.flex}
+            contentContainerStyle={[
+              styles.reviewContent,
+              {
+                paddingBottom: insets.bottom + spacing.xl + (keyboardVisible ? spacing.lg : 0),
+              },
+            ]}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
             showsVerticalScrollIndicator={false}
           >
             {isManualEntry ? (
               <View style={styles.manualBanner}>
-                <Text style={styles.manualBannerTitle}>No receipt attached</Text>
-                <Text style={styles.manualBannerSub}>
-                  Fill in the details below. Business purpose is required for manual entries.
-                </Text>
+                <Text style={styles.manualBannerIcon}>⚠️</Text>
+                <View style={styles.manualBannerText}>
+                  <Text style={styles.manualBannerTitle}>No receipt attached</Text>
+                  <Text style={styles.manualBannerSub}>
+                    Business purpose is required for manual entries.
+                  </Text>
+                </View>
               </View>
             ) : null}
 
             {previewUri ? <Image source={{ uri: previewUri }} style={styles.reviewThumb} /> : null}
 
-            <View style={styles.merchantCard}>
-              <Text style={styles.merchantLabel}>{isManualEntry ? "Merchant / vendor" : "Merchant"}</Text>
-              <TextInput
-                style={styles.merchantNameInput}
-                value={merchantName}
-                onChangeText={setMerchantName}
-                placeholder={isManualEntry ? "e.g. Starbucks, Shell, Amazon" : "Merchant name"}
-                placeholderTextColor={colors.slate400}
-                autoFocus={isManualEntry}
-              />
-              <View style={styles.totalRow}>
+            <View style={[styles.merchantCard, isManualEntry && styles.merchantCardManual]}>
+              <View style={styles.merchantCardInner} onLayout={trackFieldLayout("merchant")}>
+                <Text style={styles.merchantLabel}>{isManualEntry ? "Merchant / vendor" : "Merchant"}</Text>
+                <TextInput
+                  ref={merchantRef}
+                  style={[styles.merchantNameInput, isManualEntry && styles.merchantNameInputManual]}
+                  value={merchantName}
+                  onChangeText={setMerchantName}
+                  placeholder={isManualEntry ? "e.g. Starbucks, Shell, Amazon" : "Merchant name"}
+                  placeholderTextColor={colors.slate400}
+                  onFocus={() => scrollToField("merchant")}
+                  returnKeyType="next"
+                  onSubmitEditing={() => amountRef.current?.focus()}
+                />
+              </View>
+              <View style={styles.amountDivider} />
+              <View style={styles.totalRow} onLayout={trackFieldLayout("amount")}>
                 <Text style={styles.currencySign}>$</Text>
                 <TextInput
+                  ref={amountRef}
                   style={styles.totalInput}
                   value={totalAmount}
                   onChangeText={setTotalAmount}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
                   placeholderTextColor={colors.slate400}
+                  onFocus={() => scrollToField("amount")}
                 />
               </View>
               {itemCount > 1 ? (
@@ -302,33 +366,43 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
               ) : null}
             </View>
 
-            <CategoryPicker value={category} onChange={setCategory} />
-
-            <CompanyPicker value={company} onChange={setCompany} />
-
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Date</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={expenseDate}
-                onChangeText={setExpenseDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.slate400}
-              />
-            </View>
-
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>
-                Business purpose{isManualEntry ? " *" : ""}
-              </Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={relatedTo}
-                onChangeText={setRelatedTo}
-                placeholder={isManualEntry ? "Client visit, team lunch, supplies for…" : "Client, account, or reason"}
-                placeholderTextColor={colors.slate400}
-                multiline={isManualEntry}
-              />
+            <View style={styles.formCard}>
+              <Text style={styles.formSectionLabel}>Details</Text>
+              <CategoryPicker value={category} onChange={setCategory} embedded />
+              <View style={styles.formDivider} />
+              <CompanyPicker value={company} onChange={setCompany} embedded />
+              <View style={styles.formDivider} />
+              <View style={styles.field} onLayout={trackFieldLayout("date")}>
+                <Text style={styles.fieldLabel}>Date</Text>
+                <TextInput
+                  ref={dateRef}
+                  style={styles.fieldInput}
+                  value={expenseDate}
+                  onChangeText={setExpenseDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={colors.slate400}
+                  onFocus={() => scrollToField("date")}
+                  returnKeyType="next"
+                  onSubmitEditing={() => purposeRef.current?.focus()}
+                />
+              </View>
+              <View style={styles.formDivider} />
+              <View style={styles.field} onLayout={trackFieldLayout("purpose")}>
+                <Text style={styles.fieldLabel}>
+                  Business purpose{isManualEntry ? " *" : ""}
+                </Text>
+                <TextInput
+                  ref={purposeRef}
+                  style={[styles.fieldInput, isManualEntry && styles.fieldInputMultiline]}
+                  value={relatedTo}
+                  onChangeText={setRelatedTo}
+                  placeholder={isManualEntry ? "Client visit, team lunch, supplies for…" : "Client, account, or reason"}
+                  placeholderTextColor={colors.slate400}
+                  multiline={isManualEntry}
+                  textAlignVertical={isManualEntry ? "top" : "center"}
+                  onFocus={() => scrollToField("purpose")}
+                />
+              </View>
             </View>
 
             {!isManualEntry && itemCount > 1 ? (
@@ -363,26 +437,22 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
             ) : null}
 
             {isManualEntry ? (
-              <Pressable onPress={resetScan}>
+              <Pressable onPress={resetScan} style={styles.altAction}>
                 <Text style={styles.retake}>← Scan receipt instead</Text>
               </Pressable>
             ) : (
-              <Pressable onPress={resetScan}>
+              <Pressable onPress={resetScan} style={styles.altAction}>
                 <Text style={styles.retake}>↻ Retake photo</Text>
               </Pressable>
             )}
-          </ScrollView>
-        ) : null}
 
-        {isReviewStep ? (
-          <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
             <Button
               title={isManualEntry ? "Save Manual Expense" : "Save Expense"}
               onPress={handleSave}
               loading={submitting}
-              style={styles.saveBtn}
+              style={styles.saveBtnInline}
             />
-          </View>
+          </ScrollView>
         ) : null}
       </KeyboardAvoidingView>
     </View>
@@ -441,30 +511,50 @@ const styles = StyleSheet.create({
   manualSub: { fontSize: 13, color: colors.slate500, lineHeight: 18 },
   manualChevron: { fontSize: 24, fontWeight: "300", color: colors.slate400 },
   manualBanner: {
-    backgroundColor: "#fef3c7",
-    borderRadius: radius.md,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    backgroundColor: "#fffbeb",
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: "#fcd34d",
+    borderColor: "#fde68a",
     padding: spacing.md,
-    gap: 4,
   },
+  manualBannerIcon: { fontSize: 18, marginTop: 1 },
+  manualBannerText: { flex: 1, gap: 2 },
   manualBannerTitle: { fontSize: 14, fontWeight: "700", color: "#92400e" },
-  manualBannerSub: { fontSize: 13, color: "#a16207", lineHeight: 18 },
-  reviewContent: { padding: spacing.md, gap: spacing.md },
-  reviewThumb: { width: "100%", height: 120, borderRadius: radius.md, resizeMode: "cover" },
+  manualBannerSub: { fontSize: 13, color: "#b45309", lineHeight: 18 },
+  reviewContent: { padding: spacing.md, gap: spacing.md, flexGrow: 1 },
+  reviewThumb: { width: "100%", height: 120, borderRadius: radius.lg, resizeMode: "cover" },
   merchantCard: {
     backgroundColor: colors.white,
     borderRadius: radius.lg,
     padding: spacing.lg,
     alignItems: "center",
     shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 3,
     gap: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  merchantLabel: { fontSize: 13, fontWeight: "600", color: colors.slate500, alignSelf: "flex-start" },
+  merchantCardManual: { alignItems: "stretch" },
+  merchantCardInner: { width: "100%", gap: 6 },
+  amountDivider: {
+    width: "100%",
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.sm,
+  },
+  merchantLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.slate500,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
   merchantNameInput: {
     fontSize: 20,
     fontWeight: "700",
@@ -473,29 +563,54 @@ const styles = StyleSheet.create({
     width: "100%",
     padding: 0,
   },
-  totalRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 4 },
-  currencySign: { fontSize: 28, fontWeight: "800", color: colors.primary, marginTop: 6, marginRight: 2 },
+  merchantNameInputManual: { fontSize: 22, textAlign: "left" },
+  totalRow: { flexDirection: "row", alignItems: "flex-start", width: "100%" },
+  currencySign: { fontSize: 32, fontWeight: "800", color: colors.primary, marginTop: 4, marginRight: 4 },
   totalInput: {
-    fontSize: 42,
+    flex: 1,
+    fontSize: 44,
     fontWeight: "800",
     color: colors.primary,
-    minWidth: 120,
     padding: 0,
-    textAlign: "center",
+    textAlign: "left",
   },
-  metaHint: { fontSize: 13, color: colors.slate500, marginTop: 2 },
-  field: { gap: 6 },
-  fieldLabel: { fontSize: 13, fontWeight: "600", color: colors.slate500 },
-  fieldInput: {
+  metaHint: { fontSize: 13, color: colors.slate500, marginTop: 2, alignSelf: "center" },
+  formCard: {
     backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+    shadowColor: colors.cardShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  formSectionLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.slate500,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+    marginLeft: 2,
+  },
+  formDivider: { height: 1, backgroundColor: colors.border, marginVertical: 2 },
+  field: { gap: 6 },
+  fieldLabel: { fontSize: 13, fontWeight: "600", color: colors.slate500, marginLeft: 2 },
+  fieldInput: {
+    backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 13,
     fontSize: 16,
     color: colors.slate800,
   },
+  fieldInputMultiline: { minHeight: 96, paddingTop: 13 },
   detailsSection: {
     backgroundColor: colors.white,
     borderRadius: radius.md,
@@ -528,17 +643,7 @@ const styles = StyleSheet.create({
   detailTotalLabel: { fontSize: 13, fontWeight: "600", color: colors.slate500 },
   detailTotalAmount: { fontSize: 16, fontWeight: "800", color: colors.primary },
   detailsNote: { fontSize: 11, color: colors.slate400, textAlign: "center", marginTop: 4 },
-  retake: { color: colors.primary, fontWeight: "600", textAlign: "center", paddingVertical: 8 },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    backgroundColor: colors.bg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  saveBtn: { paddingVertical: 16, borderRadius: radius.lg },
+  retake: { color: colors.primary, fontWeight: "600", textAlign: "center" },
+  altAction: { alignItems: "center", paddingVertical: spacing.xs },
+  saveBtnInline: { paddingVertical: 16, borderRadius: radius.lg, marginTop: spacing.xs },
 });
