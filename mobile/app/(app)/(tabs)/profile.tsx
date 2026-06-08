@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { useSettings, useTheme, type ThemeMode } from "../../../lib/settings-context";
+import { useAppUpdates } from "../../../lib/use-app-updates";
 import {
   getCompanyLabel,
   getRegionLabel,
@@ -98,6 +99,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { colors, themeMode, setThemeMode, isDark } = useTheme();
   const { notifications, setPushEnabled, setExpenseReminders, setReportUpdates, pushToken } = useSettings();
+  const { info: updateInfo, checkForUpdate } = useAppUpdates(false);
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -226,6 +228,42 @@ export default function ProfileScreen() {
         ) : null}
       </Section>
 
+      <Section title="App updates" colors={colors} isDark={isDark}>
+        <SettingRow
+          label="Update channel"
+          subtitle={updateInfo.channel ?? "Not configured — need TestFlight build #3+"}
+          colors={colors}
+          isDark={isDark}
+        />
+        <SettingRow
+          label="Status"
+          subtitle={updateInfo.message || `Runtime ${updateInfo.runtimeVersion ?? "?"}`}
+          colors={colors}
+          isDark={isDark}
+          last={!updateInfo.updateId}
+        />
+        {updateInfo.updateId ? (
+          <SettingRow
+            label="Installed update"
+            subtitle={updateInfo.updateId.slice(0, 8) + "…"}
+            colors={colors}
+            isDark={isDark}
+            last
+          />
+        ) : null}
+        <Pressable
+          style={styles.updateBtn}
+          onPress={() => checkForUpdate(true)}
+          disabled={updateInfo.status === "checking" || updateInfo.status === "downloading"}
+        >
+          <Text style={styles.updateBtnText}>
+            {updateInfo.status === "checking" || updateInfo.status === "downloading"
+              ? updateInfo.message
+              : "Check for updates"}
+          </Text>
+        </Pressable>
+      </Section>
+
       <Section title="Account" colors={colors} isDark={isDark}>
         <Pressable style={styles.signOutBtn} onPress={signOut}>
           <Text style={styles.signOutText}>Sign out</Text>
@@ -317,6 +355,13 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     themeChipTextActive: { color: colors.white },
     signOutBtn: { padding: spacing.md, alignItems: "center" },
     signOutText: { color: colors.error, fontSize: 16, fontWeight: "700" },
+    updateBtn: {
+      padding: spacing.md,
+      alignItems: "center",
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    updateBtnText: { color: colors.primary, fontSize: 15, fontWeight: "700" },
     footer: { textAlign: "center", fontSize: 12, color: colors.slate400, marginTop: spacing.sm },
   });
 }
