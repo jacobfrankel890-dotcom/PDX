@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: "rgba(255,255,255,0.64)",
+    color: "rgba(255,255,255,0.76)",
     letterSpacing: 1,
     textTransform: "uppercase",
     marginBottom: grid(1),
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 15,
     fontWeight: "500",
-    color: "rgba(255,255,255,0.88)",
+    color: "rgba(255,255,255,0.92)",
     lineHeight: 22,
     marginBottom: grid(2.5),
     maxWidth: 320,
@@ -173,12 +173,12 @@ const styles = StyleSheet.create({
   },
   trustIcon: {
     fontSize: 11,
-    color: "rgba(255,255,255,0.62)",
+    color: "rgba(255,255,255,0.72)",
   },
   trustText: {
     fontSize: 12,
     fontWeight: "500",
-    color: "rgba(255,255,255,0.62)",
+    color: "rgba(255,255,255,0.72)",
   },
   footer: {
     alignItems: "center",

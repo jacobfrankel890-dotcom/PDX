@@ -71,8 +71,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: grid(3.5),
     borderRadius: radius.lg,
     borderWidth: 1.5,
-    borderColor: AUTH_BORDER,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    borderColor: "rgba(255,255,255,0.32)",
+    backgroundColor: "rgba(0,0,0,0.34)",
     gap: 8,
   },
   outlineIcon: {
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: "rgba(255,255,255,0.52)",
+    color: "rgba(255,255,255,0.72)",
     letterSpacing: 1,
     textTransform: "uppercase",
     marginBottom: grid(1),

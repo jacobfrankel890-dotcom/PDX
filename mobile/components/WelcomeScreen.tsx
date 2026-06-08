@@ -89,6 +89,11 @@ const styles = StyleSheet.create({
     gap: grid(2),
     marginTop: grid(2),
     marginBottom: grid(3),
+    padding: grid(1.75),
+    borderRadius: radius.lg,
+    backgroundColor: "rgba(0,0,0,0.34)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   badge: {
     flexDirection: "row",
@@ -121,19 +126,24 @@ const styles = StyleSheet.create({
   subheadline: {
     fontSize: 15,
     fontWeight: "500",
-    color: "rgba(255,255,255,0.88)",
+    color: "rgba(255,255,255,0.92)",
     lineHeight: 22,
     maxWidth: 320,
   },
   actions: {
     gap: grid(3),
+    padding: grid(1.75),
+    borderRadius: radius.lg,
+    backgroundColor: "rgba(0,0,0,0.36)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   actionBlock: {
     gap: grid(0.5),
   },
   hint: {
     fontSize: 13,
-    color: "rgba(255,255,255,0.68)",
+    color: "rgba(255,255,255,0.76)",
     lineHeight: 18,
     marginTop: grid(0.5),
   },
@@ -151,11 +161,11 @@ const styles = StyleSheet.create({
   },
   trustIcon: {
     fontSize: 11,
-    color: "rgba(255,255,255,0.62)",
+    color: "rgba(255,255,255,0.72)",
   },
   trustText: {
     fontSize: 12,
     fontWeight: "500",
-    color: "rgba(255,255,255,0.62)",
+    color: "rgba(255,255,255,0.72)",
   },
 });
