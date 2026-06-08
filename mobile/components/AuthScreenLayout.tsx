@@ -19,12 +19,13 @@ export function AuthScreenLayout({ children }: Props) {
     <ImageBackground source={TIRE_BG} style={styles.root} resizeMode="cover">
       <StatusBar style="light" />
       <BlurView
-        intensity={Platform.OS === "ios" ? 32 : 48}
+        intensity={Platform.OS === "ios" ? 42 : 55}
         tint="dark"
         style={StyleSheet.absoluteFillObject}
         pointerEvents="none"
       />
       <View style={styles.shade} pointerEvents="none" />
+      <View style={styles.vignette} pointerEvents="none" />
       <SafeAreaView style={styles.content} edges={["top", "bottom"]}>
         {children}
       </SafeAreaView>
@@ -38,7 +39,11 @@ const styles = StyleSheet.create({
   },
   shade: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(0,0,0,0.68)",
+  },
+  vignette: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.18)",
   },
   content: {
     flex: 1,

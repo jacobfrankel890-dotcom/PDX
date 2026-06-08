@@ -3,12 +3,10 @@ import { router } from "expo-router";
 import {
   AUTH_BG,
   AUTH_BORDER,
-  AUTH_GRAY_45,
   AUTH_GRAY_60,
   AUTH_TAGLINE,
   AUTH_TRUST_ITEMS,
   AUTH_WHITE_90,
-  authHorizontalPad,
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
@@ -29,35 +27,41 @@ export function WelcomeScreen() {
       >
         <AuthLogoHeader compact={compact} />
 
-        <View style={styles.badge}>
-          <Text style={styles.badgeIcon}>⚡</Text>
-          <Text style={styles.badgeText}>For PDX teams</Text>
+        <View style={styles.hero}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeIcon}>⚡</Text>
+            <Text style={styles.badgeText}>For PDX teams</Text>
+          </View>
+
+          <Text style={[styles.headline, compact && styles.headlineCompact]}>
+            Your receipts.{"\n"}Submitted.
+          </Text>
+          <Text style={styles.subheadline}>{AUTH_TAGLINE}</Text>
         </View>
 
-        <Text style={[styles.headline, compact && styles.headlineCompact]}>
-          Your receipts.{"\n"}Submitted.
-        </Text>
-        <Text style={styles.subheadline}>{AUTH_TAGLINE}</Text>
-
         <View style={styles.actions}>
-          <Text style={styles.sectionLabel}>New account</Text>
-          <Pressable
-            style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}
-            onPress={() => router.push("/(auth)/signup")}
-          >
-            <Text style={styles.primaryBtnText}>Create account</Text>
-            <Text style={styles.primaryBtnIcon}>+</Text>
-          </Pressable>
-          <Text style={styles.hint}>First time here? Free to join — takes about a minute.</Text>
+          <View style={styles.actionBlock}>
+            <Text style={styles.sectionLabel}>New account</Text>
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}
+              onPress={() => router.push("/(auth)/signup")}
+            >
+              <Text style={styles.primaryBtnText}>Create account</Text>
+              <Text style={styles.primaryBtnIcon}>+</Text>
+            </Pressable>
+            <Text style={styles.hint}>First time here? Free to join — takes about a minute.</Text>
+          </View>
 
-          <Text style={[styles.sectionLabel, styles.sectionLabelGap]}>Returning user</Text>
-          <Pressable
-            style={({ pressed }) => [styles.outlineBtn, pressed && styles.btnPressed]}
-            onPress={() => router.push("/(auth)/login")}
-          >
-            <Text style={styles.outlineBtnIcon}>→</Text>
-            <Text style={styles.outlineBtnText}>Sign in</Text>
-          </Pressable>
+          <View style={styles.actionBlock}>
+            <Text style={styles.sectionLabel}>Returning user</Text>
+            <Pressable
+              style={({ pressed }) => [styles.outlineBtn, pressed && styles.btnPressed]}
+              onPress={() => router.push("/(auth)/login")}
+            >
+              <Text style={styles.outlineBtnIcon}>→</Text>
+              <Text style={styles.outlineBtnText}>Sign in</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.trustRow}>
@@ -78,7 +82,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: grid(4),
+    flexGrow: 1,
+    paddingBottom: grid(3),
+  },
+  hero: {
+    gap: grid(2),
+    marginBottom: grid(3),
   },
   badge: {
     flexDirection: "row",
@@ -89,7 +98,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: radius.full,
     gap: 4,
-    marginBottom: grid(1.5),
   },
   badgeIcon: { fontSize: 11, color: AUTH_BG },
   badgeText: {
@@ -99,45 +107,42 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   headline: {
-    fontSize: 36,
+    fontSize: 34,
     fontWeight: "800",
     color: AUTH_WHITE_90,
-    lineHeight: 42,
-    letterSpacing: -1,
-    marginBottom: grid(1.5),
+    lineHeight: 40,
+    letterSpacing: -0.8,
   },
   headlineCompact: {
-    fontSize: 30,
-    lineHeight: 36,
+    fontSize: 28,
+    lineHeight: 34,
   },
   subheadline: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "500",
     color: AUTH_GRAY_60,
-    lineHeight: 24,
-    marginBottom: grid(1.5),
+    lineHeight: 22,
+    maxWidth: 340,
   },
   actions: {
+    gap: grid(3),
+  },
+  actionBlock: {
     gap: grid(1),
-    marginTop: grid(0.5),
   },
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: AUTH_GRAY_45,
-    letterSpacing: 0.8,
+    color: AUTH_GRAY_60,
+    letterSpacing: 0.9,
     textTransform: "uppercase",
-    marginBottom: grid(0.5),
-  },
-  sectionLabelGap: {
-    marginTop: grid(2),
   },
   primaryBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 54,
-    borderRadius: 18,
+    minHeight: 52,
+    borderRadius: 16,
     backgroundColor: "#99C221",
     gap: 10,
     paddingHorizontal: grid(3),
@@ -154,19 +159,18 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: 13,
-    color: AUTH_GRAY_45,
+    color: AUTH_GRAY_60,
     lineHeight: 18,
-    marginTop: 4,
   },
   outlineBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     minHeight: 50,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: AUTH_BORDER,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.08)",
     gap: 10,
     paddingHorizontal: grid(3),
   },
@@ -187,9 +191,10 @@ const styles = StyleSheet.create({
   trustRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: grid(3),
-    columnGap: grid(2.5),
-    rowGap: grid(1.5),
+    marginTop: "auto",
+    paddingTop: grid(4),
+    columnGap: grid(2),
+    rowGap: grid(1),
   },
   trustItem: {
     flexDirection: "row",
@@ -197,12 +202,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   trustIcon: {
-    fontSize: 13,
-    color: AUTH_GRAY_45,
+    fontSize: 12,
+    color: AUTH_GRAY_60,
   },
   trustText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "500",
-    color: AUTH_GRAY_45,
+    color: AUTH_GRAY_60,
   },
 });
