@@ -14,6 +14,7 @@ export default function SignupScreen() {
   const [step, setStep] = useState<Step>("account");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const [form, setForm] = useState({
     firstName: "",
@@ -28,6 +29,7 @@ export default function SignupScreen() {
   function update(field: keyof typeof form, value: string) {
     setForm((p) => ({ ...p, [field]: value }));
     setError("");
+    setSuccess("");
   }
 
   function validateAccount(): boolean {
@@ -57,7 +59,7 @@ export default function SignupScreen() {
     }
 
     setLoading(true);
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email: form.email.trim(),
       password: form.password,
       options: {
@@ -77,7 +79,13 @@ export default function SignupScreen() {
       return;
     }
 
-    router.replace("/(app)/dashboard");
+    if (data.session) {
+      router.replace("/(app)/dashboard");
+      return;
+    }
+
+    setStep("account");
+    setSuccess("Account created! Check your email to confirm, then sign in.");
   }
 
   return (
@@ -87,6 +95,7 @@ export default function SignupScreen() {
         <Text style={styles.subtitle}>Parts Distribution Xpress</Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {success ? <Text style={styles.success}>{success}</Text> : null}
 
         {step === "account" && (
           <>
@@ -162,6 +171,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "700", color: colors.primary, textAlign: "center" },
   subtitle: { fontSize: 14, color: colors.slate500, textAlign: "center", marginBottom: 8 },
   error: { color: colors.error, backgroundColor: colors.errorBg, padding: 12, borderRadius: 8 },
+  success: { color: colors.primary, backgroundColor: "#e8eef5", padding: 12, borderRadius: 8 },
   label: { fontSize: 14, fontWeight: "600", color: colors.slate700, marginTop: 8 },
   option: { padding: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white },
   optionActive: { borderColor: colors.primary, backgroundColor: "#e8eef5" },
