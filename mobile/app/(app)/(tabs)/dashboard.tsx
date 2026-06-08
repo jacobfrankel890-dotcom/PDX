@@ -262,7 +262,10 @@ export default function DashboardScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={styles.expenseCard}>
+          <Pressable
+            style={styles.expenseCard}
+            onPress={() => router.push(`/(app)/expense/${item.id}`)}
+          >
             <View style={styles.categoryStripe}>
               <Text style={styles.stripeEmoji}>
                 {EXPENSE_CATEGORIES.find((c) => c.key === getCategoryFromItem(item))?.emoji ?? "📋"}
@@ -286,8 +289,9 @@ export default function DashboardScreen() {
             <View style={styles.expenseRight}>
               <Text style={styles.expenseAmount}>{formatCurrency(item.row_total)}</Text>
               <StatusBadge status={item.report_status} colors={colors} />
+              <Text style={styles.chevron}>›</Text>
             </View>
-          </View>
+          </Pressable>
         )}
       />
 
@@ -404,8 +408,9 @@ function makeStyles(colors: ThemeColors) {
   expenseDesc: { fontSize: 16, fontWeight: "600", color: colors.slate800 },
   expenseMeta: { fontSize: 13, color: colors.slate500, marginTop: 3 },
   relatedTo: { fontSize: 12, color: colors.primaryLight, marginTop: 2, fontStyle: "italic" },
-  expenseRight: { alignItems: "flex-end", padding: spacing.md, paddingLeft: 0, gap: 6 },
+  expenseRight: { alignItems: "flex-end", padding: spacing.md, paddingLeft: 0, gap: 4 },
   expenseAmount: { fontSize: 17, fontWeight: "700", color: colors.primary },
+  chevron: { fontSize: 22, color: colors.slate400, fontWeight: "300", marginTop: 2 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full },
   badgeDraft: { backgroundColor: colors.greenLight },
   badgeSubmitted: { backgroundColor: "#e0e7ff" },

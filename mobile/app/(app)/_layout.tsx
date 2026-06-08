@@ -14,6 +14,7 @@ export default function AppLayout() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="submit" options={{ headerShown: false, presentation: "modal" }} />
+      <Stack.Screen name="expense/[id]" options={{ title: "Receipt" }} />
       <Stack.Screen name="reports/new" options={{ headerShown: false }} />
       <Stack.Screen name="reports/[id]" options={{ title: "Report Details" }} />
     </Stack>

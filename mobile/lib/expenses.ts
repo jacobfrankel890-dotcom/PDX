@@ -241,3 +241,73 @@ export function getPendingReportIds(expenses: ExpenseEntry[]): string[] {
     ),
   ];
 }
+
+export function isExpenseEditable(entry: ExpenseEntry): boolean {
+  return entry.report_status === "draft" || entry.report_status === "rejected";
+}
+
+export async function fetchExpenseById(id: string): Promise<ExpenseEntry | null> {
+  const { data, error } = await supabase
+    .from("expense_line_items")
+    .select("*, expense_reports(status, pay_period_start)")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as ExpenseLineItem & {
+    expense_reports: { status: ExpenseReport["status"]; pay_period_start: string } | null;
+  };
+
+  return {
+    ...row,
+    report_status: row.expense_reports?.status,
+    pay_period_start: row.expense_reports?.pay_period_start,
+  };
+}
+
+export type UpdateExpenseInput = {
+  description: string;
+  amount: number;
+  category: ExpenseCategory;
+  expenseDate: string;
+  relatedTo?: string;
+  company?: string;
+};
+
+export async function updateExpenseLineItem(id: string, input: UpdateExpenseInput): Promise<ExpenseLineItem> {
+  const amount = Math.round(input.amount * 100) / 100;
+  const payload: Record<string, unknown> = {
+    description: input.description.trim() || "Expense",
+    related_to: input.relatedTo?.trim() || null,
+    company: input.company?.trim() || null,
+    expense_date: toIsoDate(input.expenseDate) ?? format(new Date(), "yyyy-MM-dd"),
+    travel_lodging: 0,
+    tolls_parking: 0,
+    miles: 0,
+    mileage_calc: 0,
+    office_supplies: 0,
+    meals_entertainment: 0,
+    vehicle_maintenance: 0,
+    marketing: 0,
+    misc: 0,
+    row_total: amount,
+  };
+  payload[input.category] = amount;
+
+  const { data, error } = await supabase.from("expense_line_items").update(payload).eq("id", id).select().single();
+  if (error) throw error;
+  return data as ExpenseLineItem;
+}
+
+export async function deleteExpenseLineItem(id: string): Promise<void> {
+  const { error } = await supabase.from("expense_line_items").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function getReceiptImageUrl(storagePath: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from("receipts").createSignedUrl(storagePath, 3600);
+  if (error) return null;
+  return data.signedUrl;
+}
