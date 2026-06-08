@@ -1,27 +1,19 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AUTH_BG, AUTH_GRAY_60, AUTH_WHITE_90, authHorizontalPad } from "../constants/auth-chrome";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { AUTH_GRAY_60, AUTH_WHITE_90, authHorizontalPad } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
 import { AuthScreenBackdrop } from "./AuthScreenBackdrop";
 import { AuthLogoHeader } from "./AuthLogoHeader";
 
 export function LandingSplash() {
-  const insets = useSafeAreaInsets();
   const barWidth = useRef(new Animated.Value(grid(3))).current;
-  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const contentOpacity = useRef(new Animated.Value(1)).current;
   const trackWidth = useRef(grid(35));
 
   useEffect(() => {
-    Animated.timing(contentOpacity, {
-      toValue: 1,
-      duration: 450,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-
     Animated.loop(
       Animated.sequence([
         Animated.timing(barWidth, {
@@ -38,24 +30,30 @@ export function LandingSplash() {
         }),
       ])
     ).start();
-  }, [barWidth, contentOpacity]);
+  }, [barWidth]);
 
   const styles = useMemo(() => makeStyles(), []);
 
   return (
-    <View style={[styles.root, { paddingBottom: insets.bottom + grid(3) }]}>
+    <View style={styles.root}>
       <StatusBar style="light" />
-      <AuthScreenBackdrop />
-      <AuthLogoHeader />
 
-      <Animated.View style={[styles.content, { opacity: contentOpacity }]}>
-        <Text style={styles.headline}>Your receipts.{"\n"}Submitted.</Text>
-        <Text style={styles.subline}>Loading your workspace…</Text>
+      <View style={styles.background} pointerEvents="none">
+        <AuthScreenBackdrop />
+      </View>
 
-        <View style={styles.loaderTrack}>
-          <Animated.View style={[styles.loaderFill, { width: barWidth }]} />
-        </View>
-      </Animated.View>
+      <SafeAreaView style={styles.foreground} edges={["top", "bottom"]}>
+        <AuthLogoHeader />
+
+        <Animated.View style={[styles.content, { opacity: contentOpacity }]}>
+          <Text style={styles.headline}>Your receipts.{"\n"}Submitted.</Text>
+          <Text style={styles.subline}>Loading your workspace…</Text>
+
+          <View style={styles.loaderTrack}>
+            <Animated.View style={[styles.loaderFill, { width: barWidth }]} />
+          </View>
+        </Animated.View>
+      </SafeAreaView>
     </View>
   );
 }
@@ -64,11 +62,19 @@ function makeStyles() {
   return StyleSheet.create({
     root: {
       flex: 1,
-      backgroundColor: AUTH_BG,
+    },
+    background: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 0,
+    },
+    foreground: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 1,
+      paddingHorizontal: authHorizontalPad,
+      paddingBottom: grid(3),
     },
     content: {
       gap: grid(1.5),
-      paddingHorizontal: authHorizontalPad + grid(0.5),
       marginTop: grid(1),
     },
     headline: {

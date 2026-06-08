@@ -1,9 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import * as Updates from "expo-updates";
-import { useEffect } from "react";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   AUTH_BG,
   AUTH_BORDER,
@@ -20,41 +18,26 @@ import { AuthScreenBackdrop } from "./AuthScreenBackdrop";
 import { AuthLogoHeader } from "./AuthLogoHeader";
 
 export function WelcomeScreen() {
-  const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const compact = height < 740;
-
-  useEffect(() => {
-    if (__DEV__ || !Updates.isEnabled) return;
-    (async () => {
-      try {
-        const check = await Updates.checkForUpdateAsync();
-        if (!check.isAvailable) return;
-        await Updates.fetchUpdateAsync();
-        await Updates.reloadAsync();
-      } catch {
-        // ignore — user can check manually from profile when signed in
-      }
-    })();
-  }, []);
 
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
-      <AuthScreenBackdrop />
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + grid(4) },
-        ]}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <AuthLogoHeader compact={compact} />
+      <View style={styles.background} pointerEvents="none">
+        <AuthScreenBackdrop />
+      </View>
 
-        <View style={styles.content}>
+      <SafeAreaView style={styles.foreground} edges={["top", "bottom"]}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <AuthLogoHeader compact={compact} />
+
           <View style={styles.badge}>
             <Text style={styles.badgeIcon}>⚡</Text>
             <Text style={styles.badgeText}>For PDX teams</Text>
@@ -94,8 +77,8 @@ export function WelcomeScreen() {
               </View>
             ))}
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }
@@ -103,16 +86,21 @@ export function WelcomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: AUTH_BG,
   },
-  scroll: { flex: 1, zIndex: 1 },
+  background: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
+  foreground: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
   scrollContent: {
-    flexGrow: 1,
-    justifyContent: "flex-start",
-  },
-  content: {
-    gap: grid(1.5),
     paddingHorizontal: authHorizontalPad,
+    paddingBottom: grid(4),
   },
   badge: {
     flexDirection: "row",
@@ -123,6 +111,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: radius.full,
     gap: 4,
+    marginBottom: grid(1.5),
   },
   badgeIcon: { fontSize: 11, color: AUTH_BG },
   badgeText: {
@@ -137,6 +126,7 @@ const styles = StyleSheet.create({
     color: AUTH_WHITE_90,
     lineHeight: 42,
     letterSpacing: -1,
+    marginBottom: grid(1.5),
   },
   headlineCompact: {
     fontSize: 30,
@@ -147,10 +137,11 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: AUTH_GRAY_60,
     lineHeight: 24,
+    marginBottom: grid(1.5),
   },
   actions: {
     gap: grid(1),
-    marginTop: grid(1),
+    marginTop: grid(0.5),
   },
   sectionLabel: {
     fontSize: 11,

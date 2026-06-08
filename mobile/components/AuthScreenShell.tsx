@@ -10,7 +10,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   AUTH_BG,
   AUTH_GRAY_45,
@@ -49,7 +49,6 @@ export function AuthScreenShell({
   showTrust = true,
   compactHero,
 }: Props) {
-  const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -58,22 +57,29 @@ export function AuthScreenShell({
   }, [scrollKey]);
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}>
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
+    >
       <StatusBar style="light" />
-      <AuthScreenBackdrop />
 
-      <ScrollView
-        ref={scrollRef}
-        style={styles.flex}
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + grid(3) }, contentStyle]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
-        automaticallyAdjustKeyboardInsets
-        showsVerticalScrollIndicator={false}
-      >
-        <AuthLogoHeader compact={compactHero} />
+      <View style={styles.background} pointerEvents="none">
+        <AuthScreenBackdrop />
+      </View>
 
-        <View style={styles.content}>
+      <SafeAreaView style={styles.foreground} edges={["top", "bottom"]}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, contentStyle]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          automaticallyAdjustKeyboardInsets
+          showsVerticalScrollIndicator={false}
+        >
+          <AuthLogoHeader compact={compactHero} />
+
           {badge ? (
             <View style={styles.badge}>
               <Text style={styles.badgeIcon}>⚡</Text>
@@ -100,20 +106,26 @@ export function AuthScreenShell({
           ) : null}
 
           {footer ? <View style={styles.footer}>{footer}</View> : null}
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: AUTH_BG },
-  scroll: {
-    flexGrow: 1,
+  root: { flex: 1 },
+  background: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
   },
-  content: {
-    gap: grid(2),
+  foreground: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+  },
+  scroll: { flex: 1 },
+  scrollContent: {
     paddingHorizontal: authHorizontalPad,
+    paddingBottom: grid(3),
   },
   badge: {
     flexDirection: "row",
@@ -124,6 +136,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: radius.full,
     gap: 4,
+    marginBottom: grid(2),
   },
   badgeIcon: { fontSize: 11, color: AUTH_BG },
   badgeText: {
@@ -138,6 +151,7 @@ const styles = StyleSheet.create({
     color: AUTH_GRAY_45,
     letterSpacing: 0.8,
     textTransform: "uppercase",
+    marginBottom: grid(1),
   },
   title: {
     fontSize: 34,
@@ -145,22 +159,21 @@ const styles = StyleSheet.create({
     color: AUTH_WHITE_90,
     letterSpacing: -0.8,
     lineHeight: 40,
+    marginBottom: grid(1),
   },
   subtitle: {
     fontSize: 16,
     fontWeight: "500",
     color: AUTH_GRAY_60,
     lineHeight: 24,
-    marginBottom: grid(1),
+    marginBottom: grid(2),
   },
   form: {
     gap: grid(2),
-    marginTop: grid(0.5),
   },
   trustRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: grid(2),
     marginTop: grid(2),
     columnGap: grid(2),
     rowGap: grid(1),
