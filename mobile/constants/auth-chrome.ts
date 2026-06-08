@@ -34,4 +34,7 @@ export function authHeroHeight(compact?: boolean): number {
 
 export const authHorizontalPad = grid(3.5);
 
+/** Content overlaps the hero fade zone (Reroute-style). */
+export const authHeroOverlap = -grid(9);
+
 export { SCREEN_WIDTH, SCREEN_HEIGHT };

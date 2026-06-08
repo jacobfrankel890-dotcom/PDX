@@ -10,12 +10,12 @@ import {
   AUTH_TAGLINE,
   AUTH_TRUST_ITEMS,
   AUTH_WHITE_90,
+  authHeroOverlap,
   authHorizontalPad,
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
-import { AuthBackdrop } from "./AuthBackdrop";
-import { AuthLogoHeader } from "./AuthLogoHeader";
+import { AuthHero } from "./AuthHero";
 
 export function WelcomeScreen() {
   const insets = useSafeAreaInsets();
@@ -25,17 +25,15 @@ export function WelcomeScreen() {
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
-      <AuthBackdrop compact={compact} />
-
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + grid(4) }]}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <AuthLogoHeader compact={compact} />
+        <AuthHero compact={compact} />
 
-        <View style={styles.content}>
+        <View style={[styles.content, { marginTop: authHeroOverlap }]}>
           <View style={styles.badge}>
             <Text style={styles.badgeIcon}>⚡</Text>
             <Text style={styles.badgeText}>For PDX teams</Text>

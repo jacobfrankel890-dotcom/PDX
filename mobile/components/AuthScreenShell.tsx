@@ -17,12 +17,12 @@ import {
   AUTH_GRAY_60,
   AUTH_TRUST_ITEMS,
   AUTH_WHITE_90,
+  authHeroOverlap,
   authHorizontalPad,
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
-import { AuthBackdrop } from "./AuthBackdrop";
-import { AuthLogoHeader } from "./AuthLogoHeader";
+import { AuthHero } from "./AuthHero";
 
 type Props = {
   title: string;
@@ -60,8 +60,6 @@ export function AuthScreenShell({
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}>
       <StatusBar style="light" />
-      <AuthBackdrop compact={compactHero} />
-
       <ScrollView
         ref={scrollRef}
         style={styles.flex}
@@ -71,9 +69,9 @@ export function AuthScreenShell({
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       >
-        <AuthLogoHeader compact={compactHero} />
+        <AuthHero compact={compactHero} />
 
-        <View style={styles.content}>
+        <View style={[styles.content, { marginTop: authHeroOverlap }]}>
           {badge ? (
             <View style={styles.badge}>
               <Text style={styles.badgeIcon}>⚡</Text>
