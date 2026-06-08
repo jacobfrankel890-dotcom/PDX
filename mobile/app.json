@@ -19,6 +19,7 @@
         "NSCameraUsageDescription": "PDX Expense needs camera access to photograph receipts for expense reports.",
         "NSPhotoLibraryUsageDescription": "PDX Expense needs photo library access to upload receipt images.",
         "NSPhotoLibraryAddUsageDescription": "PDX Expense may save receipt photos to your library.",
+        "NSFaceIDUsageDescription": "PDX Expense uses Face ID for quick and secure sign-in.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -37,7 +38,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-updates"
+      "expo-updates",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

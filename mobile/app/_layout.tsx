@@ -1,9 +1,11 @@
 import "react-native-gesture-handler";
+import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SettingsProvider, useTheme } from "../lib/settings-context";
 import { AppUpdateGate } from "../components/AppUpdateGate";
+import { initBiometricSessionSync } from "../lib/biometric-auth";
 
 function RootNavigator() {
   const { colors, isDark } = useTheme();
@@ -28,6 +30,8 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  useEffect(() => initBiometricSessionSync(), []);
+
   return (
     <SafeAreaProvider>
       <SettingsProvider>

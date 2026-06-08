@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Link, router } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import {
+  getBiometricLabel,
+  isBiometricLoginEnabled,
+  offerBiometricSetupAfterLogin,
+  signInWithBiometric,
+} from "../../lib/biometric-auth";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { colors } from "../../constants/theme";
@@ -10,7 +16,20 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
   const [error, setError] = useState("");
+  const [biometricLabel, setBiometricLabel] = useState("Biometrics");
+  const [showBiometric, setShowBiometric] = useState(false);
+
+  useEffect(() => {
+    isBiometricLoginEnabled().then(setShowBiometric);
+    getBiometricLabel().then(setBiometricLabel);
+  }, []);
+
+  const goToApp = useCallback(async () => {
+    await offerBiometricSetupAfterLogin();
+    router.replace("/(app)/dashboard");
+  }, []);
 
   async function handleLogin() {
     setLoading(true);
@@ -19,6 +38,20 @@ export default function LoginScreen() {
     setLoading(false);
     if (authError) {
       setError(authError.message);
+      return;
+    }
+    await goToApp();
+  }
+
+  async function handleBiometricLogin() {
+    setBiometricLoading(true);
+    setError("");
+    const result = await signInWithBiometric();
+    setBiometricLoading(false);
+    if (!result.ok) {
+      if (result.error && result.error !== "Authentication cancelled") {
+        setError(result.error);
+      }
       return;
     }
     router.replace("/(app)/dashboard");
@@ -30,6 +63,17 @@ export default function LoginScreen() {
         <Text style={styles.brand}>Parts Distribution Xpress</Text>
         <Text style={styles.sub}>Expense Report Portal</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {showBiometric ? (
+          <Button
+            title={`Sign in with ${biometricLabel}`}
+            variant="outline"
+            onPress={handleBiometricLogin}
+            loading={biometricLoading}
+            style={styles.biometricBtn}
+          />
+        ) : null}
+
         <Input label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
         <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry />
         <Button title="Sign In" onPress={handleLogin} loading={loading} />
@@ -49,5 +93,6 @@ const styles = StyleSheet.create({
   brand: { fontSize: 22, fontWeight: "700", color: colors.primary, textAlign: "center" },
   sub: { fontSize: 14, color: colors.slate500, textAlign: "center", marginBottom: 16 },
   error: { color: colors.error, backgroundColor: colors.errorBg, padding: 12, borderRadius: 8 },
+  biometricBtn: { marginBottom: 4 },
   link: { color: colors.primary, textAlign: "center", fontWeight: "600", marginTop: 8 },
 });

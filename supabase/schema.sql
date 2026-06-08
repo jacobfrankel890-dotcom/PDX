@@ -291,7 +291,11 @@ CREATE POLICY "Users can create own reports"
 
 CREATE POLICY "Users can update own draft reports"
   ON public.expense_reports FOR UPDATE
-  USING (auth.uid() = user_id AND status IN ('draft', 'rejected'));
+  USING (auth.uid() = user_id AND status IN ('draft', 'rejected'))
+  WITH CHECK (
+    auth.uid() = user_id
+    AND status IN ('draft', 'rejected', 'submitted')
+  );
 
 CREATE POLICY "Users can delete own draft reports"
   ON public.expense_reports FOR DELETE

@@ -15,6 +15,14 @@ import { supabase } from "../../../lib/supabase";
 import { useSettings, useTheme, type ThemeMode } from "../../../lib/settings-context";
 import { useAppUpdates } from "../../../lib/use-app-updates";
 import {
+  disableBiometricLogin,
+  enableBiometricLogin,
+  getBiometricLabel,
+  isBiometricHardwareAvailable,
+  isBiometricLoginEnabled,
+  promptBiometric,
+} from "../../../lib/biometric-auth";
+import {
   getCompanyLabel,
   getRegionLabel,
   ROLES,
@@ -104,6 +112,9 @@ export default function ProfileScreen() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricLabel, setBiometricLabel] = useState("Biometrics");
 
   const load = useCallback(async () => {
     const {
@@ -115,6 +126,9 @@ export default function ProfileScreen() {
     }
     const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
     setProfile(data as Profile);
+    setBiometricEnabled(await isBiometricLoginEnabled());
+    setBiometricAvailable(await isBiometricHardwareAvailable());
+    setBiometricLabel(await getBiometricLabel());
     setLoading(false);
   }, []);
 
@@ -125,6 +139,28 @@ export default function ProfileScreen() {
     }, [load])
   );
 
+  async function toggleBiometric(enabled: boolean) {
+    if (enabled) {
+      if (!(await isBiometricHardwareAvailable())) {
+        Alert.alert("Not available", "Set up Face ID, Touch ID, or fingerprint on this device first.");
+        return;
+      }
+      const { data } = await supabase.auth.getSession();
+      const refreshToken = data.session?.refresh_token;
+      if (!refreshToken) {
+        Alert.alert("Sign in again", "Sign out and sign in with password to enable biometric sign-in.");
+        return;
+      }
+      const authed = await promptBiometric(`Enable ${biometricLabel}`);
+      if (!authed) return;
+      await enableBiometricLogin(refreshToken);
+      setBiometricEnabled(true);
+    } else {
+      await disableBiometricLogin();
+      setBiometricEnabled(false);
+    }
+  }
+
   async function signOut() {
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
@@ -132,6 +168,7 @@ export default function ProfileScreen() {
         text: "Sign out",
         style: "destructive",
         onPress: async () => {
+          await disableBiometricLogin();
           await supabase.auth.signOut();
           router.replace("/(auth)/login");
         },
@@ -180,6 +217,25 @@ export default function ProfileScreen() {
           <ThemeOption mode="system" label="System" selected={themeMode === "system"} onSelect={setThemeMode} colors={colors} isDark={isDark} />
         </View>
       </Section>
+
+      {biometricAvailable ? (
+        <Section title="Security" colors={colors} isDark={isDark}>
+          <SettingRow
+            label={`${biometricLabel} sign-in`}
+            subtitle={`Sign in quickly with ${biometricLabel}`}
+            colors={colors}
+            isDark={isDark}
+            last
+          >
+            <Switch
+              value={biometricEnabled}
+              onValueChange={toggleBiometric}
+              trackColor={{ false: colors.border, true: colors.primaryLight }}
+              thumbColor={colors.white}
+            />
+          </SettingRow>
+        </Section>
+      ) : null}
 
       <Section title="Notifications" colors={colors} isDark={isDark}>
         <SettingRow
