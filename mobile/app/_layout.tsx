@@ -18,6 +18,8 @@ function RootNavigator() {
           headerStyle: { backgroundColor: colors.primary },
           headerTintColor: colors.white,
           headerTitleStyle: { fontWeight: "600" },
+          headerBackButtonDisplayMode: "minimal",
+          headerBackTitle: "",
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />

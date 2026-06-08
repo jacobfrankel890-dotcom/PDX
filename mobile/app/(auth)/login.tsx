@@ -28,7 +28,7 @@ export default function LoginScreen() {
 
   const goToApp = useCallback(async () => {
     await offerBiometricSetupAfterLogin();
-    router.replace("/(app)/dashboard");
+    router.replace("/(app)/(tabs)/dashboard");
   }, []);
 
   async function handleLogin() {
@@ -54,7 +54,7 @@ export default function LoginScreen() {
       }
       return;
     }
-    router.replace("/(app)/dashboard");
+    router.replace("/(app)/(tabs)/dashboard");
   }
 
   return (

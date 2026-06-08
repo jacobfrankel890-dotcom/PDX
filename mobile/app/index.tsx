@@ -56,5 +56,5 @@ export default function Index() {
     );
   }
 
-  return <Redirect href={session ? "/(app)/dashboard" : "/(auth)/login"} />;
+  return <Redirect href={session ? "/(app)/(tabs)/dashboard" : "/(auth)/login"} />;
 }

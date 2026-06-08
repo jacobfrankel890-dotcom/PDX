@@ -1,6 +1,5 @@
 import * as Updates from "expo-updates";
 import { useCallback, useEffect, useState } from "react";
-import { AppState, type AppStateStatus } from "react-native";
 
 export type UpdateStatus = "idle" | "checking" | "downloading" | "ready" | "error" | "dev";
 
@@ -88,12 +87,8 @@ export function useAppUpdates(autoCheck = true) {
   useEffect(() => {
     if (!autoCheck || __DEV__) return;
 
+    // Check once on launch only — avoid reload loops when returning from background.
     checkForUpdate(true);
-
-    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
-      if (state === "active") checkForUpdate(true);
-    });
-    return () => sub.remove();
   }, [autoCheck, checkForUpdate]);
 
   return { info, checkForUpdate };

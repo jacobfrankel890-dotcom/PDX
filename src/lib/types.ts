@@ -1,7 +1,7 @@
 export const REGIONS = [
   { value: "cpx", label: "CPX", description: "Canada" },
   { value: "pdx_north", label: "PDX North", description: "Northeast US" },
-  { value: "apx", label: "APX", description: "All Parts Xpress" },
+  { value: "apx", label: "APX", description: "Auto Parts Xpress" },
   { value: "pdx", label: "PDX", description: "Parts Distribution Xpress" },
   { value: "pdx_south", label: "PDX South", description: "Southeast US" },
   { value: "pdx_west", label: "PDX West", description: "Northwest US" },

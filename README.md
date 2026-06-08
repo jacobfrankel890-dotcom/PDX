@@ -118,7 +118,7 @@ src/
 |--------|-----------|
 | CPX | Canada |
 | PDX North | Northeast US |
-| APX | All Parts Xpress |
+| APX | Auto Parts Xpress |
 | PDX | Core PDX territory |
 | PDX South | Southeast US |
 | PDX West | Northwest US |

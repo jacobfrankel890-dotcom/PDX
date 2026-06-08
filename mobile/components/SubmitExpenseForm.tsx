@@ -39,6 +39,7 @@ import {
 import { getErrorMessage, toIsoDate } from "../lib/utils";
 import { colors, radius, spacing } from "../constants/theme";
 import { Button } from "./Button";
+import { CategoryPicker } from "./CategoryPicker";
 import { CompanyPicker } from "./CompanyPicker";
 import { ReceiptAnalyzingView } from "./ReceiptAnalyzingView";
 
@@ -132,11 +133,6 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
     },
     [userId]
   );
-
-  function cycleCategory() {
-    const idx = EXPENSE_CATEGORIES.findIndex((c) => c.key === category);
-    setCategory(EXPENSE_CATEGORIES[(idx + 1) % EXPENSE_CATEGORIES.length].key);
-  }
 
   function toggleDetails() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -236,14 +232,12 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
                   placeholderTextColor={colors.slate400}
                 />
               </View>
-              <Pressable onPress={cycleCategory} style={styles.categoryPill}>
-                <Text style={styles.categoryPillText}>{EXPENSE_CATEGORY_LABELS[category]}</Text>
-                <Text style={styles.categoryPillTap}> ▾ tap to change</Text>
-              </Pressable>
               {itemCount > 1 ? (
                 <Text style={styles.metaHint}>{itemCount} line items detected</Text>
               ) : null}
             </View>
+
+            <CategoryPicker value={category} onChange={setCategory} />
 
             <CompanyPicker value={company} onChange={setCompany} />
 
@@ -376,17 +370,6 @@ const styles = StyleSheet.create({
     padding: 0,
     textAlign: "center",
   },
-  categoryPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#e8eef5",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    marginTop: 4,
-  },
-  categoryPillText: { fontSize: 13, fontWeight: "700", color: colors.primary },
-  categoryPillTap: { fontSize: 11, color: colors.slate500 },
   metaHint: { fontSize: 13, color: colors.slate500, marginTop: 2 },
   field: { gap: 6 },
   fieldLabel: { fontSize: 13, fontWeight: "600", color: colors.slate500 },

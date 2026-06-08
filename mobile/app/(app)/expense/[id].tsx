@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -15,7 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { format, parseISO } from "date-fns";
-import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS, type ExpenseCategoryKey } from "../../../lib/categories";
+import { type ExpenseCategoryKey } from "../../../lib/categories";
 import {
   deleteExpenseLineItem,
   fetchExpenseById,
@@ -31,6 +32,7 @@ import { formatCurrency, getCompanyLabel, normalizeCompanyValue, type CompanyVal
 import { getErrorMessage } from "../../../lib/utils";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 import { Button } from "../../../components/Button";
+import { CategoryPicker } from "../../../components/CategoryPicker";
 import { CompanyPicker } from "../../../components/CompanyPicker";
 
 function formatDisplayDate(d: string | null | undefined): string {
@@ -53,6 +55,8 @@ export default function ExpenseDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
+  const [imageExpanded, setImageExpanded] = useState(false);
+  const [footerHeight, setFooterHeight] = useState(72);
 
   const [merchantName, setMerchantName] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
@@ -100,11 +104,6 @@ export default function ExpenseDetailScreen() {
       load();
     }, [load])
   );
-
-  function cycleCategory() {
-    const idx = EXPENSE_CATEGORIES.findIndex((c) => c.key === category);
-    setCategory(EXPENSE_CATEGORIES[(idx + 1) % EXPENSE_CATEGORIES.length].key);
-  }
 
   async function handleSave() {
     if (!expense?.id || !editable) return;
@@ -175,14 +174,21 @@ export default function ExpenseDetailScreen() {
         ? "Submitted"
         : expense.report_status ?? "";
 
+  const scrollBottomPadding = editable ? footerHeight + spacing.md : spacing.md;
+
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + (editable ? 120 : 40) }]}
+        contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
         keyboardShouldPersistTaps="handled"
       >
         {receiptUri ? (
-          <Image source={{ uri: receiptUri }} style={styles.receiptImage} resizeMode="contain" />
+          <Pressable onPress={() => setImageExpanded(true)} style={styles.receiptImageWrap}>
+            <Image source={{ uri: receiptUri }} style={styles.receiptImage} resizeMode="contain" />
+            <View style={styles.expandHint}>
+              <Text style={styles.expandHintText}>Tap to expand</Text>
+            </View>
+          </Pressable>
         ) : (
           <View style={styles.noReceipt}>
             <Text style={styles.noReceiptEmoji}>🧾</Text>
@@ -224,10 +230,6 @@ export default function ExpenseDetailScreen() {
                   placeholderTextColor={colors.slate400}
                 />
               </View>
-              <Pressable onPress={cycleCategory} style={styles.categoryPill}>
-                <Text style={styles.categoryText}>{EXPENSE_CATEGORY_LABELS[category]}</Text>
-                <Text style={styles.categoryTap}> ▾ change</Text>
-              </Pressable>
             </>
           ) : (
             <>
@@ -240,6 +242,7 @@ export default function ExpenseDetailScreen() {
 
         {editable ? (
           <>
+            <CategoryPicker value={category} onChange={setCategory} />
             <CompanyPicker value={company} onChange={setCompany} />
             <View style={styles.field}>
               <Text style={styles.fieldLabel}>Date</Text>
@@ -287,13 +290,41 @@ export default function ExpenseDetailScreen() {
       </ScrollView>
 
       {editable ? (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-          <Button title="Save changes" onPress={handleSave} loading={saving} style={styles.saveBtn} />
-          <Pressable onPress={handleDelete} disabled={deleting} style={styles.deleteBtn}>
-            <Text style={styles.deleteText}>{deleting ? "Deleting…" : "Delete receipt"}</Text>
+        <View
+          style={styles.footer}
+          onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
+        >
+          <Pressable
+            onPress={handleDelete}
+            disabled={deleting}
+            style={({ pressed }) => [styles.footerBtn, styles.deleteBtn, pressed && styles.footerBtnPressed]}
+          >
+            <Text style={styles.deleteText}>{deleting ? "Deleting…" : "Delete"}</Text>
           </Pressable>
+          <Button
+            title="Save"
+            onPress={handleSave}
+            loading={saving}
+            style={styles.footerBtn}
+          />
         </View>
       ) : null}
+
+      <Modal visible={imageExpanded} transparent animationType="fade" onRequestClose={() => setImageExpanded(false)}>
+        <View style={styles.imageModal}>
+          <Pressable style={styles.imageModalBackdrop} onPress={() => setImageExpanded(false)} />
+          {receiptUri ? (
+            <Image source={{ uri: receiptUri }} style={styles.imageModalImage} resizeMode="contain" />
+          ) : null}
+          <Pressable
+            style={[styles.imageModalClose, { top: insets.top + spacing.sm }]}
+            onPress={() => setImageExpanded(false)}
+            hitSlop={12}
+          >
+            <Text style={styles.imageModalCloseText}>✕</Text>
+          </Pressable>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -303,12 +334,25 @@ function makeStyles(colors: ThemeColors) {
     flex: { flex: 1, backgroundColor: colors.bg },
     center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg },
     content: { padding: spacing.md, gap: spacing.md },
+    receiptImageWrap: {
+      borderRadius: radius.md,
+      overflow: "hidden",
+      backgroundColor: colors.border,
+    },
     receiptImage: {
       width: "100%",
       height: 220,
-      borderRadius: radius.md,
-      backgroundColor: colors.border,
     },
+    expandHint: {
+      position: "absolute",
+      right: 8,
+      bottom: 8,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: radius.full,
+    },
+    expandHintText: { color: "#fff", fontSize: 11, fontWeight: "600" },
     noReceipt: {
       height: 120,
       borderRadius: radius.md,
@@ -357,17 +401,6 @@ function makeStyles(colors: ThemeColors) {
       color: colors.primary,
       padding: 0,
     },
-    categoryPill: {
-      flexDirection: "row",
-      alignSelf: "flex-start",
-      backgroundColor: "#e8eef5",
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: radius.full,
-      marginTop: 4,
-    },
-    categoryText: { fontSize: 13, fontWeight: "700", color: colors.primary },
-    categoryTap: { fontSize: 11, color: colors.slate500 },
     merchantReadonly: { fontSize: 22, fontWeight: "700", color: colors.text, textAlign: "center" },
     amountReadonly: { fontSize: 36, fontWeight: "800", color: colors.primary, textAlign: "center" },
     categoryReadonly: { fontSize: 14, fontWeight: "600", color: colors.slate500, textAlign: "center" },
@@ -388,15 +421,51 @@ function makeStyles(colors: ThemeColors) {
       bottom: 0,
       left: 0,
       right: 0,
+      flexDirection: "row",
       paddingHorizontal: spacing.md,
       paddingTop: spacing.sm,
+      paddingBottom: 0,
       backgroundColor: colors.bg,
       borderTopWidth: 1,
       borderTopColor: colors.border,
       gap: spacing.sm,
     },
-    saveBtn: { paddingVertical: 16, borderRadius: radius.lg },
-    deleteBtn: { paddingVertical: 12, alignItems: "center" },
+    footerBtn: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: radius.lg,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    footerBtnPressed: { opacity: 0.85 },
+    deleteBtn: {
+      borderWidth: 2,
+      borderColor: colors.error,
+      backgroundColor: "transparent",
+    },
     deleteText: { color: colors.error, fontSize: 16, fontWeight: "700" },
+    imageModal: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.92)",
+      justifyContent: "center",
+    },
+    imageModalBackdrop: {
+      ...StyleSheet.absoluteFill,
+    },
+    imageModalImage: {
+      width: "100%",
+      height: "100%",
+    },
+    imageModalClose: {
+      position: "absolute",
+      right: spacing.md,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "rgba(255,255,255,0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    imageModalCloseText: { color: "#fff", fontSize: 18, fontWeight: "600" },
   });
 }

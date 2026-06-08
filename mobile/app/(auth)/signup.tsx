@@ -81,7 +81,7 @@ export default function SignupScreen() {
     }
 
     if (data.session) {
-      router.replace("/(app)/dashboard");
+      router.replace("/(app)/(tabs)/dashboard");
       return;
     }
 
