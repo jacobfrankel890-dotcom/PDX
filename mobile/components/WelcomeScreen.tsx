@@ -80,17 +80,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    flexGrow: 1,
+    paddingBottom: grid(4),
   },
   page: {
-    flexGrow: 1,
     paddingHorizontal: authHorizontalPad,
-    paddingBottom: grid(3),
   },
   hero: {
     gap: grid(2),
-    marginTop: grid(1),
-    marginBottom: grid(3.5),
+    marginTop: grid(2),
+    marginBottom: grid(3),
   },
   badge: {
     flexDirection: "row",
@@ -142,8 +140,7 @@ const styles = StyleSheet.create({
   trustRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: "auto",
-    paddingTop: grid(5),
+    marginTop: grid(4),
     columnGap: grid(2.5),
     rowGap: grid(1),
   },
