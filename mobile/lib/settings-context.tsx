@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react";
 import { Alert, useColorScheme } from "react-native";
-import * as Notifications from "expo-notifications";
 import { getColors, type ThemeColors } from "../constants/theme";
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -40,16 +39,6 @@ const defaultNotifications: NotificationSettings = {
   expenseReminders: true,
   reportUpdates: true,
 };
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
@@ -87,30 +76,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const registerForPush = useCallback(async (): Promise<boolean> => {
-    try {
-      const { status: existing } = await Notifications.getPermissionsAsync();
-      let finalStatus = existing;
-      if (existing !== "granted") {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-      if (finalStatus !== "granted") {
-        Alert.alert(
-          "Notifications disabled",
-          "Enable notifications in Settings to receive expense alerts."
-        );
-        return false;
-      }
-      const token = await Notifications.getExpoPushTokenAsync();
-      setPushToken(token.data);
-      return true;
-    } catch {
-      Alert.alert(
-        "Push not available",
-        "Push notifications require a new app build. Your preference has been saved for when it's enabled."
-      );
-      return false;
-    }
+    Alert.alert(
+      "Push not available yet",
+      "Push notifications will be enabled in a future app update. Your preferences are saved."
+    );
+    return false;
   }, []);
 
   const setPushEnabled = useCallback(
