@@ -52,7 +52,11 @@ function makeStyles() {
     content: {
       flex: 1,
       gap: grid(1.5),
+      width: "100%",
+      maxWidth: 430,
+      alignSelf: "center",
       paddingHorizontal: authHorizontalPad,
+      paddingTop: grid(1),
       paddingBottom: grid(3),
     },
     headline: {

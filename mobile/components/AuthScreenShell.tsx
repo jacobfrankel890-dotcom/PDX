@@ -108,11 +108,14 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: grid(4),
   },
   page: {
-    flexGrow: 1,
+    width: "100%",
+    maxWidth: 430,
+    alignSelf: "center",
     paddingHorizontal: authHorizontalPad,
-    paddingBottom: grid(3),
+    paddingTop: grid(1),
   },
   badge: {
     flexDirection: "row",
@@ -138,7 +141,7 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.76)",
     letterSpacing: 1,
     textTransform: "uppercase",
-    marginBottom: grid(1),
+    marginBottom: grid(1.25),
   },
   title: {
     fontSize: 30,
@@ -146,23 +149,23 @@ const styles = StyleSheet.create({
     color: AUTH_WHITE_90,
     letterSpacing: -0.6,
     lineHeight: 36,
-    marginBottom: grid(1),
+    marginBottom: grid(1.25),
   },
   subtitle: {
     fontSize: 15,
     fontWeight: "500",
     color: "rgba(255,255,255,0.92)",
     lineHeight: 22,
-    marginBottom: grid(2.5),
+    marginBottom: grid(3),
     maxWidth: 320,
   },
   form: {
-    gap: grid(2),
+    gap: grid(1.5),
   },
   trustRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: grid(3),
+    marginTop: grid(4),
     columnGap: grid(2.5),
     rowGap: grid(1),
   },
@@ -182,6 +185,6 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: "center",
-    paddingTop: grid(2),
+    paddingTop: grid(3),
   },
 });
