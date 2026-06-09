@@ -60,6 +60,52 @@ export async function supabaseRest(path, options = {}) {
 }
 
 /**
+ * Signed URL for a private storage object (receipts, avatars, etc.).
+ */
+export async function createSignedStorageUrl(bucket, storagePath, expiresIn = 3600) {
+  if (!storagePath) return null;
+
+  const baseUrl = (await getSecret("SUPABASE_URL")).replace(/\/$/, "");
+  const serviceKey = await getSecret("SUPABASE_SERVICE_ROLE_KEY");
+  const encodedPath = storagePath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  const response = await fetch(`${baseUrl}/storage/v1/object/sign/${bucket}/${encodedPath}`, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ expiresIn }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    return null;
+  }
+
+  const signed = data.signedURL || data.signedUrl;
+  if (!signed) return null;
+  if (signed.startsWith("http")) return signed;
+  return `${baseUrl}/storage/v1${signed.startsWith("/") ? signed : `/${signed}`}`;
+}
+
+/**
+ * Full URL for avatar or receipt — http(s) passthrough, else sign storage path.
+ */
+export async function resolveImageUrl(urlOrPath, bucket = "receipts") {
+  if (!urlOrPath) return null;
+  const trimmed = urlOrPath.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  return createSignedStorageUrl(bucket, trimmed);
+}
+
+/**
  * Validate a Supabase user JWT and ensure the email is in ADMIN_EMAILS.
  */
 export async function verifyAdminAccessToken(accessToken) {

@@ -112,7 +112,26 @@ After publishing:
 
 ---
 
-## Admin capabilities
+## Mike's Credit Card Bill export (finance)
+
+Kim submits expenses in the mobile app (vendor → `description`, category, amount, date, company/branch). Mike exports on the **Admin → Export** tab:
+
+1. Select **employee** (cardholder, e.g. Kim)
+2. Set **statement from / to** (same dates as the Chase bill cycle)
+3. Optionally enter **Total on bill** — export calculates **Difference** automatically
+4. **Preview totals** → **Download Credit Card Bill (.csv)**
+
+The CSV matches the finance spreadsheet layout:
+
+- Header: employee name, statement dates, spreadsheet total vs bill total
+- One row per submitted expense: Date, Vendor, Employee initials, Company, Description, category columns (TRV/LOD, Toll/Parking, etc.), Total
+- Footer: category subtotals and grand total
+
+Only **submitted** and **approved** expenses are included (drafts are excluded until Kim submits her report).
+
+Credit Card Bill export logic lives in `velo/backend/pdx-admin.jsw` (no separate file needed).
+
+---
 
 | Action | Description |
 |--------|-------------|

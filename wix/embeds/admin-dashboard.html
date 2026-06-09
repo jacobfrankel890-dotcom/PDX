@@ -4,84 +4,115 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PDX Expense Admin</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
-      --bg: #0f1419;
-      --surface: #1a2332;
-      --surface2: #243044;
-      --border: #2d3a4f;
-      --text: #e8edf4;
-      --muted: #8b9cb3;
-      --accent: #6366f1;
-      --accent-hover: #4f46e5;
-      --success: #22c55e;
-      --danger: #ef4444;
-      --radius: 10px;
+      --bg: #0f1419; --surface: #1a2332; --surface2: #243044; --border: #2d3a4f;
+      --text: #e8edf4; --muted: #8b9cb3; --accent: #6366f1; --success: #22c55e;
+      --danger: #ef4444; --radius: 10px;
       --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
     .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
     .logo { font-size: 1.35rem; font-weight: 700; }
     .logo span { color: var(--accent); }
-    .admin-tag { font-size: 0.7rem; background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
+    .admin-tag { font-size: 0.7rem; background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+    .dev-banner { background: #422006; color: #fcd34d; font-size: 0.8rem; padding: 8px 14px; border-radius: 8px; border: 1px solid #78350f; margin-bottom: 16px; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; }
     h2 { font-size: 1.05rem; margin-bottom: 16px; }
-    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
-    input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); color: var(--text); font-size: 0.95rem; margin-bottom: 14px; }
-    .btn { display: inline-flex; align-items: center; padding: 8px 16px; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent-hover); }
-    .btn-success { background: var(--success); color: #fff; }
-    .btn-danger { background: var(--danger); color: #fff; }
-    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-    .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .error { color: var(--danger); font-size: 0.85rem; margin-bottom: 12px; }
-    .muted { color: var(--muted); font-size: 0.85rem; }
-    .hidden { display: none !important; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .stat-value { font-size: 1.35rem; font-weight: 700; }
+    .stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; }
     .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
     .tab { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 0.875rem; }
     .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
     th { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; }
-    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
     .badge-submitted { background: #1e3a5f; color: #93c5fd; }
-    .badge-approved { background: #14532d; color: #86efac; }
-    .badge-rejected { background: #450a0a; color: #fca5a5; }
-    .filters { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; margin-bottom: 16px; }
-    @media (max-width: 700px) { .filters { grid-template-columns: 1fr; } }
-    .detail-panel { background: var(--surface2); border-radius: 8px; padding: 16px; margin-top: 12px; }
-    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+    .btn { padding: 6px 12px; border: none; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .hidden { display: none !important; }
     .loading { text-align: center; padding: 32px; color: var(--muted); }
-    .user-bar { display: flex; align-items: center; gap: 12px; }
+    .error { color: var(--danger); font-size: 0.85rem; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    .detail-panel { background: var(--surface2); border-radius: 8px; padding: 16px; margin-top: 12px; }
+    .actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+    .filters-4 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .preview-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .preview-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .preview-row:last-child { border-bottom: none; font-weight: 700; }
+    .spreadsheet-wrap { overflow-x: auto; margin-top: 16px; border: 1px solid var(--border); border-radius: 8px; }
+    .spreadsheet-wrap table { font-size: 0.78rem; margin: 0; }
+    .spreadsheet-wrap th, .spreadsheet-wrap td { white-space: nowrap; padding: 6px 8px; }
+    .spreadsheet-wrap .sheet-title td { font-weight: 700; font-size: 0.95rem; background: var(--surface2); }
+    .spreadsheet-wrap .sheet-meta td { color: var(--muted); background: var(--surface2); }
+    .spreadsheet-wrap .sheet-totals td { font-weight: 700; background: var(--surface2); }
+    .spreadsheet-wrap .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .spreadsheet-wrap .filled { background: rgba(99, 102, 241, 0.08); }
+    .download-fallback { margin-top: 12px; padding: 12px; background: var(--surface2); border-radius: 8px; border: 1px solid var(--border); }
+    .download-fallback a { color: var(--accent); word-break: break-all; }
+    .btn-download-ready {
+      display: inline-block; padding: 10px 18px; border-radius: 8px; font-size: 0.9rem;
+      font-weight: 600; text-decoration: none; background: var(--success); color: #fff;
+      border: none; cursor: pointer;
+    }
+    .btn-download-ready:hover { filter: brightness(1.08); }
+    .btn-download-ready.disabled { opacity: 0.45; pointer-events: none; cursor: wait; }
+    .match-ok { color: var(--success); }
+    .match-bad { color: var(--danger); }
+    .review-header { margin-bottom: 12px; }
+    .receipt-gallery {
+      display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0;
+      padding: 12px; background: var(--surface2); border-radius: 8px; border: 1px solid var(--border);
+    }
+    .receipt-gallery-item { text-align: center; }
+    .receipt-thumb {
+      width: 72px; height: 72px; border-radius: 8px; object-fit: cover; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface2); display: block;
+    }
+    .receipt-thumb-lg {
+      width: 120px; height: 120px; border-radius: 8px; object-fit: cover; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface2);
+    }
+    .receipt-caption { font-size: 0.7rem; color: var(--muted); margin-top: 4px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .receipt-lightbox {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 9999;
+      display: flex; align-items: center; justify-content: center; padding: 24px; cursor: pointer;
+    }
+    .receipt-lightbox img { max-width: 95vw; max-height: 90vh; border-radius: 8px; }
+    .filter-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; align-items: end; }
+    .filter-bar input, .filter-bar select { margin-bottom: 0; }
+    .filter-count { font-size: 0.8rem; color: var(--muted); margin-bottom: 12px; }
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable:hover { color: var(--text); }
+    th.sortable .sort-icon { opacity: 0.45; font-size: 0.65rem; margin-left: 4px; }
+    th.sortable.active { color: var(--accent); }
+    th.sortable.active .sort-icon { opacity: 1; }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); color: var(--text); font-size: 0.95rem; margin-bottom: 14px; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
       <div class="logo">PDX <span>Expense</span><span class="admin-tag">ADMIN</span></div>
-      <div id="userBar" class="user-bar hidden">
-        <span class="muted" id="userName"></span>
-        <button class="btn btn-ghost btn-sm" id="signOutBtn">Sign out</button>
-      </div>
+      <button class="btn btn-primary" id="refreshBtn">Refresh</button>
     </div>
 
-    <div id="authView" class="card">
-      <h2>Admin sign in</h2>
-      <p class="muted" style="margin-bottom:16px">Sign in with a PDX Expense account listed in <code>ADMIN_EMAILS</code>.</p>
-      <div id="authError" class="error hidden"></div>
-      <label for="email">Email</label>
-      <input type="email" id="email" autocomplete="email" />
-      <label for="password">Password</label>
-      <input type="password" id="password" autocomplete="current-password" />
-      <button class="btn btn-primary" id="signInBtn" style="width:100%">Sign in</button>
-    </div>
+    <div class="dev-banner">Dev mode — no sign-in. Data flows via Velo service role. Auth will be added later.</div>
+
+    <div id="configWait" class="loading">Connecting to database…</div>
+    <div id="errorBox" class="error hidden"></div>
 
     <div id="appView" class="hidden">
+      <div class="stats" id="statsRow"></div>
       <div class="tabs">
         <button class="tab active" data-tab="pending">Pending approval</button>
         <button class="tab" data-tab="export">Export</button>
@@ -91,6 +122,13 @@
       <div id="tab-pending">
         <div class="card">
           <h2>Reports awaiting review</h2>
+          <div class="filter-bar">
+            <div><label for="pendingSearch">Search name</label><input type="text" id="pendingSearch" placeholder="Kim, Bob…" /></div>
+            <div><label for="pendingRole">Position</label><select id="pendingRole"><option value="">All positions</option></select></div>
+            <div><label for="pendingCompany">Company</label><select id="pendingCompany"><option value="">All companies</option></select></div>
+            <div><label for="pendingCardType">Card type</label><select id="pendingCardType"><option value="">All cards</option></select></div>
+          </div>
+          <div class="filter-count" id="pendingCount"></div>
           <div id="pendingTable"><div class="loading">Loading…</div></div>
           <div id="detailPanel" class="detail-panel hidden"></div>
         </div>
@@ -98,18 +136,24 @@
 
       <div id="tab-export" class="hidden">
         <div class="card">
-          <h2>Export expense data</h2>
-          <div class="filters">
-            <div>
-              <label for="exportStart">Pay period start (from)</label>
-              <input type="date" id="exportStart" />
-            </div>
-            <div>
-              <label for="exportEnd">Pay period end (to)</label>
-              <input type="date" id="exportEnd" />
-            </div>
-            <button class="btn btn-primary" id="exportBtn">Download CSV</button>
+          <h2>Credit Card Bill export</h2>
+          <p class="muted" style="margin-bottom:16px">
+            Pick the statement cycle (same dates as the Chase bill). Select the cardholder — every expense Kim submitted in that window exports into the finance spreadsheet automatically.
+          </p>
+          <div class="filters" style="grid-template-columns:1fr 1fr;">
+            <div><label for="exportEmployee">Employee (cardholder)</label><select id="exportEmployee"><option value="">All employees</option></select></div>
+            <div><label for="statementTotal">Total on bill (optional — for Difference row)</label><input type="number" id="statementTotal" step="0.01" placeholder="4836.18" /></div>
+            <div><label for="exportStart">Statement from</label><input type="date" id="exportStart" /></div>
+            <div><label for="exportEnd">Statement to</label><input type="date" id="exportEnd" /></div>
           </div>
+          <div class="actions" style="margin-top:0;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-primary" id="previewExportBtn">Preview totals</button>
+            <button type="button" id="exportDownloadBtn" class="btn-download-ready disabled">Preparing Excel file…</button>
+          </div>
+          <p class="muted" id="exportHint" style="margin-top:10px;font-size:0.8rem">
+            Wait for the green button, then click once. The file saves from the Wix page (not inside the iframe).
+          </p>
+          <div id="exportPreview" style="margin-top:16px"></div>
           <div id="regionSummary"></div>
         </div>
       </div>
@@ -117,36 +161,204 @@
       <div id="tab-employees" class="hidden">
         <div class="card">
           <h2>Employees</h2>
-          <label for="regionFilter">Filter by region</label>
-          <select id="regionFilter">
-            <option value="">All regions</option>
-            <option value="cpx">CPX</option>
-            <option value="pdx_north">PDX North</option>
-            <option value="apx">APX</option>
-            <option value="pdx">PDX</option>
-            <option value="pdx_south">PDX South</option>
-            <option value="pdx_west">PDX West</option>
-            <option value="apx_california">APX California</option>
-          </select>
+          <div class="filter-bar">
+            <div><label for="empSearch">Search name</label><input type="text" id="empSearch" placeholder="Name or email…" /></div>
+            <div><label for="empRole">Position</label><select id="empRole"><option value="">All positions</option></select></div>
+            <div><label for="empCompany">Company</label><select id="empCompany"><option value="">All companies</option></select></div>
+            <div><label for="empCardType">Card type</label><select id="empCardType"><option value="">All cards</option></select></div>
+          </div>
+          <div class="filter-count" id="empCount"></div>
           <div id="employeesTable"><div class="loading">Loading…</div></div>
         </div>
       </div>
     </div>
-
-    <div id="configWait" class="loading">Connecting…</div>
   </div>
 
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script>
-    const REGIONS = {
-      cpx: "CPX", pdx_north: "PDX North", apx: "APX", pdx: "PDX",
-      pdx_south: "PDX South", pdx_west: "PDX West", apx_california: "APX California",
+    // Matches mobile/lib/types.ts — COMPANIES, ROLES, card types
+    const COMPANIES = [
+      { value: "cpx", label: "CPX — Canada" },
+      { value: "pdx_north", label: "PDX North — Northeast US" },
+      { value: "apx", label: "APX — Auto Parts Xpress" },
+      { value: "pdx", label: "PDX — Parts Distribution Xpress" },
+      { value: "pdx_south", label: "PDX South — Southeast US" },
+      { value: "pdx_west", label: "PDX West — Northwest US" },
+      { value: "apx_california", label: "APX California — Southwest US / California" },
+    ];
+    const POSITIONS = [
+      { value: "kam", label: "KAM" },
+      { value: "regional_manager", label: "Regional" },
+    ];
+    const CARD_TYPES = [
+      { value: "rho", label: "Rho" },
+      { value: "credit", label: "Credit" },
+    ];
+    const LEGACY_COMPANY = {
+      "Parts Distribution Xpress": "pdx",
+      "All Parts Xpress": "apx",
+      "Auto Parts Xpress": "apx",
+      CPX: "cpx",
     };
 
-    let supabase = null;
-    let config = null;
-    let accessToken = null;
-    let pendingRequestId = 0;
-    const pendingCallbacks = new Map();
+    let reqId = 0;
+    const callbacks = new Map();
+    let pendingReports = [];
+    let allEmployees = [];
+    let employeesList = [];
+    let connected = false;
+    let exportHttpBase = null;
+    let lastExportCache = null;
+    let exportRefreshTimer = null;
+    let pendingSort = { key: "submitted_at", dir: "desc" };
+    let empSort = { key: "name", dir: "asc" };
+    const EXPORT_CATEGORIES = [
+      { key: "travel_lodging", label: "TRV / LOD" },
+      { key: "tolls_parking", label: "Toll/Parking" },
+      { key: "office_supplies", label: "OFF. SUP & EQP" },
+      { key: "meals_entertainment", label: "Meals & Enter." },
+      { key: "vehicle_maintenance", label: "Cell & / M" },
+      { key: "marketing", label: "Marketing" },
+      { key: "misc", label: "Misc." },
+      { key: "mileage_calc", label: "Mileage" },
+    ];
+
+    function fullName(e) {
+      return `${e?.first_name || ""} ${e?.last_name || ""}`.trim() || "—";
+    }
+    function roleLabel(role) {
+      return POSITIONS.find((p) => p.value === role)?.label || role || "—";
+    }
+    function normalizeCompanyKey(employee) {
+      const company = employee?.company;
+      const region = employee?.region;
+      if (!company) return region || "";
+      if (COMPANIES.some((c) => c.value === company)) return company;
+      if (LEGACY_COMPANY[company]) return LEGACY_COMPANY[company];
+      if (COMPANIES.some((c) => c.value === region)) return region;
+      return company;
+    }
+    function companyLabel(keyOrLegacy) {
+      if (!keyOrLegacy) return "—";
+      let key = keyOrLegacy;
+      if (LEGACY_COMPANY[keyOrLegacy]) key = LEGACY_COMPANY[keyOrLegacy];
+      const match = COMPANIES.find((c) => c.value === key);
+      return match ? match.label : keyOrLegacy;
+    }
+    function cardLabel(c) {
+      if (!c) return "—";
+      return CARD_TYPES.find((t) => t.value === c)?.label || c;
+    }
+    function norm(s) { return (s || "").toLowerCase().trim(); }
+
+    function uniqueSorted(values) {
+      return [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+    }
+
+    function fillSelect(id, values, labelFn, allLabel) {
+      const el = $(id);
+      const current = el.value;
+      el.innerHTML = `<option value="">${allLabel}</option>` +
+        values.map((v) => `<option value="${String(v).replace(/"/g, "&quot;")}">${labelFn(v)}</option>`).join("");
+      if (values.map(String).includes(current)) el.value = current;
+    }
+
+    function populatePendingFilters() {
+      fillSelect("pendingRole", POSITIONS.map((p) => p.value), roleLabel, "All positions");
+      fillSelect("pendingCompany", COMPANIES.map((c) => c.value), companyLabel, "All companies");
+      fillSelect("pendingCardType", CARD_TYPES.map((c) => c.value), cardLabel, "All cards");
+    }
+
+    function populateEmpFilters() {
+      fillSelect("empRole", POSITIONS.map((p) => p.value), roleLabel, "All positions");
+      fillSelect("empCompany", COMPANIES.map((c) => c.value), companyLabel, "All companies");
+      fillSelect("empCardType", CARD_TYPES.map((c) => c.value), cardLabel, "All cards");
+    }
+
+    function getPendingFilters() {
+      return {
+        search: norm($("pendingSearch").value),
+        role: $("pendingRole").value,
+        company: $("pendingCompany").value,
+        cardType: $("pendingCardType").value,
+      };
+    }
+
+    function getEmpFilters() {
+      return {
+        search: norm($("empSearch").value),
+        role: $("empRole").value,
+        company: $("empCompany").value,
+        cardType: $("empCardType").value,
+      };
+    }
+
+    function filterPendingRow(r) {
+      const e = r.employee || {};
+      const f = getPendingFilters();
+      const name = norm(fullName(e));
+      const email = norm(e.email);
+      if (f.search && !name.includes(f.search) && !email.includes(f.search)) return false;
+      if (f.role && e.role !== f.role) return false;
+      if (f.company && normalizeCompanyKey(e) !== f.company) return false;
+      if (f.cardType && (e.card_type || "") !== f.cardType) return false;
+      return true;
+    }
+
+    function filterEmpRow(e) {
+      const f = getEmpFilters();
+      const name = norm(fullName(e));
+      const email = norm(e.email);
+      if (f.search && !name.includes(f.search) && !email.includes(f.search)) return false;
+      if (f.role && e.role !== f.role) return false;
+      if (f.company && normalizeCompanyKey(e) !== f.company) return false;
+      if (f.cardType && (e.card_type || "") !== f.cardType) return false;
+      return true;
+    }
+
+    function sortRows(rows, sort, getters) {
+      const getter = getters[sort.key] || getters.name || getters.submitted_at || (() => "");
+      const mul = sort.dir === "asc" ? 1 : -1;
+      return [...rows].sort((a, b) => {
+        const av = getter(a), bv = getter(b);
+        if (typeof av === "number" && typeof bv === "number") return (av - bv) * mul;
+        return String(av || "").localeCompare(String(bv || ""), undefined, { numeric: true }) * mul;
+      });
+    }
+
+    function sortHeader(label, key, activeSort) {
+      const active = activeSort.key === key;
+      const icon = active ? (activeSort.dir === "asc" ? "▲" : "▼") : "↕";
+      return `<th class="sortable${active ? " active" : ""}" data-sort="${key}">${label}<span class="sort-icon">${icon}</span></th>`;
+    }
+
+    function bindSortHeaders(container, sortState, rerender) {
+      container.querySelectorAll("th.sortable").forEach((th) => {
+        th.onclick = () => {
+          const key = th.dataset.sort;
+          if (sortState.key === key) sortState.dir = sortState.dir === "asc" ? "desc" : "asc";
+          else { sortState.key = key; sortState.dir = "asc"; }
+          rerender();
+        };
+      });
+    }
+
+    function parseMsg(raw) {
+      if (raw == null) return null;
+      if (typeof raw === "string") {
+        try { return JSON.parse(raw); } catch { return null; }
+      }
+      return raw;
+    }
+
+    function onConnected(data) {
+      if (data?.exportHttpBase) exportHttpBase = data.exportHttpBase;
+      if (connected) return;
+      connected = true;
+      hide($("configWait"));
+      show($("appView"));
+      loadAll();
+    }
 
     function $(id) { return document.getElementById(id); }
     function show(el) { el.classList.remove("hidden"); }
@@ -154,320 +366,537 @@
     function fmt(n) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0); }
     function fmtDate(d) { if (!d) return "—"; return new Date(d + "T12:00:00").toLocaleDateString(); }
 
-    function isInWix() { return window.parent !== window; }
+    function postToParent(msg) {
+      try { window.parent.postMessage(msg, "*"); } catch (_) {}
+      try { window.top.postMessage(msg, "*"); } catch (_) {}
+    }
 
     function callBackend(action, params = {}) {
-      if (!isInWix()) {
-        return Promise.reject(new Error("Admin API requires Wix Velo page bridge. Paste admin-dashboard.js into your Wix page code."));
-      }
-
       return new Promise((resolve, reject) => {
-        const requestId = `req_${++pendingRequestId}`;
-        pendingCallbacks.set(requestId, { resolve, reject });
-        window.parent.postMessage({ requestId, action, accessToken, ...params }, "*");
+        const requestId = `req_${++reqId}`;
+        callbacks.set(requestId, { resolve, reject });
+        postToParent({ requestId, action, ...params });
         setTimeout(() => {
-          if (pendingCallbacks.has(requestId)) {
-            pendingCallbacks.delete(requestId);
-            reject(new Error("Request timed out — check Velo page code is published"));
+          if (callbacks.has(requestId)) {
+            callbacks.delete(requestId);
+            reject(new Error("Timed out — check Velo page code is published and element ID is pdxAdminEmbed"));
           }
         }, 30000);
       });
     }
 
     window.addEventListener("message", (event) => {
-      const data = event.data;
-
-      if (data?.type === "init" || data?.type === "config") {
-        config = data;
-        if (config.supabaseUrl && config.supabaseAnonKey) initSupabase();
+      const data = parseMsg(event.data);
+      if (!data) return;
+      if (data.type === "ready" || data.type === "pdx-connected") {
+        onConnected(data);
         return;
       }
-
-      if (data?.requestId && pendingCallbacks.has(data.requestId)) {
-        const { resolve, reject } = pendingCallbacks.get(data.requestId);
-        pendingCallbacks.delete(data.requestId);
-        if (data.ok) resolve(data.data);
-        else reject(new Error(data.error || "Request failed"));
+      if (data.type === "pdx-save-result") {
+        if (data.ok) {
+          $("exportHint").textContent = `Saved ${data.filename || "file"} — check your Downloads folder.`;
+        }
+        return;
+      }
+      if (data.requestId && callbacks.has(data.requestId)) {
+        const { resolve, reject } = callbacks.get(data.requestId);
+        callbacks.delete(data.requestId);
+        data.ok ? resolve(data.data) : reject(new Error(data.error || "Failed"));
       }
     });
 
-    function initSupabase() {
-      supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
-        auth: { persistSession: true, autoRefreshToken: true },
-      });
-    }
-
-    async function ensureToken() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not signed in");
-      accessToken = session.access_token;
-      return session;
+    async function loadStats() {
+      const s = await callBackend("stats");
+      $("statsRow").innerHTML = `
+        <div class="stat"><div class="stat-value">${s.pending_count}</div><div class="stat-label">Pending</div></div>
+        <div class="stat"><div class="stat-value">${s.approved_count}</div><div class="stat-label">Approved</div></div>
+        <div class="stat"><div class="stat-value">${s.employee_count}</div><div class="stat-label">Employees</div></div>
+        <div class="stat"><div class="stat-value">${fmt(s.total_expenses)}</div><div class="stat-label">Total $</div></div>`;
     }
 
     async function loadPending() {
-      $("pendingTable").innerHTML = '<div class="loading">Loading…</div>';
       hide($("detailPanel"));
-
-      try {
-        const reports = await callBackend("listPending");
-
-        if (!reports?.length) {
-          $("pendingTable").innerHTML = '<p class="muted">No reports pending approval.</p>';
-          return;
-        }
-
-        $("pendingTable").innerHTML = `
-          <table>
-            <thead><tr>
-              <th>Employee</th><th>Region</th><th>Pay period</th><th>Total</th><th>Submitted</th><th></th>
-            </tr></thead>
-            <tbody>${reports.map((r) => {
-              const emp = r.employee || {};
-              return `<tr>
-                <td>${emp.first_name || ""} ${emp.last_name || ""}</td>
-                <td>${REGIONS[emp.region] || emp.region || "—"}</td>
-                <td>${fmtDate(r.pay_period_start)} – ${fmtDate(r.pay_period_end)}</td>
-                <td>${fmt(r.grand_total)}</td>
-                <td>${r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "—"}</td>
-                <td><button class="btn btn-ghost btn-sm" data-view="${r.id}">Review</button></td>
-              </tr>`;
-            }).join("")}</tbody>
-          </table>`;
-
-        document.querySelectorAll("[data-view]").forEach((btn) => {
-          btn.addEventListener("click", () => showReportDetail(btn.dataset.view, reports));
-        });
-      } catch (e) {
-        $("pendingTable").innerHTML = `<p class="error">${e.message}</p>`;
-      }
+      pendingReports = await callBackend("listPending");
+      populatePendingFilters();
+      renderPendingTable();
     }
 
-    async function showReportDetail(reportId, reports) {
-      const report = reports.find((r) => r.id === reportId);
-      if (!report) return;
+    function renderPendingTable() {
+      const filtered = sortRows(
+        pendingReports.filter(filterPendingRow),
+        pendingSort,
+        {
+          name: (r) => fullName(r.employee),
+          role: (r) => roleLabel(r.employee?.role),
+          company: (r) => companyLabel(normalizeCompanyKey(r.employee)),
+          card_type: (r) => cardLabel(r.employee?.card_type),
+          pay_period: (r) => r.pay_period_start || "",
+          grand_total: (r) => Number(r.grand_total || 0),
+          submitted_at: (r) => r.submitted_at || "",
+        }
+      );
 
-      $("detailPanel").innerHTML = '<div class="loading">Loading line items…</div>';
+      $("pendingCount").textContent = filtered.length === pendingReports.length
+        ? `${filtered.length} report${filtered.length === 1 ? "" : "s"}`
+        : `${filtered.length} of ${pendingReports.length} reports`;
+
+      if (!filtered.length) {
+        $("pendingTable").innerHTML = pendingReports.length
+          ? '<p class="muted">No reports match your filters.</p>'
+          : '<p class="muted">No reports pending approval.</p>';
+        return;
+      }
+
+      $("pendingTable").innerHTML = `<table>
+        <thead><tr>
+          ${sortHeader("Name", "name", pendingSort)}
+          ${sortHeader("Position", "role", pendingSort)}
+          ${sortHeader("Company", "company", pendingSort)}
+          ${sortHeader("Card", "card_type", pendingSort)}
+          ${sortHeader("Pay period", "pay_period", pendingSort)}
+          ${sortHeader("Total", "grand_total", pendingSort)}
+          ${sortHeader("Submitted", "submitted_at", pendingSort)}
+          <th></th>
+        </tr></thead>
+        <tbody>${filtered.map((r) => {
+          const e = r.employee || {};
+          return `<tr>
+            <td>${fullName(e)}</td>
+            <td>${roleLabel(e.role)}</td>
+            <td>${companyLabel(normalizeCompanyKey(e))}</td>
+            <td>${cardLabel(e.card_type)}</td>
+            <td>${fmtDate(r.pay_period_start)} – ${fmtDate(r.pay_period_end)}</td>
+            <td>${fmt(r.grand_total)}</td>
+            <td>${r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "—"}</td>
+            <td><button class="btn btn-ghost" data-view="${r.id}">Review</button></td>
+          </tr>`;
+        }).join("")}</tbody></table>`;
+
+      bindSortHeaders($("pendingTable"), pendingSort, renderPendingTable);
+      document.querySelectorAll("[data-view]").forEach((btn) => {
+        btn.addEventListener("click", () => showDetail(btn.dataset.view));
+      });
+    }
+
+    function receiptCell(item) {
+      if (item.receipt_image_url) {
+        return `<img class="receipt-thumb" src="${item.receipt_image_url}" alt="Receipt" data-full="${item.receipt_image_url}" title="Click to enlarge" />`;
+      }
+      if (item.receipt_url) {
+        return `<span class="muted" title="${item.receipt_url}">Unable to load</span>`;
+      }
+      return `<span class="muted">No receipt</span>`;
+    }
+
+    function receiptGalleryHtml(items, gallery) {
+      const fromLines = (items || []).filter((i) => i.receipt_image_url);
+      const extra = (gallery || []).filter((g) => g.receipt_image_url);
+      const all = [
+        ...fromLines.map((i) => ({ url: i.receipt_image_url, label: i.description || "Expense" })),
+        ...extra.map((g) => ({ url: g.receipt_image_url, label: g.file_name || "Upload" })),
+      ];
+      if (!all.length) {
+        return '<p class="muted">No receipt images attached to this report.</p>';
+      }
+      return `<div class="receipt-gallery">${all.map((r) => `
+        <div class="receipt-gallery-item">
+          <img class="receipt-thumb-lg" src="${r.url}" alt="Receipt" data-full="${r.url}" title="Click to enlarge" />
+          <div class="receipt-caption">${r.label}</div>
+        </div>`).join("")}</div>`;
+    }
+
+    function bindReceiptClicks(root) {
+      root.querySelectorAll(".receipt-thumb, .receipt-thumb-lg").forEach((img) => {
+        img.addEventListener("click", () => openLightbox(img.dataset.full || img.src));
+      });
+    }
+
+    function openLightbox(url) {
+      const overlay = document.createElement("div");
+      overlay.className = "receipt-lightbox";
+      overlay.innerHTML = `<img src="${url}" alt="Receipt" />`;
+      overlay.onclick = () => overlay.remove();
+      document.body.appendChild(overlay);
+    }
+
+    async function showDetail(reportId) {
+      const report = pendingReports.find((r) => r.id === reportId);
+      if (!report) return;
+      $("detailPanel").innerHTML = '<div class="loading">Loading…</div>';
       show($("detailPanel"));
 
-      try {
-        const items = await callBackend("getLineItems", { reportId });
-        const emp = report.employee || {};
+      const review = await callBackend("getReportReview", { reportId });
+      const e = report.employee || {};
+      const items = review.line_items || [];
 
-        $("detailPanel").innerHTML = `
-          <h2 style="margin-bottom:8px">${emp.first_name} ${emp.last_name} — ${fmt(report.grand_total)}</h2>
-          <p class="muted" style="margin-bottom:12px">${fmtDate(report.pay_period_start)} – ${fmtDate(report.pay_period_end)} · ${REGIONS[emp.region] || emp.region}</p>
-          <table>
-            <thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead>
-            <tbody>${(items || []).map((i) => `<tr>
-              <td>${fmtDate(i.expense_date)}</td>
-              <td>${i.description || "—"}${i.related_to ? ` <span class="muted">(${i.related_to})</span>` : ""}</td>
-              <td>${fmt(i.row_total)}</td>
-            </tr>`).join("") || '<tr><td colspan="3" class="muted">No line items</td></tr>'}
-          </tbody></table>
-          <div class="actions" style="margin-top:16px">
-            <button class="btn btn-success btn-sm" id="approveBtn">Approve</button>
-            <button class="btn btn-danger btn-sm" id="rejectBtn">Reject</button>
-          </div>`;
+      $("detailPanel").innerHTML = `
+        <div class="review-header">
+          <h2>${fullName(e)} — ${fmt(report.grand_total)}</h2>
+          <p class="muted">${roleLabel(e.role)} · ${companyLabel(normalizeCompanyKey(e))} · ${cardLabel(e.card_type)}</p>
+          <p class="muted">${fmtDate(report.pay_period_start)} – ${fmtDate(report.pay_period_end)}</p>
+        </div>
+        <h3 style="font-size:0.95rem;margin-bottom:8px">Receipt images</h3>
+        ${receiptGalleryHtml(items, review.receipt_gallery)}
+        <table style="margin-top:12px"><thead><tr>
+          <th>Receipt</th><th>Date</th><th>Description</th><th>Amount</th>
+        </tr></thead>
+        <tbody>${items.length ? items.map((i) => `<tr>
+          <td>${receiptCell(i)}</td>
+          <td>${fmtDate(i.expense_date)}</td>
+          <td>${i.description || "—"}${i.related_to ? `<br><span class="muted">${i.related_to}</span>` : ""}</td>
+          <td>${fmt(i.row_total)}</td>
+        </tr>`).join("") : '<tr><td colspan="4" class="muted">No line items</td></tr>'}</tbody></table>
+        <div class="actions">
+          <button class="btn btn-success" id="approveBtn">Approve</button>
+          <button class="btn btn-danger" id="rejectBtn">Reject</button>
+        </div>`;
 
-        $("approveBtn").addEventListener("click", async () => {
-          $("approveBtn").disabled = true;
-          try {
-            await callBackend("approve", { reportId });
-            await loadPending();
-          } catch (e) { alert(e.message); $("approveBtn").disabled = false; }
-        });
+      bindReceiptClicks($("detailPanel"));
 
-        $("rejectBtn").addEventListener("click", async () => {
-          const reason = prompt("Rejection reason (optional):");
-          $("rejectBtn").disabled = true;
-          try {
-            await callBackend("reject", { reportId, reason });
-            await loadPending();
-          } catch (e) { alert(e.message); $("rejectBtn").disabled = false; }
-        });
-      } catch (e) {
-        $("detailPanel").innerHTML = `<p class="error">${e.message}</p>`;
-      }
+      $("approveBtn").onclick = async () => {
+        await callBackend("approve", { reportId });
+        await loadAll();
+      };
+      $("rejectBtn").onclick = async () => {
+        const reason = prompt("Rejection reason (optional):");
+        await callBackend("reject", { reportId, reason });
+        await loadAll();
+      };
     }
 
     async function loadEmployees() {
       $("employeesTable").innerHTML = '<div class="loading">Loading…</div>';
-      try {
-        const region = $("regionFilter").value;
-        const employees = await callBackend("listEmployees", { region: region || undefined });
-
-        $("employeesTable").innerHTML = `
-          <table>
-            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Region</th></tr></thead>
-            <tbody>${(employees || []).map((e) => `<tr>
-              <td>${e.first_name} ${e.last_name}</td>
-              <td>${e.email}</td>
-              <td>${e.role === "regional_manager" ? "Regional Manager" : "KAM"}</td>
-              <td>${REGIONS[e.region] || e.region}</td>
-            </tr>`).join("")}</tbody>
-          </table>`;
-      } catch (e) {
-        $("employeesTable").innerHTML = `<p class="error">${e.message}</p>`;
-      }
+      allEmployees = await callBackend("listEmployees");
+      populateEmpFilters();
+      renderEmployeesTable();
     }
 
-    async function loadRegionSummary() {
-      const start = $("exportStart").value;
-      const end = $("exportEnd").value;
-      if (!start || !end) return;
-
-      try {
-        const summary = await callBackend("regionSummary", { payPeriodStart: start, payPeriodEnd: end });
-        $("regionSummary").innerHTML = summary?.length ? `
-          <h2 style="margin-top:20px">Region summary</h2>
-          <table>
-            <thead><tr><th>Region</th><th>Reports</th><th>Total</th><th>Miles</th></tr></thead>
-            <tbody>${summary.map((s) => `<tr>
-              <td>${REGIONS[s.region] || s.region}</td>
-              <td>${s.report_count}</td>
-              <td>${fmt(s.total_expenses)}</td>
-              <td>${Number(s.total_miles).toFixed(1)}</td>
-            </tr>`).join("")}</tbody>
-          </table>` : '<p class="muted" style="margin-top:12px">No data for this period.</p>';
-      } catch (e) {
-        $("regionSummary").innerHTML = `<p class="error">${e.message}</p>`;
-      }
-    }
-
-    function toCsv(rows) {
-      if (!rows?.length) return "";
-      const headers = Object.keys(rows[0]);
-      const escape = (v) => {
-        const s = v == null ? "" : String(v);
-        return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
-      };
-      return [headers.join(","), ...rows.map((r) => headers.map((h) => escape(r[h])).join(","))].join("\n");
-    }
-
-    async function handleExport() {
-      const start = $("exportStart").value;
-      const end = $("exportEnd").value;
-      if (!start || !end) { alert("Select a date range"); return; }
-
-      $("exportBtn").disabled = true;
-      try {
-        const rows = await callBackend("export", { payPeriodStart: start, payPeriodEnd: end });
-        const csv = toCsv(rows);
-        const blob = new Blob([csv], { type: "text/csv" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `pdx-expenses_${start}_${end}.csv`;
-        a.click();
-        await loadRegionSummary();
-      } catch (e) {
-        alert(e.message);
-      } finally {
-        $("exportBtn").disabled = false;
-      }
-    }
-
-    async function showApp(session) {
-      hide($("authView"));
-      hide($("configWait"));
-      show($("appView"));
-      $("userName").textContent = session.user.email;
-      show($("userBar"));
-      accessToken = session.access_token;
-      await loadPending();
-    }
-
-    async function handleSignIn() {
-      const errEl = $("authError");
-      hide(errEl);
-      $("signInBtn").disabled = true;
-
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: $("email").value.trim(),
-          password: $("password").value,
-        });
-        if (error) throw error;
-
-        accessToken = data.session.access_token;
-        await callBackend("listPending");
-        await showApp(data.session);
-      } catch (e) {
-        errEl.textContent = e.message;
-        show(errEl);
-      } finally {
-        $("signInBtn").disabled = false;
-      }
-    }
-
-    function setupTabs() {
-      document.querySelectorAll(".tab").forEach((tab) => {
-        tab.addEventListener("click", async () => {
-          document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-          tab.classList.add("active");
-          ["pending", "export", "employees"].forEach(async (name) => {
-            const el = $(`tab-${name}`);
-            name === tab.dataset.tab ? show(el) : hide(el);
-          });
-          if (tab.dataset.tab === "employees") await loadEmployees();
-          if (tab.dataset.tab === "export") await loadRegionSummary();
-        });
-      });
-    }
-
-    function setDefaultDates() {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      $("exportStart").value = start.toISOString().slice(0, 10);
-      $("exportEnd").value = end.toISOString().slice(0, 10);
-    }
-
-    async function bootstrap() {
-      if (!config?.supabaseUrl) return;
-
-      initSupabase();
-      setupTabs();
-      setDefaultDates();
-
-      $("signInBtn").addEventListener("click", handleSignIn);
-      $("password").addEventListener("keydown", (e) => { if (e.key === "Enter") handleSignIn(); });
-      $("signOutBtn").addEventListener("click", async () => {
-        await supabase.auth.signOut();
-        accessToken = null;
-        hide($("appView"));
-        show($("authView"));
-        hide($("userBar"));
-      });
-      $("exportBtn").addEventListener("click", handleExport);
-      $("regionFilter").addEventListener("change", loadEmployees);
-      $("exportStart").addEventListener("change", loadRegionSummary);
-      $("exportEnd").addEventListener("change", loadRegionSummary);
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        try {
-          accessToken = session.access_token;
-          await callBackend("listPending");
-          await showApp(session);
-        } catch {
-          hide($("configWait"));
-          show($("authView"));
+    function renderEmployeesTable() {
+      const filtered = sortRows(
+        allEmployees.filter(filterEmpRow),
+        empSort,
+        {
+          name: (e) => fullName(e),
+          role: (e) => roleLabel(e.role),
+          company: (e) => companyLabel(normalizeCompanyKey(e)),
+          card_type: (e) => cardLabel(e.card_type),
+          email: (e) => e.email || "",
         }
+      );
+
+      $("empCount").textContent = filtered.length === allEmployees.length
+        ? `${filtered.length} employee${filtered.length === 1 ? "" : "s"}`
+        : `${filtered.length} of ${allEmployees.length} employees`;
+
+      if (!filtered.length) {
+        $("employeesTable").innerHTML = allEmployees.length
+          ? '<p class="muted">No employees match your filters.</p>'
+          : '<p class="muted">No employees.</p>';
+        return;
+      }
+
+      $("employeesTable").innerHTML = `<table>
+        <thead><tr>
+          ${sortHeader("Name", "name", empSort)}
+          ${sortHeader("Position", "role", empSort)}
+          ${sortHeader("Company", "company", empSort)}
+          ${sortHeader("Card type", "card_type", empSort)}
+          ${sortHeader("Email", "email", empSort)}
+        </tr></thead>
+        <tbody>${filtered.map((e) => `<tr>
+          <td>${fullName(e)}</td>
+          <td>${roleLabel(e.role)}</td>
+          <td>${companyLabel(normalizeCompanyKey(e))}</td>
+          <td>${cardLabel(e.card_type)}</td>
+          <td>${e.email || "—"}</td>
+        </tr>`).join("")}</tbody></table>`;
+
+      bindSortHeaders($("employeesTable"), empSort, renderEmployeesTable);
+    }
+
+    function exportParams() {
+      return {
+        dateFrom: $("exportStart").value,
+        dateTo: $("exportEnd").value,
+        employeeId: $("exportEmployee").value || undefined,
+        statementTotal: $("statementTotal").value || undefined,
+      };
+    }
+
+    async function loadExportEmployees() {
+      employeesList = await callBackend("listEmployees");
+      $("exportEmployee").innerHTML = '<option value="">All employees</option>' +
+        (employeesList || []).map(e =>
+          `<option value="${e.id}">${e.first_name} ${e.last_name}</option>`
+        ).join("");
+    }
+
+    function moneyCell(n) {
+      if (n == null || n === "" || Number(n) === 0) return '<td class="num"></td>';
+      const num = Number(n);
+      const text = num < 0 ? `(${fmt(Math.abs(num))})` : fmt(num);
+      return `<td class="num filled">${text}</td>`;
+    }
+
+    function renderSpreadsheetPreview(data) {
+      const h = data.header;
+      const catKeys = data.category_keys || EXPORT_CATEGORIES.map((c) => c.key);
+      const catLabels = EXPORT_CATEGORIES.map((c) => c.label);
+      const diffClass = h.difference != null && Math.abs(h.difference) < 0.01 ? "match-ok" : h.difference != null ? "match-bad" : "";
+
+      let html = `<div class="preview-box">
+        <div class="preview-row"><span>Line items</span><span>${h.line_count}</span></div>
+        <div class="preview-row"><span>Total per Spreadsheet</span><span>${fmt(h.spreadsheet_total)}</span></div>
+        ${h.statement_total != null ? `<div class="preview-row"><span>Total on bill</span><span>${fmt(h.statement_total)}</span></div>` : ""}
+        ${h.difference != null ? `<div class="preview-row ${diffClass}"><span>Difference</span><span>${fmt(h.difference)}</span></div>` : ""}
+      </div>`;
+
+      if (!data.rows?.length) {
+        return html + '<p class="muted" style="margin-top:12px">No submitted expenses in this date range. Check Pending tab for unsubmitted reports.</p>';
+      }
+
+      const headerCols = ["Date", "Vendor", "Employee", "Company", "Description", ...catLabels, "Total"];
+      html += `<div class="spreadsheet-wrap"><table>
+        <tr class="sheet-title"><td colspan="${headerCols.length}">${h.title || "Credit Card Bill"}</td></tr>
+        <tr class="sheet-meta">
+          <td colspan="2">Employee</td><td colspan="2">${h.employee_name}</td>
+          <td></td><td colspan="2">From:</td><td>${h.date_from}</td>
+          <td colspan="2">To:</td><td colspan="${headerCols.length - 9}">${h.date_to}</td>
+        </tr>
+        <tr class="sheet-meta sheet-totals">
+          <td colspan="5"></td>
+          <td colspan="2">Total per Spreadsheet:</td><td class="num filled">${fmt(h.spreadsheet_total)}</td>
+          <td colspan="2">Total on bill:</td><td class="num">${h.statement_total != null ? fmt(h.statement_total) : ""}</td>
+          <td colspan="2">Difference:</td><td class="num ${diffClass}">${h.difference != null ? fmt(h.difference) : ""}</td>
+        </tr>
+        <thead><tr>${headerCols.map((c) => `<th>${c}</th>`).join("")}</tr></thead>
+        <tbody>${data.rows.map((r) => `<tr>
+          <td>${r.date}</td>
+          <td>${r.vendor}</td>
+          <td>${r.employee_initials}</td>
+          <td>${r.company}</td>
+          <td>${r.description || ""}</td>
+          ${catKeys.map((k) => moneyCell(r.amounts?.[k])).join("")}
+          ${moneyCell(r.total)}
+        </tr>`).join("")}
+        <tr class="sheet-totals">
+          <td>Total</td><td></td><td></td><td></td><td></td>
+          ${catKeys.map((k) => moneyCell(data.category_totals?.[k])).join("")}
+          ${moneyCell(data.grand_total)}
+        </tr>
+        </tbody></table></div>`;
+      return html;
+    }
+
+    function xlsxMoney(n) {
+      if (n == null || n === "" || Number(n) === 0) return "";
+      return Math.round(Number(n) * 100) / 100;
+    }
+
+    function buildXlsxWorkbook(data) {
+      const h = data.header;
+      const catKeys = data.category_keys || EXPORT_CATEGORIES.map((c) => c.key);
+      const catLabels = EXPORT_CATEGORIES.map((c) => c.label);
+      const rows = [];
+
+      rows.push([h.title || "Credit Card Bill"]);
+      rows.push(["Employee", h.employee_name, "", "", "From:", h.date_from, "", "To:", h.date_to]);
+      rows.push([
+        "", "", "", "", "Total per Spreadsheet:", xlsxMoney(h.spreadsheet_total),
+        "", "Total on bill:", h.statement_total != null ? xlsxMoney(h.statement_total) : "",
+        "", "Difference:", h.difference != null ? xlsxMoney(h.difference) : "",
+      ]);
+      rows.push([]);
+      rows.push(["Date", "Vendor", "Employee", "Company", "Description", ...catLabels, "Total"]);
+
+      for (const row of data.rows || []) {
+        rows.push([
+          row.date,
+          row.vendor,
+          row.employee_initials,
+          row.company,
+          row.description || "",
+          ...catKeys.map((k) => xlsxMoney(row.amounts?.[k])),
+          xlsxMoney(row.total),
+        ]);
+      }
+
+      rows.push([
+        "Total", "", "", "", "",
+        ...catKeys.map((k) => xlsxMoney(data.category_totals?.[k])),
+        xlsxMoney(data.grand_total),
+      ]);
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws["!cols"] = [
+        { wch: 12 }, { wch: 28 }, { wch: 8 }, { wch: 26 }, { wch: 20 },
+        ...catLabels.map(() => ({ wch: 12 })),
+        { wch: 12 },
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Credit Card Bill");
+      return wb;
+    }
+
+    function exportFilename() {
+      const p = exportParams();
+      const emp = $("exportEmployee").selectedOptions[0]?.text?.replace(/\s+/g, "_") || "all";
+      return `credit_card_bill_${emp}_${p.dateFrom}_${p.dateTo}.xlsx`;
+    }
+
+    function buildHttpFallbackUrl() {
+      const p = exportParams();
+      if (!exportHttpBase || !p.dateFrom || !p.dateTo) return null;
+      const emp = $("exportEmployee").selectedOptions[0]?.text?.replace(/\s+/g, "_") || "all";
+      const q = new URLSearchParams({
+        action: "exportBill",
+        dateFrom: p.dateFrom,
+        dateTo: p.dateTo,
+        filenameHint: emp,
+      });
+      if (p.employeeId) q.set("employeeId", p.employeeId);
+      if (p.statementTotal) q.set("statementTotal", p.statementTotal);
+      return `${exportHttpBase}?${q.toString()}`;
+    }
+
+    function setExportBtnReady(ready, label) {
+      const btn = $("exportDownloadBtn");
+      if (ready) {
+        btn.classList.remove("disabled");
+        btn.textContent = label || "Download Excel file";
       } else {
-        hide($("configWait"));
-        show($("authView"));
+        btn.classList.add("disabled");
+        btn.textContent = label || "Preparing Excel file…";
       }
     }
 
-    if (isInWix()) {
-      window.parent.postMessage({ type: "ready" }, "*");
-    } else {
-      config = {
-        supabaseUrl: "https://fubgrrthbqdgxvggccwk.supabase.co",
-        supabaseAnonKey: "REPLACE_WITH_ANON_KEY",
-      };
-      bootstrap();
+    function buildXlsxBytes(data) {
+      if (typeof XLSX === "undefined") throw new Error("Excel library not loaded — refresh the page.");
+      const wb = buildXlsxWorkbook(data);
+      return XLSX.write(wb, { bookType: "xlsx", type: "array" });
     }
+
+    function updateExportDownloadLink(data) {
+      const filename = exportFilename();
+      const buf = buildXlsxBytes(data);
+      const bytes = new Uint8Array(buf);
+      let binary = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      lastExportCache = { data, filename, base64: btoa(binary) };
+      setExportBtnReady(true, `Download ${filename}`);
+    }
+
+    function triggerExportDownload() {
+      if (!lastExportCache?.base64) {
+        alert("Export is still loading — wait for the green button.");
+        return;
+      }
+      postToParent({
+        type: "pdx-save-file",
+        base64: lastExportCache.base64,
+        filename: lastExportCache.filename,
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        httpFallback: buildHttpFallbackUrl(),
+      });
+      $("exportHint").textContent = "Saving file… if nothing downloads in 3 seconds, publish the site and update http-functions/pdx-admin.js.";
+    }
+
+    function scheduleExportRefresh() {
+      clearTimeout(exportRefreshTimer);
+      setExportBtnReady(false, "Preparing Excel file…");
+      exportRefreshTimer = setTimeout(refreshExportCache, 400);
+    }
+
+    async function refreshExportCache() {
+      const p = exportParams();
+      if (!p.dateFrom || !p.dateTo) {
+        $("exportPreview").innerHTML = '<p class="muted">Select statement from / to dates above.</p>';
+        setExportBtnReady(false, "Select dates first");
+        return;
+      }
+      try {
+        $("exportPreview").innerHTML = '<div class="loading">Loading preview…</div>';
+        const data = await callBackend("exportCreditCardBill", p);
+        $("exportPreview").innerHTML = renderSpreadsheetPreview(data);
+        updateExportDownloadLink(data);
+        $("exportHint").textContent = "Click the green button once to save the .xlsx file.";
+      } catch (e) {
+        setExportBtnReady(false, "Export failed — retry");
+        $("exportPreview").innerHTML = `<p class="error">${e.message}</p>`;
+      }
+    }
+
+    async function previewExport() {
+      await refreshExportCache();
+    }
+
+    async function loadAll() {
+      hide($("errorBox"));
+      try {
+        await callBackend("ping");
+        populateEmpFilters();
+        await Promise.all([loadStats(), loadPending()]);
+      } catch (e) {
+        $("errorBox").textContent = e.message;
+        show($("errorBox"));
+      }
+    }
+
+    const now = new Date();
+    $("exportStart").value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+    $("exportEnd").value = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", async () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        ["pending","export","employees"].forEach(n => { const el=$(`tab-${n}`); n===tab.dataset.tab?show(el):hide(el); });
+        try {
+          hide($("errorBox"));
+          if (tab.dataset.tab === "employees") await loadEmployees();
+          if (tab.dataset.tab === "export") {
+            await loadExportEmployees();
+            await previewExport();
+          }
+        } catch (e) {
+          $("errorBox").textContent = e.message;
+          show($("errorBox"));
+          if (tab.dataset.tab === "employees") {
+            $("employeesTable").innerHTML = `<p class="error">${e.message}</p>`;
+          }
+        }
+      });
+    });
+
+    ["pendingSearch","pendingRole","pendingCompany","pendingCardType"].forEach((id) => {
+      $(id).addEventListener("input", renderPendingTable);
+      $(id).addEventListener("change", renderPendingTable);
+    });
+    ["empSearch","empRole","empCompany","empCardType"].forEach((id) => {
+      $(id).addEventListener("input", renderEmployeesTable);
+      $(id).addEventListener("change", renderEmployeesTable);
+    });
+
+    $("refreshBtn").addEventListener("click", loadAll);
+    $("previewExportBtn").addEventListener("click", previewExport);
+    $("exportDownloadLink").addEventListener("click", triggerExportDownload);
+    $("exportServerForm").addEventListener("submit", () => syncServerExportForm());
+    ["exportEmployee", "exportStart", "exportEnd", "statementTotal"].forEach((id) => {
+      $(id).addEventListener("change", scheduleExportRefresh);
+      $(id).addEventListener("input", scheduleExportRefresh);
+    });
+
+    function handshake() { postToParent({ type: "ready" }); }
+    handshake();
+    setInterval(() => { if (!connected) handshake(); }, 1500);
+    setTimeout(() => {
+      if (!connected) {
+        $("configWait").innerHTML = "Still connecting… Check: (1) HTML element ID is <b>pdxAdminEmbed</b>, (2) Admin page code is pasted, (3) site is Published, (4) pdx-admin.jsw is saved.";
+      }
+    }, 12000);
   </script>
 </body>
 </html>
