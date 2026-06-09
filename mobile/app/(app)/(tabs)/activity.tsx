@@ -1,59 +1,45 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  Pressable,
+  FlatList,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router, useFocusEffect } from "expo-router";
-import { format, parseISO } from "date-fns";
+import { router, useFocusEffect, useNavigation } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import {
-  fetchExpenseReminders,
-  getReminderStatusLabel,
-  type ExpenseReminder,
-} from "../../../lib/activity";
-import { sendMissingExpensePush, sendTestPushNotification } from "../../../lib/push-api";
-import { registerForPushNotificationsAsync } from "../../../lib/push-notifications";
-import { useSettings, useTheme } from "../../../lib/settings-context";
-import { formatCurrency, type Profile } from "../../../lib/types";
+  countUnreadNotifications,
+  dismissReminder,
+  fetchNotifications,
+  type AppNotification,
+} from "../../../lib/notifications-feed";
 import { hapticLight } from "../../../lib/haptics";
-import { useToast } from "../../../lib/toast-context";
+import { useTheme } from "../../../lib/settings-context";
 import { getTabBarStackHeight } from "../../../lib/tab-bar-layout";
-import { HapticSwitch } from "../../../components/HapticSwitch";
-import { radius, spacing, type ThemeColors } from "../../../constants/theme";
+import { NotificationItemCard } from "../../../components/NotificationItemCard";
+import { spacing, type ThemeColors } from "../../../constants/theme";
 
-function formatWhen(value: string | null | undefined): string {
-  if (!value) return "";
-  try {
-    return format(parseISO(value), "MMM d, h:mm a");
-  } catch {
-    return value;
-  }
-}
-
-export default function ActivityScreen() {
+export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useTheme();
-  const { notifications, setPushEnabled, setExpenseReminders, setReportUpdates, pushToken } = useSettings();
-  const { showToast } = useToast();
-  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
+  const navigation = useNavigation();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [reminders, setReminders] = useState<ExpenseReminder[]>([]);
+  const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [pushTesting, setPushTesting] = useState(false);
   const hasLoadedRef = useRef(false);
 
-  const pendingCount = useMemo(
-    () => reminders.filter((r) => r.status === "notified" || r.status === "pending").length,
-    [reminders]
-  );
+  const unreadCount = useMemo(() => countUnreadNotifications(items), [items]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+    });
+  }, [navigation, unreadCount]);
 
   const load = useCallback(async (silent = false) => {
     const {
@@ -67,15 +53,11 @@ export default function ActivityScreen() {
     if (!silent && !hasLoadedRef.current) setLoading(true);
 
     try {
-      const [{ data: p }, items] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", user.id).single(),
-        fetchExpenseReminders(user.id),
-      ]);
-      setProfile(p as Profile);
-      setReminders(items);
+      const feed = await fetchNotifications(user.id);
+      setItems(feed);
       hasLoadedRef.current = true;
     } catch {
-      setReminders([]);
+      setItems([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -88,181 +70,96 @@ export default function ActivityScreen() {
     }, [load])
   );
 
-  async function sendTestPush() {
-    setPushTesting(true);
-    try {
-      await registerForPushNotificationsAsync();
-      const { delivery } = await sendTestPushNotification();
-      showToast(delivery?.message ?? "Test notification sent");
-    } catch (error) {
-      Alert.alert("Push failed", error instanceof Error ? error.message : "Could not send test notification.");
-    } finally {
-      setPushTesting(false);
+  function openNotification(item: AppNotification) {
+    hapticLight();
+
+    if (item.kind === "missing_expense" && item.reminderId) {
+      router.push({
+        pathname: "/(app)/submit",
+        params: {
+          prefill: "1",
+          merchant: item.merchant ?? "",
+          amount: item.amount != null ? String(item.amount) : "",
+          expenseDate: item.expenseDate ?? "",
+          reminderId: item.reminderId,
+        },
+      });
+      return;
+    }
+
+    if (item.reportId) {
+      router.push(`/(app)/reports/${item.reportId}`);
     }
   }
 
-  function openReminder(reminder: ExpenseReminder) {
-    if (reminder.status === "submitted" || reminder.status === "dismissed") return;
+  async function handleDismiss(item: AppNotification) {
+    if (item.kind !== "missing_expense" || !item.reminderId) return;
     hapticLight();
-    router.push({
-      pathname: "/(app)/submit",
-      params: {
-        prefill: "1",
-        merchant: reminder.merchant,
-        amount: String(reminder.amount),
-        expenseDate: reminder.expense_date ?? "",
-        reminderId: reminder.id,
-      },
-    });
+    try {
+      await dismissReminder(item.reminderId);
+      setItems((prev) => prev.filter((n) => n.id !== item.id));
+    } catch (error) {
+      Alert.alert("Could not dismiss", error instanceof Error ? error.message : "Try again.");
+    }
   }
-
-  const isAdmin = profile?.role === "regional_manager";
 
   return (
     <View style={styles.flex}>
       <View style={[styles.topBar, { paddingTop: insets.top + 4 }]}>
-        <Text style={styles.pageTitle}>Activity</Text>
-        {pendingCount > 0 ? (
+        <Text style={styles.pageTitle}>Notifications</Text>
+        {unreadCount > 0 ? (
           <View style={styles.countPill}>
-            <Text style={styles.countText}>{pendingCount} open</Text>
+            <Text style={styles.countText}>{unreadCount} new</Text>
           </View>
         ) : null}
       </View>
 
-      <ScrollView
-        style={styles.flex}
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[
+          styles.list,
+          { paddingBottom: getTabBarStackHeight(insets) + spacing.lg },
+          items.length === 0 && styles.listEmpty,
+        ]}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }} tintColor={colors.primary} />
-        }
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, { paddingBottom: getTabBarStackHeight(insets) + spacing.lg }]}
-      >
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowLabel}>Push notifications</Text>
-              <Text style={styles.rowSub}>{pushToken ? "Enabled on this device" : "Tap to enable alerts"}</Text>
-            </View>
-            <HapticSwitch
-              value={notifications.pushEnabled}
-              onValueChange={setPushEnabled}
-              trackColor={{ false: colors.border, true: colors.primaryLight }}
-              thumbColor={colors.white}
-            />
-          </View>
-          <View style={[styles.row, styles.rowBorder]}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowLabel}>Expense reminders</Text>
-              <Text style={styles.rowSub}>Missing receipt alerts</Text>
-            </View>
-            <HapticSwitch
-              value={notifications.expenseReminders}
-              onValueChange={setExpenseReminders}
-              disabled={!notifications.pushEnabled}
-              trackColor={{ false: colors.border, true: colors.primaryLight }}
-              thumbColor={colors.white}
-            />
-          </View>
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowLabel}>Report updates</Text>
-              <Text style={styles.rowSub}>Approved or rejected reports</Text>
-            </View>
-            <HapticSwitch
-              value={notifications.reportUpdates}
-              onValueChange={setReportUpdates}
-              disabled={!notifications.pushEnabled}
-              trackColor={{ false: colors.border, true: colors.primaryLight }}
-              thumbColor={colors.white}
-            />
-          </View>
-          {notifications.pushEnabled ? (
-            <Pressable style={styles.testBtn} onPress={sendTestPush} disabled={pushTesting}>
-              <Text style={styles.testBtnText}>{pushTesting ? "Sending…" : "Send test notification"}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-
-        <Text style={styles.feedTitle}>Recent activity</Text>
-
-        {loading && !reminders.length ? (
-          <Text style={styles.emptySub}>Loading…</Text>
-        ) : reminders.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>🔔</Text>
-            <Text style={styles.emptyTitle}>No activity yet</Text>
-            <Text style={styles.emptySub}>
-              Missing expense alerts and report updates will show up here.
-            </Text>
-          </View>
-        ) : (
-          reminders.map((reminder) => {
-            const actionable = reminder.status === "notified" || reminder.status === "pending";
-            return (
-              <Pressable
-                key={reminder.id}
-                style={({ pressed }) => [styles.feedCard, pressed && actionable && styles.feedCardPressed]}
-                onPress={() => openReminder(reminder)}
-                disabled={!actionable}
-              >
-                <View style={styles.feedIcon}>
-                  <Text style={styles.feedIconText}>{actionable ? "!" : "✓"}</Text>
-                </View>
-                <View style={styles.feedBody}>
-                  <Text style={styles.feedMerchant} numberOfLines={1}>
-                    {reminder.merchant}
-                  </Text>
-                  <Text style={styles.feedMeta}>
-                    {formatCurrency(Number(reminder.amount))}
-                    {reminder.expense_date ? ` · ${reminder.expense_date}` : ""}
-                  </Text>
-                  <Text style={styles.feedStatus}>{getReminderStatusLabel(reminder.status)}</Text>
-                  {reminder.note ? (
-                    <Text style={styles.feedNote} numberOfLines={2}>
-                      {reminder.note}
-                    </Text>
-                  ) : null}
-                </View>
-                <Text style={styles.feedWhen}>{formatWhen(reminder.notified_at ?? reminder.created_at)}</Text>
-              </Pressable>
-            );
-          })
-        )}
-
-        {isAdmin && notifications.pushEnabled ? (
-          <Pressable
-            style={styles.adminBtn}
-            onPress={async () => {
-              if (!profile) return;
-              setPushTesting(true);
-              try {
-                await sendMissingExpensePush({
-                  userId: profile.id,
-                  merchant: "Sample Merchant",
-                  amount: 42.5,
-                  expenseDate: new Date().toISOString().slice(0, 10),
-                  note: "Admin preview",
-                });
-                showToast("Sample alert sent");
-                load(true);
-              } catch (error) {
-                Alert.alert("Failed", error instanceof Error ? error.message : "Could not send sample alert.");
-              } finally {
-                setPushTesting(false);
-              }
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load(true);
             }}
-            disabled={pushTesting}
-          >
-            <Text style={styles.adminBtnText}>Send sample missing expense (admin)</Text>
-          </Pressable>
-        ) : null}
-      </ScrollView>
+            tintColor={colors.primary}
+          />
+        }
+        ListEmptyComponent={
+          loading ? (
+            <Text style={styles.emptySub}>Loading…</Text>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyEmoji}>🔔</Text>
+              <Text style={styles.emptyTitle}>All caught up</Text>
+              <Text style={styles.emptySub}>
+                Missing receipt alerts and report updates will appear here.
+              </Text>
+            </View>
+          )
+        }
+        renderItem={({ item }) => (
+          <NotificationItemCard
+            item={item}
+            colors={colors}
+            onPress={() => openNotification(item)}
+            onDismiss={item.kind === "missing_expense" && item.unread ? () => handleDismiss(item) : undefined}
+          />
+        )}
+      />
     </View>
   );
 }
 
-function makeStyles(colors: ThemeColors, isDark: boolean) {
+function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     flex: { flex: 1, backgroundColor: colors.bg },
     topBar: {
@@ -280,75 +177,16 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
       backgroundColor: colors.greenLight,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: radius.full,
+      borderRadius: 999,
     },
     countText: { fontSize: 12, fontWeight: "700", color: colors.primaryDark },
-    content: { paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.md },
-    sectionCard: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: spacing.md,
-      gap: spacing.sm,
-    },
-    sectionTitle: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: colors.textSecondary,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-    },
-    row: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: 4 },
-    rowBorder: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      paddingVertical: spacing.sm,
-    },
-    rowText: { flex: 1, gap: 2 },
-    rowLabel: { fontSize: 15, fontWeight: "600", color: colors.text },
-    rowSub: { fontSize: 12, color: colors.textSecondary },
-    testBtn: { alignItems: "center", paddingTop: spacing.sm },
-    testBtnText: { fontSize: 14, fontWeight: "700", color: colors.primary },
-    feedTitle: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: colors.textSecondary,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-      marginLeft: 4,
-    },
-    feedCard: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: spacing.sm,
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: spacing.md,
-    },
-    feedCardPressed: { opacity: 0.9 },
-    feedIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.greenLight,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    feedIconText: { fontSize: 16, fontWeight: "800", color: colors.primaryDark },
-    feedBody: { flex: 1, minWidth: 0, gap: 2 },
-    feedMerchant: { fontSize: 15, fontWeight: "700", color: colors.text },
-    feedMeta: { fontSize: 13, color: colors.textSecondary },
-    feedStatus: { fontSize: 12, fontWeight: "600", color: colors.primary },
-    feedNote: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-    feedWhen: { fontSize: 10, color: colors.textSecondary, maxWidth: 72, textAlign: "right" },
+    list: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
+    listEmpty: { flexGrow: 1, justifyContent: "center" },
+    separator: { height: spacing.sm },
     emptyCard: {
       alignItems: "center",
       backgroundColor: colors.surface,
-      borderRadius: radius.lg,
+      borderRadius: 16,
       borderWidth: 1,
       borderColor: colors.border,
       padding: spacing.lg,
@@ -357,7 +195,5 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     emptyEmoji: { fontSize: 32 },
     emptyTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
     emptySub: { fontSize: 13, color: colors.textSecondary, textAlign: "center", lineHeight: 19 },
-    adminBtn: { alignItems: "center", paddingVertical: spacing.sm },
-    adminBtnText: { fontSize: 13, fontWeight: "600", color: colors.primary },
   });
 }

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { format, parseISO } from "date-fns";
 import { EXPENSE_CATEGORIES } from "../lib/categories";
@@ -21,6 +22,7 @@ function formatExpenseDate(d: string | null | undefined): string {
 }
 
 function StatusBadge({ status, colors }: { status?: string; colors: ThemeColors }) {
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const isDraft = status === "draft";
   return (
     <View style={[styles.badge, isDraft ? styles.badgeDraft : styles.badgeSubmitted]}>

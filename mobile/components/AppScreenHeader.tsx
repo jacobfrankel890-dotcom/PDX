@@ -11,24 +11,24 @@ type Props = {
   onAvatarPress?: () => void;
 };
 
-/** Compact home header: logo + greeting + avatar on one row. */
+/** Home header: wordmark row, then greeting. */
 export function AppScreenHeader({ title, topInset, style, avatarInitial, onAvatarPress }: Props) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
 
   return (
-    <View style={[styles.wrap, { paddingTop: topInset + 4 }, style]}>
-      <PdxLogo size="md" />
+    <View style={[styles.wrap, { paddingTop: topInset + 6 }, style]}>
+      <View style={styles.topRow}>
+        <PdxLogo size="lg" />
+        {onAvatarPress && avatarInitial ? (
+          <Pressable onPress={onAvatarPress} style={styles.avatar} accessibilityRole="button">
+            <Text style={styles.avatarText}>{avatarInitial}</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <Text style={styles.title} numberOfLines={1}>
         {title}
       </Text>
-      {onAvatarPress && avatarInitial ? (
-        <Pressable onPress={onAvatarPress} style={styles.avatar} accessibilityRole="button">
-          <Text style={styles.avatarText}>{avatarInitial}</Text>
-        </Pressable>
-      ) : (
-        <View style={styles.avatarSpacer} />
-      )}
     </View>
   );
 }
@@ -36,21 +36,23 @@ export function AppScreenHeader({ title, topInset, style, avatarInitial, onAvata
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     wrap: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
       paddingHorizontal: spacing.md,
-      paddingBottom: 10,
+      paddingBottom: 12,
       backgroundColor: colors.surface,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
+      gap: 8,
+    },
+    topRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
     },
     title: {
-      flex: 1,
-      fontSize: 20,
-      fontWeight: "700",
+      fontSize: 24,
+      fontWeight: "800",
       color: colors.text,
-      letterSpacing: -0.3,
+      letterSpacing: -0.4,
     },
     avatar: {
       width: 40,
@@ -62,7 +64,6 @@ function makeStyles(colors: ThemeColors) {
       borderWidth: 2,
       borderColor: colors.primary,
     },
-    avatarSpacer: { width: 40 },
     avatarText: {
       color: colors.text,
       fontWeight: "800",

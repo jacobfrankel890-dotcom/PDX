@@ -17,7 +17,7 @@ type TabConfig = {
 const TABS: Record<TabRoute, TabConfig> = {
   dashboard: { outline: "home-outline", filled: "home", label: "Home" },
   expenses: { outline: "receipt-outline", filled: "receipt", label: "Expenses" },
-  activity: { outline: "notifications-outline", filled: "notifications", label: "Activity" },
+  activity: { outline: "notifications-outline", filled: "notifications", label: "Notifications" },
   profile: { outline: "person-outline", filled: "person", label: "Profile" },
 };
 
@@ -30,7 +30,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
       style={[
         styles.bar,
         {
-          paddingBottom: insets.bottom,
+          paddingBottom: Math.max(insets.bottom, 8),
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
         },
@@ -75,7 +75,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
             >
               <Ionicons
                 name={isFocused ? tab.filled : tab.outline}
-                size={24}
+                size={22}
                 color={isFocused ? colors.primaryDark : colors.textSecondary}
               />
               {badge != null && badge !== false ? (
@@ -89,6 +89,8 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
   );
 }
 
+const ICON_SIZE = 44;
+
 const styles = StyleSheet.create({
   bar: {
     position: "absolute",
@@ -99,7 +101,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-around",
     minHeight: TAB_BAR_HEIGHT,
-    paddingTop: 6,
+    paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   tab: {
@@ -108,16 +110,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   iconWrap: {
-    width: 48,
-    height: 40,
-    borderRadius: 20,
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+    borderRadius: ICON_SIZE / 2,
     alignItems: "center",
     justifyContent: "center",
   },
   badge: {
     position: "absolute",
-    top: 7,
-    right: 10,
+    top: 9,
+    right: 9,
     width: 8,
     height: 8,
     borderRadius: 4,

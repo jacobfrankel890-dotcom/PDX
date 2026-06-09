@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../../lib/supabase";
 import { EXPENSE_CATEGORIES } from "../../../lib/categories";
 import {
@@ -21,16 +22,17 @@ import {
   type ExpenseSortKey,
   type ExpenseStatusFilter,
 } from "../../../lib/expense-filters";
+import { groupExpensesByMonth, sumExpenseTotals } from "../../../lib/expense-sections";
 import {
   fetchRecentExpenses,
   type ExpenseCategory,
   type ExpenseEntry,
 } from "../../../lib/expenses";
 import { hapticLight, hapticSelection } from "../../../lib/haptics";
-import { ListGap } from "../../../lib/list-separator";
 import { useTheme } from "../../../lib/settings-context";
+import { formatCurrency } from "../../../lib/types";
 import { getTabBarStackHeight } from "../../../lib/tab-bar-layout";
-import { ExpenseListCard } from "../../../components/ExpenseListCard";
+import { ExpenseCompactRow } from "../../../components/ExpenseCompactRow";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 
 export default function ExpensesScreen() {
@@ -44,6 +46,7 @@ export default function ExpensesScreen() {
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | "all">("all");
   const [statusFilter, setStatusFilter] = useState<ExpenseStatusFilter>("all");
   const [sort, setSort] = useState<ExpenseSortKey>("newest");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const hasLoadedRef = useRef(false);
 
   const load = useCallback(async (silent = false) => {
@@ -84,6 +87,9 @@ export default function ExpensesScreen() {
     [expenses, search, categoryFilter, statusFilter, sort]
   );
 
+  const sections = useMemo(() => groupExpensesByMonth(filtered), [filtered]);
+  const totals = useMemo(() => sumExpenseTotals(filtered), [filtered]);
+
   const activeFilterCount = countActiveExpenseFilters({
     query: search,
     category: categoryFilter,
@@ -101,8 +107,31 @@ export default function ExpensesScreen() {
 
   const listHeader = (
     <View style={styles.headerBlock}>
+      <Text style={styles.subtitle}>Browse and filter all receipts</Text>
+
+      <View style={styles.summaryCard}>
+        <Text style={styles.summaryTotal}>{formatCurrency(totals.total)}</Text>
+        <Text style={styles.summaryLabel}>
+          {filtered.length} receipt{filtered.length === 1 ? "" : "s"} shown
+        </Text>
+        <View style={styles.summaryBreakdown}>
+          <View style={styles.breakdownItem}>
+            <View style={[styles.legendDot, styles.legendPending]} />
+            <Text style={styles.breakdownText}>
+              {totals.pendingCount} pending · {formatCurrency(totals.pending)}
+            </Text>
+          </View>
+          <View style={styles.breakdownItem}>
+            <View style={[styles.legendDot, styles.legendSubmitted]} />
+            <Text style={styles.breakdownText}>
+              {totals.submittedCount} submitted · {formatCurrency(totals.submitted)}
+            </Text>
+          </View>
+        </View>
+      </View>
+
       <View style={styles.searchBox}>
-        <Text style={styles.searchIcon}>🔍</Text>
+        <Ionicons name="search" size={18} color={colors.textSecondary} />
         <TextInput
           style={styles.searchInput}
           value={search}
@@ -113,79 +142,99 @@ export default function ExpensesScreen() {
         />
       </View>
 
-      <Text style={styles.filterLabel}>Status</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-        {EXPENSE_STATUS_FILTERS.map((option) => (
-          <Pressable
-            key={option.key}
-            style={[styles.chip, statusFilter === option.key && styles.chipActive]}
-            onPress={() => {
-              hapticSelection();
-              setStatusFilter(option.key);
-            }}
-          >
-            <Text style={[styles.chipText, statusFilter === option.key && styles.chipTextActive]}>
-              {option.label}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      <Text style={styles.filterLabel}>Category</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-        <Pressable
-          style={[styles.chip, categoryFilter === "all" && styles.chipActive]}
-          onPress={() => {
-            hapticSelection();
-            setCategoryFilter("all");
-          }}
-        >
-          <Text style={[styles.chipText, categoryFilter === "all" && styles.chipTextActive]}>All</Text>
-        </Pressable>
-        {EXPENSE_CATEGORIES.map((cat) => (
-          <Pressable
-            key={cat.key}
-            style={[styles.chip, categoryFilter === cat.key && styles.chipActive]}
-            onPress={() => {
-              hapticSelection();
-              setCategoryFilter(cat.key);
-            }}
-          >
-            <Text style={styles.chipEmoji}>{cat.emoji}</Text>
-            <Text style={[styles.chipText, categoryFilter === cat.key && styles.chipTextActive]}>
-              {cat.shortLabel}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      <Text style={styles.filterLabel}>Sort</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-        {EXPENSE_SORT_OPTIONS.map((option) => (
-          <Pressable
-            key={option.key}
-            style={[styles.chip, sort === option.key && styles.chipActive]}
-            onPress={() => {
-              hapticSelection();
-              setSort(option.key);
-            }}
-          >
-            <Text style={[styles.chipText, sort === option.key && styles.chipTextActive]}>{option.label}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      <View style={styles.metaRow}>
-        <Text style={styles.resultCount}>
-          {filtered.length} receipt{filtered.length === 1 ? "" : "s"}
-          {activeFilterCount > 0 ? ` · ${activeFilterCount} filter${activeFilterCount === 1 ? "" : "s"}` : ""}
-        </Text>
+      <Pressable
+        style={styles.filterToggle}
+        onPress={() => {
+          hapticSelection();
+          setFiltersOpen((v) => !v);
+        }}
+      >
+        <Ionicons name="options-outline" size={18} color={colors.text} />
+        <Text style={styles.filterToggleText}>Filters & sort</Text>
         {activeFilterCount > 0 ? (
-          <Pressable onPress={clearFilters} hitSlop={8}>
-            <Text style={styles.clearFilters}>Clear all</Text>
-          </Pressable>
+          <View style={styles.filterBadge}>
+            <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+          </View>
         ) : null}
-      </View>
+        <Ionicons
+          name={filtersOpen ? "chevron-up" : "chevron-down"}
+          size={18}
+          color={colors.textSecondary}
+          style={styles.filterChevron}
+        />
+      </Pressable>
+
+      {filtersOpen ? (
+        <View style={styles.filterPanel}>
+          <Text style={styles.filterLabel}>Status</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {EXPENSE_STATUS_FILTERS.map((option) => (
+              <Pressable
+                key={option.key}
+                style={[styles.chip, statusFilter === option.key && styles.chipActive]}
+                onPress={() => {
+                  hapticSelection();
+                  setStatusFilter(option.key);
+                }}
+              >
+                <Text style={[styles.chipText, statusFilter === option.key && styles.chipTextActive]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          <Text style={styles.filterLabel}>Category</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            <Pressable
+              style={[styles.chip, categoryFilter === "all" && styles.chipActive]}
+              onPress={() => {
+                hapticSelection();
+                setCategoryFilter("all");
+              }}
+            >
+              <Text style={[styles.chipText, categoryFilter === "all" && styles.chipTextActive]}>All</Text>
+            </Pressable>
+            {EXPENSE_CATEGORIES.map((cat) => (
+              <Pressable
+                key={cat.key}
+                style={[styles.chip, categoryFilter === cat.key && styles.chipActive]}
+                onPress={() => {
+                  hapticSelection();
+                  setCategoryFilter(cat.key);
+                }}
+              >
+                <Text style={styles.chipEmoji}>{cat.emoji}</Text>
+                <Text style={[styles.chipText, categoryFilter === cat.key && styles.chipTextActive]}>
+                  {cat.shortLabel}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          <Text style={styles.filterLabel}>Sort</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {EXPENSE_SORT_OPTIONS.map((option) => (
+              <Pressable
+                key={option.key}
+                style={[styles.chip, sort === option.key && styles.chipActive]}
+                onPress={() => {
+                  hapticSelection();
+                  setSort(option.key);
+                }}
+              >
+                <Text style={[styles.chipText, sort === option.key && styles.chipTextActive]}>{option.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          {activeFilterCount > 0 ? (
+            <Pressable onPress={clearFilters} style={styles.clearBtn}>
+              <Text style={styles.clearFilters}>Clear all filters</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 
@@ -195,14 +244,14 @@ export default function ExpensesScreen() {
         <Text style={styles.pageTitle}>Expenses</Text>
       </View>
 
-      <FlatList
-        data={filtered}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id!}
+        stickySectionHeadersEnabled
         automaticallyAdjustKeyboardInsets
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.list, { paddingBottom: getTabBarStackHeight(insets) + spacing.lg }]}
-        ItemSeparatorComponent={() => <ListGap />}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -229,15 +278,29 @@ export default function ExpensesScreen() {
             </View>
           )
         }
-        renderItem={({ item }) => (
-          <ExpenseListCard
-            item={item}
-            colors={colors}
-            onPress={() => {
-              hapticLight();
-              router.push(`/(app)/expense/${item.id}`);
-            }}
-          />
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <Text style={styles.sectionCount}>{section.data.length}</Text>
+          </View>
+        )}
+        renderItem={({ item, index, section }) => (
+          <View
+            style={[
+              styles.sectionCard,
+              index === 0 && styles.sectionCardTop,
+              index === section.data.length - 1 && styles.sectionCardBottom,
+            ]}
+          >
+            <ExpenseCompactRow
+              item={item}
+              colors={colors}
+              onPress={() => {
+                hapticLight();
+                router.push(`/(app)/expense/${item.id}`);
+              }}
+            />
+          </View>
         )}
       />
     </View>
@@ -255,8 +318,25 @@ function makeStyles(colors: ThemeColors) {
       borderBottomColor: colors.border,
     },
     pageTitle: { fontSize: 24, fontWeight: "800", color: colors.text, letterSpacing: -0.4 },
+    subtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: spacing.sm },
     list: { paddingHorizontal: spacing.md, paddingTop: spacing.sm },
-    headerBlock: { gap: spacing.sm, marginBottom: spacing.sm },
+    headerBlock: { gap: spacing.sm, marginBottom: spacing.md },
+    summaryCard: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      gap: 4,
+    },
+    summaryTotal: { fontSize: 28, fontWeight: "800", color: colors.text, letterSpacing: -0.5 },
+    summaryLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: "500" },
+    summaryBreakdown: { marginTop: spacing.sm, gap: 6 },
+    breakdownItem: { flexDirection: "row", alignItems: "center", gap: 8 },
+    legendDot: { width: 8, height: 8, borderRadius: 4 },
+    legendPending: { backgroundColor: colors.primary },
+    legendSubmitted: { backgroundColor: colors.textSecondary },
+    breakdownText: { fontSize: 12, color: colors.textSecondary },
     searchBox: {
       flexDirection: "row",
       alignItems: "center",
@@ -267,15 +347,44 @@ function makeStyles(colors: ThemeColors) {
       paddingHorizontal: 12,
       gap: 8,
     },
-    searchIcon: { fontSize: 15 },
     searchInput: { flex: 1, paddingVertical: 11, fontSize: 15, color: colors.text },
+    filterToggle: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: colors.surface,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    filterToggleText: { flex: 1, fontSize: 14, fontWeight: "600", color: colors.text },
+    filterChevron: { marginLeft: "auto" },
+    filterBadge: {
+      backgroundColor: colors.primary,
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 6,
+    },
+    filterBadgeText: { fontSize: 11, fontWeight: "800", color: colors.onPrimary },
+    filterPanel: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      gap: spacing.sm,
+    },
     filterLabel: {
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: "700",
       color: colors.textSecondary,
       textTransform: "uppercase",
       letterSpacing: 0.4,
-      marginTop: 2,
     },
     chipRow: { gap: 8, paddingVertical: 2 },
     chip: {
@@ -285,7 +394,7 @@ function makeStyles(colors: ThemeColors) {
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: radius.full,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.bg,
       borderWidth: 1,
       borderColor: colors.border,
     },
@@ -293,14 +402,37 @@ function makeStyles(colors: ThemeColors) {
     chipEmoji: { fontSize: 13 },
     chipText: { fontSize: 13, fontWeight: "600", color: colors.textSecondary },
     chipTextActive: { color: colors.onPrimary },
-    metaRow: {
+    clearBtn: { alignItems: "center", paddingTop: 4 },
+    clearFilters: { fontSize: 13, color: colors.primary, fontWeight: "700" },
+    sectionHeader: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      marginTop: 2,
+      paddingVertical: 8,
+      paddingHorizontal: 4,
+      backgroundColor: colors.bg,
     },
-    resultCount: { fontSize: 13, color: colors.textSecondary, fontWeight: "500" },
-    clearFilters: { fontSize: 13, color: colors.primary, fontWeight: "700" },
+    sectionTitle: { fontSize: 13, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase" },
+    sectionCount: { fontSize: 12, fontWeight: "600", color: colors.textSecondary },
+    sectionCard: {
+      marginHorizontal: 0,
+      overflow: "hidden",
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    sectionCardTop: {
+      borderTopWidth: 1,
+      borderTopLeftRadius: radius.lg,
+      borderTopRightRadius: radius.lg,
+    },
+    sectionCardBottom: {
+      borderBottomWidth: 1,
+      borderBottomLeftRadius: radius.lg,
+      borderBottomRightRadius: radius.lg,
+      marginBottom: spacing.md,
+    },
     empty: { alignItems: "center", paddingVertical: 48, gap: 8 },
     emptyEmoji: { fontSize: 40 },
     emptyTitle: { fontSize: 16, fontWeight: "700", color: colors.text },

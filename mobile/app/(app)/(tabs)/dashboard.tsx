@@ -151,26 +151,20 @@ export default function DashboardScreen() {
       <View style={styles.statsStrip}>
         <View style={styles.statsRow}>
           <View style={styles.statBlock}>
-            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
               {formatCurrency(weekTotal)}
             </Text>
-            <Text style={styles.statLabel} numberOfLines={1}>
-              Pending total
-            </Text>
+            <Text style={styles.statLabel}>Total</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBlock}>
             <Text style={styles.statValue}>{draftCount}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>
-              Pending
-            </Text>
+            <Text style={styles.statLabel}>Pending</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBlock}>
             <Text style={styles.statValue}>{submittedCount}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>
-              Submitted
-            </Text>
+            <Text style={styles.statLabel}>Submitted</Text>
           </View>
         </View>
         {draftCount > 0 ? (
@@ -182,7 +176,9 @@ export default function DashboardScreen() {
             }}
             disabled={submitting}
           >
-            <Text style={styles.submitWeekText}>{submitting ? "…" : "Submit all"}</Text>
+            <Text style={styles.submitWeekText}>
+              {submitting ? "Submitting…" : `Submit all · ${formatCurrency(weekTotal)}`}
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -290,8 +286,7 @@ function makeStyles(colors: ThemeColors) {
   flex: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   statsStrip: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "column",
     alignSelf: "stretch",
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -299,7 +294,7 @@ function makeStyles(colors: ThemeColors) {
     borderColor: colors.border,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    gap: 10,
+    gap: 12,
     shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -307,37 +302,33 @@ function makeStyles(colors: ThemeColors) {
     elevation: 3,
   },
   statsRow: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "stretch",
-    minWidth: 0,
   },
   statBlock: {
     flex: 1,
-    flexDirection: "column",
+    alignItems: "center",
     justifyContent: "center",
-    gap: 2,
+    gap: 4,
     minWidth: 0,
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
   },
-  statValue: { fontSize: 18, fontWeight: "800", color: colors.text },
+  statValue: { fontSize: 17, fontWeight: "800", color: colors.text, textAlign: "center" },
   statLabel: {
     fontSize: 11,
     fontWeight: "600",
     color: colors.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
+    textAlign: "center",
   },
   statDivider: { width: 1, alignSelf: "stretch", backgroundColor: colors.border, marginVertical: 2 },
   submitWeekBtn: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: radius.full,
-    flexShrink: 0,
-    maxWidth: 96,
+    alignItems: "center",
   },
-  submitWeekText: { color: colors.onPrimary, fontWeight: "700", fontSize: 12, textAlign: "center" },
+  submitWeekText: { color: colors.onPrimary, fontWeight: "700", fontSize: 14, textAlign: "center" },
   list: { paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   listHeader: { gap: spacing.sm, marginBottom: spacing.sm },
   sectionRow: {

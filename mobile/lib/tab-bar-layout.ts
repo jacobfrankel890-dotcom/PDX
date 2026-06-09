@@ -2,7 +2,7 @@ import { Platform, StyleSheet } from "react-native";
 import type { EdgeInsets } from "react-native-safe-area-context";
 
 /** Visible tab bar height above the safe area. */
-export const TAB_BAR_HEIGHT = 52;
+export const TAB_BAR_HEIGHT = 56;
 
 /** Height of the Add Receipt bar sitting on the tab bar. */
 export const FAB_HEIGHT = 50;
@@ -19,7 +19,7 @@ export function getFabBottom(insets: EdgeInsets): number {
 }
 
 export function getHomeListBottomPadding(insets: EdgeInsets): number {
-  return getFabBottom(insets) + FAB_HEIGHT + 16;
+  return getFabBottom(insets) + FAB_HEIGHT + 24;
 }
 
 export const tabBarLayout = StyleSheet.create({

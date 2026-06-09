@@ -39,7 +39,7 @@ export function PdxLogo({ size = "md", tagline, style, onDark }: Props) {
   return (
     <View style={[styles.wrap, style]}>
       <Image
-        source={require("../assets/pdx-logo.png")}
+        source={require("../assets/pdx-wordmark.png")}
         style={{ height, width: height * WORDMARK_ASPECT }}
         resizeMode="contain"
         accessibilityLabel="PDX Expense"

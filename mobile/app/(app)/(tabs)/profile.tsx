@@ -16,7 +16,7 @@ import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../../lib/supabase";
-import { useTheme, type ThemeMode } from "../../../lib/settings-context";
+import { useTheme, useSettings, type ThemeMode } from "../../../lib/settings-context";
 import { useAppUpdates } from "../../../lib/use-app-updates";
 import {
   disableBiometricLogin,
@@ -42,6 +42,8 @@ import {
 } from "../../../lib/types";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 import { getTabBarStackHeight } from "../../../lib/tab-bar-layout";
+import { sendMissingExpensePush, sendTestPushNotification } from "../../../lib/push-api";
+import { registerForPushNotificationsAsync } from "../../../lib/push-notifications";
 
 function Section({
   title,
@@ -122,6 +124,7 @@ function ThemeOption({
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { colors, themeMode, setThemeMode, isDark } = useTheme();
+  const { notifications, setPushEnabled, setExpenseReminders, setReportUpdates, pushToken } = useSettings();
   const { info: updateInfo, checkForUpdate } = useAppUpdates(false);
   const { showToast } = useToast();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
@@ -139,6 +142,7 @@ export default function ProfileScreen() {
   const [biometricLabel, setBiometricLabel] = useState("Biometrics");
   const [refreshing, setRefreshing] = useState(false);
   const [savingWork, setSavingWork] = useState(false);
+  const [pushTesting, setPushTesting] = useState(false);
   const hasLoadedRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -194,6 +198,19 @@ export default function ProfileScreen() {
     }
     const copied = await copyTextToClipboard("support@partsdistributionxpress.com");
     showToast(copied ? "Support email copied" : "Email support@partsdistributionxpress.com");
+  }
+
+  async function sendTestPush() {
+    setPushTesting(true);
+    try {
+      await registerForPushNotificationsAsync();
+      const { delivery } = await sendTestPushNotification();
+      showToast(delivery?.message ?? "Test notification sent");
+    } catch (error) {
+      Alert.alert("Push failed", error instanceof Error ? error.message : "Could not send test notification.");
+    } finally {
+      setPushTesting(false);
+    }
   }
 
   async function onRefresh() {
@@ -370,6 +387,84 @@ export default function ProfileScreen() {
           </SettingRow>
         </Section>
       ) : null}
+
+      <Section title="Notifications" colors={colors} isDark={isDark}>
+        <SettingRow
+          label="Push notifications"
+          subtitle={pushToken ? "Enabled on this device" : "Tap to enable alerts"}
+          colors={colors}
+          isDark={isDark}
+        >
+          <HapticSwitch
+            value={notifications.pushEnabled}
+            onValueChange={setPushEnabled}
+            trackColor={{ false: colors.border, true: colors.primaryLight }}
+            thumbColor={colors.white}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Expense reminders"
+          subtitle="Missing receipt alerts"
+          colors={colors}
+          isDark={isDark}
+        >
+          <HapticSwitch
+            value={notifications.expenseReminders}
+            onValueChange={setExpenseReminders}
+            disabled={!notifications.pushEnabled}
+            trackColor={{ false: colors.border, true: colors.primaryLight }}
+            thumbColor={colors.white}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Report updates"
+          subtitle="Approved or rejected reports"
+          colors={colors}
+          isDark={isDark}
+          last={!notifications.pushEnabled}
+        >
+          <HapticSwitch
+            value={notifications.reportUpdates}
+            onValueChange={setReportUpdates}
+            disabled={!notifications.pushEnabled}
+            trackColor={{ false: colors.border, true: colors.primaryLight }}
+            thumbColor={colors.white}
+          />
+        </SettingRow>
+        {notifications.pushEnabled ? (
+          <Pressable style={styles.updateBtn} onPress={sendTestPush} disabled={pushTesting}>
+            <Text style={styles.updateBtnText}>
+              {pushTesting ? "Sending…" : "Send test notification"}
+            </Text>
+          </Pressable>
+        ) : null}
+        {profile?.role === "regional_manager" && notifications.pushEnabled ? (
+          <Pressable
+            style={styles.updateBtn}
+            onPress={async () => {
+              if (!profile) return;
+              setPushTesting(true);
+              try {
+                await sendMissingExpensePush({
+                  userId: profile.id,
+                  merchant: "Sample Merchant",
+                  amount: 42.5,
+                  expenseDate: new Date().toISOString().slice(0, 10),
+                  note: "Admin preview",
+                });
+                showToast("Sample alert sent");
+              } catch (error) {
+                Alert.alert("Failed", error instanceof Error ? error.message : "Could not send sample alert.");
+              } finally {
+                setPushTesting(false);
+              }
+            }}
+            disabled={pushTesting}
+          >
+            <Text style={styles.updateBtnText}>Send sample missing expense (admin)</Text>
+          </Pressable>
+        ) : null}
+      </Section>
 
       <Section title="App updates" colors={colors} isDark={isDark}>
         <SettingRow
