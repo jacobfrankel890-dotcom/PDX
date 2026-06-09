@@ -62,7 +62,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
                 accessibilityRole="button"
                 accessibilityState={isFocused ? { selected: true } : {}}
                 onPress={onPress}
-                style={styles.tab}
+                style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
               >
                 <View style={[styles.iconWrap, isFocused && { backgroundColor: colors.greenLight }]}>
                   <Text style={[styles.icon, isFocused && styles.iconFocused]}>{icon}</Text>
@@ -108,6 +108,7 @@ const styles = StyleSheet.create({
     gap: 1,
     paddingVertical: 4,
   },
+  tabPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
   iconWrap: {
     width: 28,
     height: 28,

@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router, useFocusEffect, useNavigation } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { format, parseISO } from "date-fns";
 import { supabase } from "../../../lib/supabase";
 import { EXPENSE_CATEGORIES } from "../../../lib/categories";
@@ -28,7 +28,8 @@ import {
 } from "../../../lib/expenses";
 import { formatCurrency, getCompanyLabel, type Profile } from "../../../lib/types";
 import { getErrorMessage } from "../../../lib/utils";
-import { hapticLight, hapticSelection, scrollHapticHandlers } from "../../../lib/haptics";
+import { hapticLight, hapticSelection } from "../../../lib/haptics";
+import { ListGap } from "../../../lib/list-separator";
 import { useToast } from "../../../lib/toast-context";
 import { useTheme } from "../../../lib/settings-context";
 import { DashboardSkeleton } from "../../../components/DashboardSkeleton";
@@ -59,7 +60,6 @@ function formatExpenseDate(d: string | null | undefined): string {
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
   const { colors } = useTheme();
   const { showToast } = useToast();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -181,7 +181,8 @@ export default function DashboardScreen() {
   }
 
   function openProfile() {
-    (navigation as { jumpTo: (name: string) => void }).jumpTo("profile");
+    hapticLight();
+    router.push("/(app)/(tabs)/profile");
   }
 
   const listHeader = (
@@ -236,7 +237,13 @@ export default function DashboardScreen() {
           clearButtonMode="while-editing"
         />
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.filterRow}
+      >
         <Pressable
           style={[styles.filterChip, categoryFilter === "all" && styles.filterChipActive]}
           onPress={() => selectFilter("all")}
@@ -297,8 +304,11 @@ export default function DashboardScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id!}
-        {...scrollHapticHandlers}
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.list, { paddingBottom: getHomeListBottomPadding(insets) }]}
+        ItemSeparatorComponent={() => <ListGap />}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -471,7 +481,7 @@ function makeStyles(colors: ThemeColors) {
     maxWidth: 96,
   },
   submitWeekText: { color: colors.onPrimary, fontWeight: "700", fontSize: 12, textAlign: "center" },
-  list: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.sm },
+  list: { paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   listHeader: { gap: spacing.sm, marginBottom: spacing.sm },
   searchBox: {
     flexDirection: "row",

@@ -11,6 +11,7 @@ import { AppUpdateGate } from "../components/AppUpdateGate";
 import { initBiometricSessionSync } from "../lib/biometric-auth";
 import { configureNotificationHandler } from "../lib/push-notifications";
 import { getNavigationTheme } from "../lib/navigation-theme";
+import { getStackScreenOptions } from "../lib/stack-screen-options";
 import { useNotificationLinking } from "../lib/use-notification-linking";
 import { useRootBackground } from "../lib/use-root-background";
 
@@ -21,16 +22,7 @@ function RootNavigator() {
   const { colors, isDark } = useTheme();
   useRootBackground();
 
-  const screenOptions = {
-    headerStyle: { backgroundColor: colors.surface },
-    headerTintColor: colors.primary,
-    headerTitleStyle: { fontWeight: "700" as const, color: colors.text },
-    headerShadowVisible: false,
-    headerBackButtonDisplayMode: "minimal" as const,
-    headerBackTitle: "",
-    contentStyle: { backgroundColor: colors.bg },
-    animation: "default" as const,
-  };
+  const screenOptions = getStackScreenOptions(colors);
 
   return (
     <ThemeProvider value={getNavigationTheme(isDark, colors)}>

@@ -1,20 +1,12 @@
 import { View } from "react-native";
 import { Stack } from "expo-router";
 import { useTheme } from "../../lib/settings-context";
+import { getStackScreenOptions } from "../../lib/stack-screen-options";
 
 export default function AppLayout() {
   const { colors } = useTheme();
 
-  const screenOptions = {
-    headerStyle: { backgroundColor: colors.surface },
-    headerTintColor: colors.primary,
-    headerTitleStyle: { fontWeight: "700" as const, color: colors.text },
-    headerShadowVisible: false,
-    headerBackButtonDisplayMode: "minimal" as const,
-    headerBackTitle: "",
-    contentStyle: { backgroundColor: colors.bg },
-    animation: "default" as const,
-  };
+  const screenOptions = getStackScreenOptions(colors);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -25,12 +17,22 @@ export default function AppLayout() {
           options={{
             headerShown: false,
             presentation: "modal",
+            animation: "slide_from_bottom",
             contentStyle: { backgroundColor: colors.bg },
           }}
         />
-        <Stack.Screen name="expense/[id]" options={{ title: "Receipt" }} />
-        <Stack.Screen name="reports/new" options={{ headerShown: false }} />
-        <Stack.Screen name="reports/[id]" options={{ title: "Report Details" }} />
+        <Stack.Screen
+          name="expense/[id]"
+          options={{ title: "Receipt", animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="reports/new"
+          options={{ headerShown: false, animation: "slide_from_bottom", presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="reports/[id]"
+          options={{ title: "Report Details", animation: "slide_from_right" }}
+        />
       </Stack>
     </View>
   );

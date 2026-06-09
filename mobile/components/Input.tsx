@@ -1,5 +1,5 @@
-import { forwardRef, useRef, type ComponentProps, type Ref } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { forwardRef, useRef, useState, type ComponentProps, type Ref } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useTheme } from "../lib/settings-context";
 import { useAuthFormScroll, type AuthScrollMode } from "../lib/auth-form-scroll";
 import {
@@ -8,6 +8,7 @@ import {
   AUTH_INPUT_BG,
   AUTH_WHITE,
 } from "../constants/auth-chrome";
+import { PasswordVisibilityIcon } from "./PasswordVisibilityIcon";
 
 type Props = ComponentProps<typeof TextInput> & {
   label?: string;
@@ -28,6 +29,7 @@ export const Input = forwardRef(function Input(
     scrollOnFocus = true,
     scrollMode = "default",
     onFocus,
+    secureTextEntry,
     ...props
   }: Props,
   ref: Ref<TextInput>
@@ -37,22 +39,44 @@ export const Input = forwardRef(function Input(
   const styles = makeStyles(colors, isAuth);
   const wrapRef = useRef<View>(null);
   const authScroll = useAuthFormScroll();
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const isPasswordField = secureTextEntry === true;
+  const hidden = isPasswordField && !passwordVisible;
 
   return (
     <View ref={wrapRef} style={styles.wrap} collapsable={false}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <TextInput
-        ref={ref}
-        placeholderTextColor={isAuth ? "rgba(255,255,255,0.35)" : colors.slate400}
-        style={[styles.input, error && styles.inputError, style]}
-        onFocus={(event) => {
-          if (scrollOnFocus && authScroll) {
-            authScroll.scrollToField(wrapRef, scrollMode);
-          }
-          onFocus?.(event);
-        }}
-        {...props}
-      />
+      <View style={styles.inputRow}>
+        <TextInput
+          ref={ref}
+          placeholderTextColor={isAuth ? "rgba(255,255,255,0.35)" : colors.slate400}
+          style={[
+            styles.input,
+            isPasswordField && styles.inputWithToggle,
+            error && styles.inputError,
+            style,
+          ]}
+          onFocus={(event) => {
+            if (scrollOnFocus && authScroll) {
+              authScroll.scrollToField(wrapRef, scrollMode);
+            }
+            onFocus?.(event);
+          }}
+          secureTextEntry={hidden}
+          {...props}
+        />
+        {isPasswordField ? (
+          <Pressable
+            style={styles.toggleBtn}
+            onPress={() => setPasswordVisible((v) => !v)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
+          >
+            <PasswordVisibilityIcon visible={passwordVisible} color={isAuth ? AUTH_GRAY_60 : colors.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
       {error ? <Text style={styles.error}>{error}</Text> : hint ? <Text style={styles.hint}>{hint}</Text> : null}
     </View>
   );
@@ -67,6 +91,10 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"], isAuth: boole
       color: isAuth ? AUTH_WHITE : colors.textSecondary,
       letterSpacing: isAuth ? 0.2 : 0,
     },
+    inputRow: {
+      position: "relative",
+      justifyContent: "center",
+    },
     input: {
       borderWidth: 1,
       borderColor: isAuth ? AUTH_BORDER : colors.border,
@@ -76,6 +104,16 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"], isAuth: boole
       fontSize: 16,
       backgroundColor: isAuth ? AUTH_INPUT_BG : colors.bg,
       color: isAuth ? AUTH_WHITE : colors.text,
+    },
+    inputWithToggle: {
+      paddingRight: 48,
+    },
+    toggleBtn: {
+      position: "absolute",
+      right: 12,
+      height: "100%",
+      justifyContent: "center",
+      alignItems: "center",
     },
     inputError: { borderColor: colors.error },
     error: { fontSize: 12, color: colors.error },

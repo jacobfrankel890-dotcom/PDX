@@ -1,14 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
+import { ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import {
   AUTH_BG,
   AUTH_TRUST_ITEMS,
@@ -55,25 +46,23 @@ export function AuthScreenShell({
 
   return (
     <AuthScreenLayout>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
-      >
-        <AuthFormScrollProvider scrollRef={scrollRef}>
-          <ScrollView
-            ref={scrollRef}
-            style={styles.flex}
-            contentContainerStyle={[styles.scrollContent, contentStyle]}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-            automaticallyAdjustKeyboardInsets
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.page}>
-              <AuthLogoHeader compact={compactHero} />
-
-              {badge ? (
+      <View style={styles.header}>
+        <View style={styles.headerInner}>
+          <AuthLogoHeader compact={compactHero} />
+        </View>
+      </View>
+      <AuthFormScrollProvider scrollRef={scrollRef}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.flex}
+          contentContainerStyle={[styles.scrollContent, contentStyle]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          automaticallyAdjustKeyboardInsets
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.page}>
+            {badge ? (
                 <View style={styles.badge}>
                   <Text style={styles.badgeIcon}>⚡</Text>
                   <Text style={styles.badgeText}>{badge}</Text>
@@ -100,15 +89,24 @@ export function AuthScreenShell({
 
               {footer ? <View style={styles.footer}>{footer}</View> : null}
             </View>
-          </ScrollView>
-        </AuthFormScrollProvider>
-      </KeyboardAvoidingView>
+        </ScrollView>
+      </AuthFormScrollProvider>
     </AuthScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  header: {
+    paddingHorizontal: authHorizontalPad - grid(0.5),
+    paddingTop: grid(1.5),
+    paddingBottom: grid(0.5),
+  },
+  headerInner: {
+    width: "100%",
+    maxWidth: 430,
+    alignSelf: "center",
+  },
   scrollContent: {
     flexGrow: 1,
     paddingBottom: grid(4.5),
@@ -118,7 +116,7 @@ const styles = StyleSheet.create({
     maxWidth: 430,
     alignSelf: "center",
     paddingHorizontal: authHorizontalPad - grid(0.5),
-    paddingTop: grid(2),
+    paddingTop: grid(0.5),
   },
   badge: {
     flexDirection: "row",

@@ -27,7 +27,7 @@ import {
   isBiometricPreferenceEnabled,
   signOutPreservingBiometric,
 } from "../../../lib/biometric-auth";
-import { scrollHapticHandlers, hapticSelection, hapticLight } from "../../../lib/haptics";
+import { hapticSelection, hapticLight } from "../../../lib/haptics";
 import { useToast } from "../../../lib/toast-context";
 import { sendMissingExpensePush, sendTestPushNotification } from "../../../lib/push-api";
 import { registerForPushNotificationsAsync } from "../../../lib/push-notifications";
@@ -246,10 +246,7 @@ export default function ProfileScreen() {
         return;
       }
       if (delivery?.status === "ok") {
-        Alert.alert(
-          "Notification sent",
-          "If you don't see a banner:\n\n• Turn off Focus / Do Not Disturb\n• Swipe down to check Notification Center\n• Background the app and try again\n• Toggle push off/on if needed"
-        );
+        showToast("Test notification sent");
         return;
       }
       showToast(delivery?.message ?? "Test notification sent");
@@ -350,10 +347,11 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={styles.flex}
-      {...scrollHapticHandlers}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
       }
+      keyboardDismissMode="on-drag"
+      showsVerticalScrollIndicator={false}
       contentContainerStyle={[
         styles.content,
         {

@@ -41,6 +41,7 @@ import {
 import { getErrorMessage, toIsoDate } from "../lib/utils";
 import { markExpenseReminderSubmitted } from "../lib/push-api";
 import { useScrollToField } from "../lib/use-scroll-to-field";
+import { getStackKeyboardOffset } from "../lib/stack-screen-options";
 import { useTheme } from "../lib/settings-context";
 import { radius, spacing, type ThemeColors } from "../constants/theme";
 import { Button } from "./Button";
@@ -296,7 +297,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Pro
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        keyboardVerticalOffset={getStackKeyboardOffset(insets)}
       >
         {step === "scan" && (
           <View style={[styles.scanStep, { paddingBottom: insets.bottom + spacing.lg }]}>

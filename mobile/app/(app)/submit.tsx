@@ -4,7 +4,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { SubmitExpenseForm, type ExpensePrefillDraft } from "../../components/SubmitExpenseForm";
 import type { Profile } from "../../lib/types";
-import { colors } from "../../constants/theme";
+import { useTheme } from "../../lib/settings-context";
 
 function buildPrefill(params: Record<string, string | string[] | undefined>): ExpensePrefillDraft | undefined {
   if (params.prefill !== "1") return undefined;
@@ -27,6 +27,7 @@ function buildPrefill(params: Record<string, string | string[] | undefined>): Ex
 }
 
 export default function SubmitExpenseScreen() {
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{
     prefill?: string;
     merchant?: string;

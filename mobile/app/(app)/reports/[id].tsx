@@ -4,9 +4,10 @@ import { useFocusEffect, useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { ExpenseReportEditor } from "../../../components/ExpenseReportEditor";
 import type { ExpenseLineItem, ExpenseReport, Profile } from "../../../lib/types";
-import { colors } from "../../../constants/theme";
+import { useTheme } from "../../../lib/settings-context";
 
 export default function ReportScreen() {
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [report, setReport] = useState<ExpenseReport | null>(null);
   const [items, setItems] = useState<ExpenseLineItem[]>([]);

@@ -195,7 +195,11 @@ export default function ExpenseDetailScreen() {
   const bottomPadding = insets.bottom + spacing.xl + (keyboardVisible ? spacing.lg : 0);
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+    >
       <ScrollView
         ref={scrollRef}
         style={styles.flex}

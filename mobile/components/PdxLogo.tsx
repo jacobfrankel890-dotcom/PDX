@@ -8,6 +8,7 @@ type Props = {
   size?: PdxLogoSize;
   tagline?: string;
   style?: StyleProp<ViewStyle>;
+  /** Force wordmark on dark backgrounds (auth screens). */
   onDark?: boolean;
 };
 
@@ -26,24 +27,38 @@ const TAGLINE: Record<PdxLogoSize, number> = {
 };
 
 /** Aspect ratio of `assets/pdx-logo.png` */
-const LOGO_ASPECT = 3.15;
+const WORDMARK_ASPECT = 3.15;
 
 export function PdxLogo({ size = "md", tagline, style, onDark }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const height = LOGO_HEIGHT[size];
   const taglineColor = onDark ? AUTH_GRAY_60 : colors.textSecondary;
+  const useWordmark = onDark || isDark;
+
+  if (useWordmark) {
+    return (
+      <View style={[styles.wrap, style]}>
+        <Image
+          source={require("../assets/pdx-logo.png")}
+          style={{ height, width: height * WORDMARK_ASPECT }}
+          resizeMode="contain"
+          accessibilityLabel="PDX Expense"
+        />
+        {tagline && useWordmark ? (
+          <Text style={[styles.tagline, { fontSize: TAGLINE[size], color: taglineColor }]}>{tagline}</Text>
+        ) : null}
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.wrap, style]}>
       <Image
-        source={require("../assets/pdx-logo.png")}
-        style={{ height, width: height * LOGO_ASPECT }}
+        source={require("../assets/icon.png")}
+        style={{ height, width: height, borderRadius: height * 0.22 }}
         resizeMode="contain"
         accessibilityLabel="PDX Expense"
       />
-      {tagline ? (
-        <Text style={[styles.tagline, { fontSize: TAGLINE[size], color: taglineColor }]}>{tagline}</Text>
-      ) : null}
     </View>
   );
 }
