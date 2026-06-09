@@ -12,7 +12,7 @@ export default function TabsLayout() {
       tabBar={(props) => <GlassTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        lazy: false,
+        lazy: true,
         detachInactiveScreens: false,
         sceneStyle: { backgroundColor: colors.bg },
         tabBarStyle: {

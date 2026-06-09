@@ -11,7 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
-import * as Clipboard from "expo-clipboard";
+import { copyTextToClipboard } from "../../../lib/safe-clipboard";
 import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
@@ -176,9 +176,9 @@ export default function ProfileScreen() {
 
   async function copyEmail() {
     if (!profile?.email) return;
-    await Clipboard.setStringAsync(profile.email);
+    const copied = await copyTextToClipboard(profile.email);
     hapticLight();
-    showToast("Email copied");
+    showToast(copied ? "Email copied" : "Copy unavailable in this build");
   }
 
   async function contactSupport() {
@@ -189,8 +189,8 @@ export default function ProfileScreen() {
       await Linking.openURL(url);
       return;
     }
-    await Clipboard.setStringAsync("support@partsdistributionxpress.com");
-    showToast("Support email copied");
+    const copied = await copyTextToClipboard("support@partsdistributionxpress.com");
+    showToast(copied ? "Support email copied" : "Email support@partsdistributionxpress.com");
   }
 
   async function onRefresh() {

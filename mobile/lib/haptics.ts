@@ -1,32 +1,53 @@
-import * as Haptics from "expo-haptics";
+import { requireOptionalNativeModule } from "expo-modules-core";
 import { Platform } from "react-native";
 
-async function run(action: () => Promise<void>) {
+const ImpactFeedbackStyle = {
+  Light: "light",
+  Medium: "medium",
+} as const;
+
+const NotificationFeedbackType = {
+  Success: "success",
+} as const;
+
+type HapticsNative = {
+  selectionAsync(): Promise<void>;
+  impactAsync(style: string): Promise<void>;
+  notificationAsync(type: string): Promise<void>;
+};
+
+function getHapticsNative(): HapticsNative | null {
+  return requireOptionalNativeModule<HapticsNative>("ExpoHaptics");
+}
+
+async function run(action: (native: HapticsNative) => Promise<void>) {
   if (Platform.OS === "web") return;
+  const native = getHapticsNative();
+  if (!native) return;
   try {
-    await action();
+    await action(native);
   } catch {
     /* haptics unavailable on simulator or unsupported device */
   }
 }
 
 export function hapticSelection() {
-  return run(() => Haptics.selectionAsync());
+  return run((native) => native.selectionAsync());
 }
 
 export function hapticLight() {
-  return run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+  return run((native) => native.impactAsync(ImpactFeedbackStyle.Light));
 }
 
 export function hapticMedium() {
-  return run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium));
+  return run((native) => native.impactAsync(ImpactFeedbackStyle.Medium));
 }
 
 export function hapticToggle(on: boolean) {
-  return run(() =>
+  return run((native) =>
     on
-      ? Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      : Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      ? native.notificationAsync(NotificationFeedbackType.Success)
+      : native.impactAsync(ImpactFeedbackStyle.Light)
   );
 }
 
