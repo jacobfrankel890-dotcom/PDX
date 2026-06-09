@@ -56,13 +56,13 @@ Or set in Expo dashboard → Project → Environment variables:
 ### 3. Build for TestFlight
 
 ```bash
-cd mobile
-npm install
+cd ~/Desktop/PDEXPENSE
+npm --prefix ./mobile install
 npm install -g eas-cli
 eas login
 eas init
-eas build --platform ios --profile preview
-eas submit --platform ios --profile preview --latest
+npm run build:ios
+npm run submit:ios
 ```
 
 **Build numbers auto-increment:** Each `preview` or `production` build bumps iOS `buildNumber` and Android `versionCode` by 1 via EAS (see `autoIncrement` in `eas.json`). User-facing `version` in `app.json` (e.g. `1.0.0`) only changes when you manually bump it for a store release.
@@ -72,8 +72,8 @@ eas submit --platform ios --profile preview --latest
 Once TestFlight/Play builds include `expo-updates` (your **next** native build), push JS/UI fixes without rebuilding:
 
 ```bash
-cd mobile
-eas update --channel preview --message "Fix expense form validation"
+cd ~/Desktop/PDEXPENSE
+npm run update:preview -- "Fix expense form validation"
 ```
 
 Testers get the update on next app launch (usually within seconds). Same as Motorly/Reroute workflow.
@@ -89,11 +89,11 @@ That's it. Same flow as your other apps.
 ## Optional: local dev with Expo Go
 
 ```bash
-cd mobile
-cp .env.example .env
+cd ~/Desktop/PDEXPENSE
+cp .env.example mobile/.env
 # fill in EXPO_PUBLIC_SUPABASE_* keys
-npm install
-npx expo start
+npm --prefix ./mobile install
+npm run start
 ```
 
 Scan QR with Expo Go on your phone.
@@ -102,4 +102,4 @@ Scan QR with Expo Go on your phone.
 
 ## Architecture note
 
-The `src/` Next.js web app in the repo root is still there (useful for admin/finance web export later) but **the iOS app does not depend on it**. The mobile app talks directly to Supabase like Motorly/Reroute.
+This repository is mobile-only. The `mobile/` app talks directly to Supabase (same pattern as Motorly/Reroute).
