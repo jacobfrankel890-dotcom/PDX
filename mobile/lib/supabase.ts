@@ -24,3 +24,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabaseAnonKey);
 }
+
+/** Clear the active session locally without revoking refresh tokens on the server. */
+export async function clearLocalAuthSessionOnly(): Promise<void> {
+  type AuthInternals = {
+    stopAutoRefresh?: () => Promise<void>;
+    _removeSession?: () => Promise<void>;
+  };
+
+  const auth = supabase.auth as unknown as AuthInternals;
+  await auth.stopAutoRefresh?.();
+  await auth._removeSession?.();
+}

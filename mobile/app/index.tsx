@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Redirect } from "expo-router";
 import { supabase } from "../lib/supabase";
-import { isBiometricLoginEnabled, signInWithBiometric } from "../lib/biometric-auth";
+import { shouldOfferBiometricSignIn, signInWithBiometric } from "../lib/biometric-auth";
 import { LandingSplash } from "../components/LandingSplash";
 
 export default function Index() {
@@ -21,7 +21,7 @@ export default function Index() {
         return;
       }
 
-      if (await isBiometricLoginEnabled()) {
+      if (await shouldOfferBiometricSignIn()) {
         const result = await signInWithBiometric();
         if (!cancelled) {
           setSession(result.ok);

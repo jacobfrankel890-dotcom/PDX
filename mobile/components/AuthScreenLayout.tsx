@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { ImageBackground, Platform, StyleSheet, View } from "react-native";
+import { ImageBackground, StyleSheet, View } from "react-native";
 import { BlurView } from "expo-blur";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,17 +10,12 @@ type Props = {
   children: ReactNode;
 };
 
-/** Full-screen tire photo, blurred + evenly darkened. UI sits on top as children. */
+/** Full-screen tire photo, blurred + darkened for readable text. */
 export function AuthScreenLayout({ children }: Props) {
   return (
     <ImageBackground source={TIRE_BG} style={styles.root} imageStyle={styles.image} resizeMode="cover">
       <StatusBar style="light" />
-      <BlurView
-        intensity={100}
-        tint="dark"
-        style={styles.overlay}
-        pointerEvents="none"
-      />
+      <BlurView intensity={72} tint="dark" style={styles.overlay} pointerEvents="none" />
       <View style={styles.scrim} pointerEvents="none" />
       <SafeAreaView style={styles.content} edges={["top", "bottom"]}>
         {children}
@@ -32,24 +27,17 @@ export function AuthScreenLayout({ children }: Props) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: "#0A0A0A",
   },
   overlay: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
+    ...StyleSheet.absoluteFillObject,
   },
   image: {
-    opacity: 0.45,
+    opacity: 0.72,
   },
   scrim: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: "rgba(0,0,0,0.92)",
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.58)",
   },
   content: {
     flex: 1,

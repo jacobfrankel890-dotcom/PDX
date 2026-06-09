@@ -19,8 +19,8 @@ import {
   enableBiometricLogin,
   getBiometricLabel,
   isBiometricHardwareAvailable,
-  isBiometricLoginEnabled,
   isBiometricNativeAvailable,
+  isBiometricPreferenceEnabled,
   promptBiometric,
   signOutPreservingBiometric,
 } from "../../../lib/biometric-auth";
@@ -134,7 +134,7 @@ export default function ProfileScreen() {
       const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (error) throw error;
       setProfile(data as Profile);
-      setBiometricEnabled(await isBiometricLoginEnabled());
+      setBiometricEnabled(await isBiometricPreferenceEnabled());
       setBiometricAvailable(isBiometricNativeAvailable() && (await isBiometricHardwareAvailable()));
       setBiometricLabel(await getBiometricLabel());
       hasLoadedRef.current = true;
@@ -167,7 +167,7 @@ export default function ProfileScreen() {
         const authed = await promptBiometric(`Enable ${biometricLabel}`);
         if (!authed) return;
         await enableBiometricLogin(refreshToken);
-        setBiometricEnabled(await isBiometricLoginEnabled());
+        setBiometricEnabled(await isBiometricPreferenceEnabled());
       } catch (error) {
         const message = error instanceof Error ? error.message : "Biometric sign-in could not be enabled.";
         Alert.alert("Couldn't enable biometrics", message);

@@ -4,9 +4,10 @@ import { Pressable, StyleSheet, Text } from "react-native";
 import { supabase } from "../../lib/supabase";
 import {
   getBiometricLabel,
-  isBiometricLoginEnabled,
   offerBiometricSetupAfterLogin,
+  shouldOfferBiometricSignIn,
   signInWithBiometric,
+  syncBiometricRefreshToken,
 } from "../../lib/biometric-auth";
 import { AUTH_GRAY_60 } from "../../constants/auth-chrome";
 import { AuthScreenShell } from "../../components/AuthScreenShell";
@@ -25,7 +26,7 @@ export default function LoginScreen() {
   const [showBiometric, setShowBiometric] = useState(false);
 
   useEffect(() => {
-    isBiometricLoginEnabled().then(setShowBiometric);
+    shouldOfferBiometricSignIn().then(setShowBiometric);
     getBiometricLabel().then(setBiometricLabel);
   }, []);
 
@@ -43,6 +44,8 @@ export default function LoginScreen() {
       setError(authError.message);
       return;
     }
+    const { data } = await supabase.auth.getSession();
+    await syncBiometricRefreshToken(data.session?.refresh_token);
     await goToApp();
   }
 

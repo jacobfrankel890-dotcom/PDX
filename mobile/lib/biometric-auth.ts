@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import { Alert, Platform } from "react-native";
-import { supabase } from "./supabase";
+import { supabase, clearLocalAuthSessionOnly } from "./supabase";
 
 const REFRESH_TOKEN_KEY = "pdx_biometric_refresh_token";
 const BIOMETRIC_ENABLED_KEY = "@pdx/biometric_enabled";
@@ -144,8 +144,14 @@ export async function disableBiometricLogin(): Promise<void> {
   }
 }
 
-async function isBiometricPreferenceEnabled(): Promise<boolean> {
+export async function isBiometricPreferenceEnabled(): Promise<boolean> {
   return (await AsyncStorage.getItem(BIOMETRIC_ENABLED_KEY)) === "true";
+}
+
+export async function shouldOfferBiometricSignIn(): Promise<boolean> {
+  if (!isBiometricNativeAvailable()) return false;
+  if (!(await isBiometricPreferenceEnabled())) return false;
+  return isBiometricHardwareAvailable();
 }
 
 /** Sign out of the app but keep Face ID credentials for quick sign-in. */
@@ -155,7 +161,8 @@ export async function signOutPreservingBiometric(): Promise<void> {
     if (data.session?.refresh_token) {
       await syncBiometricRefreshToken(data.session.refresh_token);
     }
-    await supabase.auth.signOut({ scope: "local" });
+    // Do not call auth.signOut() — even scope "local" revokes the refresh token server-side.
+    await clearLocalAuthSessionOnly();
     return;
   }
 
@@ -200,23 +207,22 @@ export async function signInWithBiometric(): Promise<{ ok: boolean; error?: stri
   }
 
   if (!refreshToken) {
-    await disableBiometricLogin();
     return { ok: false, error: "Saved session expired — sign in with password once" };
   }
 
-  const { error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
-  if (error) {
-    await disableBiometricLogin();
+  const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+  if (error || !data.session) {
     return { ok: false, error: "Session expired — sign in with password again" };
   }
 
+  await syncBiometricRefreshToken(data.session.refresh_token);
   return { ok: true };
 }
 
 export async function offerBiometricSetupAfterLogin(): Promise<void> {
   if (!isBiometricNativeAvailable()) return;
   if (!(await isBiometricHardwareAvailable())) return;
-  if (await isBiometricLoginEnabled()) return;
+  if (await isBiometricPreferenceEnabled()) return;
 
   const { data } = await supabase.auth.getSession();
   const refreshToken = data.session?.refresh_token;

@@ -33,7 +33,7 @@ function RootNavigator() {
 
   return (
     <ThemeProvider value={getNavigationTheme(isDark, colors)}>
-      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
         <StatusBar style={isDark ? "light" : "dark"} />
         <Stack screenOptions={screenOptions}>
           <Stack.Screen name="index" options={{ headerShown: false }} />
