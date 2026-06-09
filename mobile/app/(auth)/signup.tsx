@@ -13,7 +13,7 @@ import { supabase } from "../../lib/supabase";
 import { offerBiometricSetupAfterLogin } from "../../lib/biometric-auth";
 import { REGIONS, ROLES, getDefaultCompanyForRegion, type PdxRegion } from "../../lib/types";
 import { isValidEmail } from "../../lib/utils";
-import { AUTH_GRAY_60 } from "../../constants/auth-chrome";
+import { AUTH_GRAY_60, AUTH_WHITE } from "../../constants/auth-chrome";
 import { AuthScreenShell } from "../../components/AuthScreenShell";
 import { SignupStepIndicator } from "../../components/SignupStepIndicator";
 import { Button } from "../../components/Button";
@@ -226,7 +226,7 @@ function makeStyles() {
       borderRadius: 12,
       fontSize: 14,
     },
-    fieldLabel: { fontSize: 13, fontWeight: "600", color: AUTH_GRAY_60, marginBottom: spacing.xs },
+    fieldLabel: { fontSize: 13, fontWeight: "600", color: AUTH_WHITE, marginBottom: spacing.xs },
     optionList: { gap: spacing.md },
     option: {
       padding: 14,

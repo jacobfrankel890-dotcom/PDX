@@ -38,7 +38,7 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"], isAuth: boole
     label: {
       fontSize: isAuth ? 14 : 13,
       fontWeight: "600",
-      color: isAuth ? AUTH_GRAY_60 : colors.textSecondary,
+      color: isAuth ? AUTH_WHITE : colors.textSecondary,
       letterSpacing: isAuth ? 0.2 : 0,
     },
     input: {
