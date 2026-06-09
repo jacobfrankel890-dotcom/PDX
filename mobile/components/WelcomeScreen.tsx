@@ -8,6 +8,7 @@ import {
   authHorizontalPad,
 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
+import { scrollHapticHandlers } from "../lib/haptics";
 import { radius } from "../constants/theme";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { AuthLogoHeader } from "./AuthLogoHeader";
@@ -24,6 +25,7 @@ export function WelcomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces={false}
+        {...scrollHapticHandlers}
       >
         <View style={styles.page}>
           <AuthLogoHeader compact={compact} />

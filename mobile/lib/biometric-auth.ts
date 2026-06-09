@@ -182,6 +182,14 @@ export async function syncBiometricRefreshToken(refreshToken: string | undefined
   }
 }
 
+export async function enableBiometricLoginWithPrompt(refreshToken: string): Promise<boolean> {
+  const label = await getBiometricLabel();
+  const authed = await promptBiometric(`Enable ${label} sign-in`);
+  if (!authed) return false;
+  await enableBiometricLogin(refreshToken);
+  return true;
+}
+
 export async function signInWithBiometric(): Promise<{ ok: boolean; error?: string }> {
   if (!isBiometricNativeAvailable()) {
     return { ok: false, error: "Biometric sign-in requires a new app build" };
@@ -219,39 +227,52 @@ export async function signInWithBiometric(): Promise<{ ok: boolean; error?: stri
   return { ok: true };
 }
 
-export async function offerBiometricSetupAfterLogin(): Promise<void> {
-  if (!isBiometricNativeAvailable()) return;
-  if (!(await isBiometricHardwareAvailable())) return;
-  if (await isBiometricPreferenceEnabled()) return;
+/** Ask to enable Face ID after password login, then scan + save before returning. */
+export async function offerBiometricSetupAfterLogin(): Promise<boolean> {
+  if (!isBiometricNativeAvailable()) return false;
+  if (!(await isBiometricHardwareAvailable())) return false;
+  if (await isBiometricPreferenceEnabled()) return true;
 
   const { data } = await supabase.auth.getSession();
   const refreshToken = data.session?.refresh_token;
-  if (!refreshToken) return;
+  if (!refreshToken) return false;
 
   const label = await getBiometricLabel();
-  Alert.alert(
-    `Enable ${label}?`,
-    `Use ${label} to sign in quickly next time.`,
-    [
-      { text: "Not now", style: "cancel" },
-      {
-        text: "Enable",
-        onPress: async () => {
-          try {
-            const authed = await promptBiometric(`Confirm ${label} setup`);
-            if (authed) await enableBiometricLogin(refreshToken);
-          } catch (error) {
-            const detail = getErrorMessage(error);
-            Alert.alert(
-              "Couldn't enable biometrics",
-              detail ??
-                "Biometric sign-in could not be enabled on this device. You can try again later from Profile > Security."
-            );
-          }
+  const appName = "PDX Expense";
+
+  return new Promise((resolve) => {
+    Alert.alert(
+      Platform.OS === "ios" ? `"${appName}" Would Like to Use ${label}` : `Enable ${label}?`,
+      Platform.OS === "ios"
+        ? `Use ${label} to sign in to your account quickly and securely.`
+        : `Use ${label} to sign in quickly next time.`,
+      [
+        {
+          text: Platform.OS === "ios" ? "Don't Allow" : "Not now",
+          style: "cancel",
+          onPress: () => resolve(false),
         },
-      },
-    ]
-  );
+        {
+          text: "OK",
+          onPress: async () => {
+            try {
+              const enabled = await enableBiometricLoginWithPrompt(refreshToken);
+              resolve(enabled);
+            } catch (error) {
+              const detail = getErrorMessage(error);
+              Alert.alert(
+                "Couldn't enable biometrics",
+                detail ??
+                  "Biometric sign-in could not be enabled. You can try again from Profile > Security."
+              );
+              resolve(false);
+            }
+          },
+        },
+      ],
+      { cancelable: false }
+    );
+  });
 }
 
 /** Call once at app start to keep SecureStore refresh token in sync. */

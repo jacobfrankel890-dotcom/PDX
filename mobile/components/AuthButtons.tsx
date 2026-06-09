@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { AUTH_BG, AUTH_BORDER, AUTH_WHITE_90 } from "../constants/auth-chrome";
 import { grid } from "../lib/grid";
+import { hapticLight } from "../lib/haptics";
 import { radius } from "../constants/theme";
 
 type BtnProps = {
@@ -14,7 +15,10 @@ export function AuthPrimaryButton({ label, icon, onPress, style }: BtnProps) {
   return (
     <Pressable
       style={({ pressed }) => [styles.primary, pressed && styles.pressed, style]}
-      onPress={onPress}
+      onPress={() => {
+        hapticLight();
+        onPress();
+      }}
     >
       <Text style={styles.primaryText}>{label}</Text>
       {icon ? <Text style={styles.primaryIcon}>{icon}</Text> : null}
@@ -26,7 +30,10 @@ export function AuthOutlineButton({ label, icon, onPress, style }: BtnProps) {
   return (
     <Pressable
       style={({ pressed }) => [styles.outline, pressed && styles.pressed, style]}
-      onPress={onPress}
+      onPress={() => {
+        hapticLight();
+        onPress();
+      }}
     >
       {icon ? <Text style={styles.outlineIcon}>{icon}</Text> : null}
       <Text style={styles.outlineText}>{label}</Text>

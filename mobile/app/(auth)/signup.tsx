@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Link, router } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { offerBiometricSetupAfterLogin } from "../../lib/biometric-auth";
 import { REGIONS, ROLES, getDefaultCompanyForRegion, type PdxRegion } from "../../lib/types";
 import { isValidEmail } from "../../lib/utils";
 import { AUTH_GRAY_60 } from "../../constants/auth-chrome";
@@ -104,6 +105,7 @@ export default function SignupScreen() {
     }
 
     if (data.session) {
+      await offerBiometricSetupAfterLogin();
       router.replace("/(app)/(tabs)/dashboard");
       return;
     }

@@ -5,25 +5,25 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { useSettings, useTheme, type ThemeMode } from "../../../lib/settings-context";
 import { useAppUpdates } from "../../../lib/use-app-updates";
 import {
   disableBiometricLogin,
-  enableBiometricLogin,
+  enableBiometricLoginWithPrompt,
   getBiometricLabel,
   isBiometricHardwareAvailable,
   isBiometricNativeAvailable,
   isBiometricPreferenceEnabled,
-  promptBiometric,
   signOutPreservingBiometric,
 } from "../../../lib/biometric-auth";
+import { scrollHapticHandlers, hapticSelection } from "../../../lib/haptics";
+import { HapticSwitch } from "../../../components/HapticSwitch";
 import {
   getCompanyLabel,
   getRegionLabel,
@@ -100,7 +100,10 @@ function ThemeOption({
   return (
     <Pressable
       style={[styles.themeChip, selected && styles.themeChipActive]}
-      onPress={() => onSelect(mode)}
+      onPress={() => {
+        hapticSelection();
+        onSelect(mode);
+      }}
     >
       <Text style={[styles.themeChipText, selected && styles.themeChipTextActive]}>{label}</Text>
     </Pressable>
@@ -151,6 +154,12 @@ export default function ProfileScreen() {
     load();
   }, [load]);
 
+  useFocusEffect(
+    useCallback(() => {
+      isBiometricPreferenceEnabled().then(setBiometricEnabled);
+    }, [])
+  );
+
   async function toggleBiometric(enabled: boolean) {
     if (enabled) {
       try {
@@ -164,10 +173,8 @@ export default function ProfileScreen() {
           Alert.alert("Sign in again", "Sign out and sign in with password to enable biometric sign-in.");
           return;
         }
-        const authed = await promptBiometric(`Enable ${biometricLabel}`);
-        if (!authed) return;
-        await enableBiometricLogin(refreshToken);
-        setBiometricEnabled(await isBiometricPreferenceEnabled());
+        const saved = await enableBiometricLoginWithPrompt(refreshToken);
+        setBiometricEnabled(saved && (await isBiometricPreferenceEnabled()));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Biometric sign-in could not be enabled.";
         Alert.alert("Couldn't enable biometrics", message);
@@ -218,6 +225,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={styles.flex}
+      {...scrollHapticHandlers}
       contentContainerStyle={[
         styles.content,
         {
@@ -265,7 +273,7 @@ export default function ProfileScreen() {
             isDark={isDark}
             last
           >
-            <Switch
+            <HapticSwitch
               value={biometricEnabled}
               onValueChange={toggleBiometric}
               trackColor={{ false: colors.border, true: colors.primaryLight }}
@@ -282,7 +290,7 @@ export default function ProfileScreen() {
           colors={colors}
           isDark={isDark}
         >
-          <Switch
+          <HapticSwitch
             value={notifications.pushEnabled}
             onValueChange={setPushEnabled}
             trackColor={{ false: colors.border, true: colors.primaryLight }}
@@ -296,7 +304,7 @@ export default function ProfileScreen() {
           isDark={isDark}
           last={!notifications.pushEnabled}
         >
-          <Switch
+          <HapticSwitch
             value={notifications.expenseReminders}
             onValueChange={setExpenseReminders}
             disabled={!notifications.pushEnabled}
@@ -312,7 +320,7 @@ export default function ProfileScreen() {
             isDark={isDark}
             last
           >
-            <Switch
+            <HapticSwitch
               value={notifications.reportUpdates}
               onValueChange={setReportUpdates}
               trackColor={{ false: colors.border, true: colors.primaryLight }}

@@ -1,6 +1,7 @@
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { hapticNavigation } from "../lib/haptics";
 import { useTheme } from "../lib/settings-context";
 import {
   TAB_BAR_BOTTOM_GAP,
@@ -50,6 +51,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
                 canPreventDefault: true,
               });
               if (!isFocused && !event.defaultPrevented) {
+                hapticNavigation();
                 navigation.jumpTo(route.name);
               }
             };

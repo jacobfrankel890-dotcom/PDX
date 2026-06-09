@@ -38,15 +38,7 @@ function RootNavigator() {
         <Stack screenOptions={screenOptions}>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen
-            name="(auth)/welcome"
-            options={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }}
-          />
-          <Stack.Screen
-            name="(auth)/login"
-            options={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }}
-          />
-          <Stack.Screen
-            name="(auth)/signup"
+            name="(auth)"
             options={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }}
           />
           <Stack.Screen name="(app)" options={{ headerShown: false }} />

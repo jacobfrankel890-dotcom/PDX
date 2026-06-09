@@ -29,6 +29,7 @@ import {
 } from "../../../lib/expenses";
 import { formatCurrency, getCompanyLabel, getRegionLabel, type Profile } from "../../../lib/types";
 import { getErrorMessage } from "../../../lib/utils";
+import { hapticLight, scrollHapticHandlers } from "../../../lib/haptics";
 import { useTheme } from "../../../lib/settings-context";
 import { getFabBottom, getHomeListBottomPadding, tabBarLayout } from "../../../lib/tab-bar-layout";
 import { PdxLogo } from "../../../components/PdxLogo";
@@ -251,6 +252,7 @@ export default function DashboardScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id!}
+        {...scrollHapticHandlers}
         contentContainerStyle={[styles.list, { paddingBottom: getHomeListBottomPadding(insets) }]}
         refreshControl={
           <RefreshControl
@@ -279,7 +281,10 @@ export default function DashboardScreen() {
         renderItem={({ item }) => (
           <Pressable
             style={styles.expenseCard}
-            onPress={() => router.push(`/(app)/expense/${item.id}`)}
+            onPress={() => {
+              hapticLight();
+              router.push(`/(app)/expense/${item.id}`);
+            }}
           >
             <View style={styles.categoryStripe}>
               <Text style={styles.stripeEmoji}>

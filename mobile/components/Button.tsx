@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from "react-native";
 import { useTheme } from "../lib/settings-context";
+import { hapticLight } from "../lib/haptics";
 
 type Props = {
   title: string;
@@ -18,7 +19,10 @@ export function Button({ title, onPress, loading, variant = "primary", disabled,
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        hapticLight();
+        onPress();
+      }}
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.base,
