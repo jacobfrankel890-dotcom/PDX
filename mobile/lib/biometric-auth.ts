@@ -37,6 +37,13 @@ function getSecureStoreNative(): SecureStoreNative | null {
   return requireOptionalNativeModule<SecureStoreNative>("ExpoSecureStore");
 }
 
+function getErrorMessage(error: unknown): string | null {
+  if (!error) return null;
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error.trim().length > 0) return error;
+  return null;
+}
+
 export function isBiometricNativeAvailable(): boolean {
   return getLocalAuthNative() != null && getSecureStoreNative() != null;
 }
@@ -100,9 +107,18 @@ export async function promptBiometric(reason: string): Promise<boolean> {
 
 export async function enableBiometricLogin(refreshToken: string): Promise<void> {
   const SecureStore = getSecureStoreNative();
-  if (!SecureStore) throw new Error("Secure storage requires a new app build");
-  await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
-  await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, "true");
+  if (!SecureStore) throw new Error("Secure storage is not available on this device.");
+  try {
+    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+    await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, "true");
+  } catch (error) {
+    const detail = getErrorMessage(error);
+    throw new Error(
+      detail
+        ? `Could not enable biometric sign-in: ${detail}`
+        : "Could not enable biometric sign-in. Please try again."
+    );
+  }
 }
 
 export async function disableBiometricLogin(): Promise<void> {
@@ -188,8 +204,13 @@ export async function offerBiometricSetupAfterLogin(): Promise<void> {
           try {
             const authed = await promptBiometric(`Confirm ${label} setup`);
             if (authed) await enableBiometricLogin(refreshToken);
-          } catch {
-            Alert.alert("Not available yet", "Biometric sign-in requires the next app build from TestFlight.");
+          } catch (error) {
+            const detail = getErrorMessage(error);
+            Alert.alert(
+              "Couldn't enable biometrics",
+              detail ??
+                "Biometric sign-in could not be enabled on this device. You can try again later from Profile > Security."
+            );
           }
         },
       },
