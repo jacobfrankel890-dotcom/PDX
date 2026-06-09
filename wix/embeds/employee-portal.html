@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDX Expense Portal</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface2: #243044;
+      --border: #2d3a4f;
+      --text: #e8edf4;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 10px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 28px; flex-wrap: wrap; gap: 12px;
+    }
+    .logo { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+    .logo span { color: var(--accent); }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    h2 { font-size: 1.1rem; margin-bottom: 16px; }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 0.95rem;
+      margin-bottom: 14px;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 10px 18px; border: none; border-radius: 8px;
+      font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+    .error { color: var(--danger); font-size: 0.85rem; margin-bottom: 12px; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat {
+      background: var(--surface2); border-radius: 8px; padding: 14px;
+      border: 1px solid var(--border);
+    }
+    .stat-value { font-size: 1.4rem; font-weight: 700; }
+    .stat-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+    .badge {
+      display: inline-block; padding: 3px 8px; border-radius: 999px;
+      font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+    }
+    .badge-draft { background: #374151; color: #d1d5db; }
+    .badge-submitted { background: #1e3a5f; color: #93c5fd; }
+    .badge-approved { background: #14532d; color: #86efac; }
+    .badge-rejected { background: #450a0a; color: #fca5a5; }
+    .hidden { display: none !important; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .tab {
+      padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); cursor: pointer; font-size: 0.875rem;
+    }
+    .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .loading { text-align: center; padding: 40px; color: var(--muted); }
+    .user-bar { display: flex; align-items: center; gap: 12px; }
+    .user-name { font-size: 0.875rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">PDX <span>Expense</span></div>
+      <div id="userBar" class="user-bar hidden">
+        <span class="user-name" id="userName"></span>
+        <button class="btn btn-ghost btn-sm" id="signOutBtn">Sign out</button>
+      </div>
+    </div>
+
+    <!-- Auth -->
+    <div id="authView" class="card">
+      <h2>Sign in</h2>
+      <p class="muted" style="margin-bottom:16px">Use the same email and password as the PDX Expense mobile app.</p>
+      <div id="authError" class="error hidden"></div>
+      <label for="email">Email</label>
+      <input type="email" id="email" placeholder="you@company.com" autocomplete="email" />
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Password" autocomplete="current-password" />
+      <button class="btn btn-primary" id="signInBtn" style="width:100%">Sign in</button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="appView" class="hidden">
+      <div class="stats" id="statsRow"></div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="expenses">My Expenses</button>
+        <button class="tab" data-tab="reports">Reports</button>
+        <button class="tab" data-tab="submit">Add Expense</button>
+      </div>
+
+      <div id="tab-expenses">
+        <div class="card">
+          <h2>Recent expenses</h2>
+          <div id="expensesTable"><div class="loading">Loading…</div></div>
+        </div>
+      </div>
+
+      <div id="tab-reports" class="hidden">
+        <div class="card">
+          <h2>Pay period reports</h2>
+          <div id="reportsTable"><div class="loading">Loading…</div></div>
+        </div>
+      </div>
+
+      <div id="tab-submit" class="hidden">
+        <div class="card">
+          <h2>Quick expense entry</h2>
+          <div id="submitError" class="error hidden"></div>
+          <div class="grid-2">
+            <div>
+              <label for="expAmount">Amount ($)</label>
+              <input type="number" id="expAmount" step="0.01" min="0" placeholder="0.00" />
+            </div>
+            <div>
+              <label for="expDate">Date</label>
+              <input type="date" id="expDate" />
+            </div>
+          </div>
+          <label for="expCategory">Category</label>
+          <select id="expCategory"></select>
+          <label for="expDesc">Description</label>
+          <input type="text" id="expDesc" placeholder="What was this expense for?" />
+          <label for="expRelated">Related to (optional)</label>
+          <input type="text" id="expRelated" placeholder="Customer, project, etc." />
+          <button class="btn btn-primary" id="submitExpenseBtn">Save to draft report</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="configWait" class="loading">Connecting to PDX Expense…</div>
+  </div>
+
+  <script>
+    const CATEGORIES = [
+      { key: "travel_lodging", label: "TRV / LOD" },
+      { key: "tolls_parking", label: "Toll/Parking" },
+      { key: "office_supplies", label: "OFF. SUP & EQP" },
+      { key: "meals_entertainment", label: "Meals & Enter." },
+      { key: "vehicle_maintenance", label: "Cell & / M" },
+      { key: "marketing", label: "Marketing" },
+      { key: "misc", label: "Misc." },
+    ];
+
+    const REGIONS = {
+      cpx: "CPX", pdx_north: "PDX North", apx: "APX", pdx: "PDX",
+      pdx_south: "PDX South", pdx_west: "PDX West", apx_california: "APX California",
+    };
+
+    let supabase = null;
+    let config = null;
+    let profile = null;
+
+    function $(id) { return document.getElementById(id); }
+    function show(el) { el.classList.remove("hidden"); }
+    function hide(el) { el.classList.add("hidden"); }
+    function fmt(n) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0); }
+    function fmtDate(d) { if (!d) return "—"; return new Date(d + "T12:00:00").toLocaleDateString(); }
+
+    function badge(status) {
+      return `<span class="badge badge-${status}">${status}</span>`;
+    }
+
+    function getCategoryFromItem(item) {
+      for (const c of CATEGORIES) {
+        if (Number(item[c.key] || 0) > 0) return c.label;
+      }
+      if (Number(item.mileage_calc || 0) > 0) return "Mileage";
+      return "—";
+    }
+
+    function getAmountFromItem(item) {
+      for (const c of CATEGORIES) {
+        const v = Number(item[c.key] || 0);
+        if (v > 0) return v;
+      }
+      return Number(item.mileage_calc || 0) || Number(item.row_total || 0);
+    }
+
+    function initSupabase() {
+      if (!config?.supabaseUrl || !config?.supabaseAnonKey) return false;
+      supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+        auth: { persistSession: true, autoRefreshToken: true },
+      });
+      return true;
+    }
+
+    async function loadProfile(userId) {
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single();
+      if (error) throw error;
+      profile = data;
+      $("userName").textContent = `${profile.first_name} ${profile.last_name}`;
+      show($("userBar"));
+    }
+
+    async function getOrCreateDraftReport(userId) {
+      const today = new Date();
+      const day = today.getDay();
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - ((day + 6) % 7));
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      const start = monday.toISOString().slice(0, 10);
+      const end = sunday.toISOString().slice(0, 10);
+
+      const { data: existing } = await supabase
+        .from("expense_reports")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("status", "draft")
+        .eq("pay_period_start", start)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (existing?.[0]) return existing[0];
+
+      const { data, error } = await supabase
+        .from("expense_reports")
+        .insert({ user_id: userId, pay_period_start: start, pay_period_end: end, status: "draft" })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }
+
+    async function loadExpenses(userId) {
+      const { data: reports } = await supabase
+        .from("expense_reports")
+        .select("id, status, pay_period_start")
+        .eq("user_id", userId);
+
+      if (!reports?.length) {
+        $("expensesTable").innerHTML = '<p class="muted">No expenses yet. Add one from the Add Expense tab.</p>';
+        return [];
+      }
+
+      const reportMap = Object.fromEntries(reports.map((r) => [r.id, r]));
+      const { data: items, error } = await supabase
+        .from("expense_line_items")
+        .select("*")
+        .in("report_id", reports.map((r) => r.id))
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      if (!items?.length) {
+        $("expensesTable").innerHTML = '<p class="muted">No expenses yet.</p>';
+        return [];
+      }
+
+      $("expensesTable").innerHTML = `
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th>Status</th>
+          </tr></thead>
+          <tbody>${items.map((item) => {
+            const report = reportMap[item.report_id];
+            return `<tr>
+              <td>${fmtDate(item.expense_date)}</td>
+              <td>${item.description || "—"}</td>
+              <td>${getCategoryFromItem(item)}</td>
+              <td>${fmt(getAmountFromItem(item))}</td>
+              <td>${badge(report?.status || "draft")}</td>
+            </tr>`;
+          }).join("")}</tbody>
+        </table>`;
+
+      return items;
+    }
+
+    async function loadReports(userId) {
+      const { data: reports, error } = await supabase
+        .from("expense_reports")
+        .select("*")
+        .eq("user_id", userId)
+        .order("pay_period_start", { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+
+      if (!reports?.length) {
+        $("reportsTable").innerHTML = '<p class="muted">No reports yet.</p>';
+        return;
+      }
+
+      $("reportsTable").innerHTML = `
+        <table>
+          <thead><tr>
+            <th>Pay period</th><th>Total</th><th>Status</th><th>Action</th>
+          </tr></thead>
+          <tbody>${reports.map((r) => `<tr>
+            <td>${fmtDate(r.pay_period_start)} – ${fmtDate(r.pay_period_end)}</td>
+            <td>${fmt(r.grand_total)}</td>
+            <td>${badge(r.status)}</td>
+            <td>${r.status === "draft" && r.grand_total > 0
+              ? `<button class="btn btn-success btn-sm" data-submit-report="${r.id}">Submit</button>`
+              : "—"}</td>
+          </tr>`).join("")}</tbody>
+        </table>`;
+
+      document.querySelectorAll("[data-submit-report]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          const { error } = await supabase
+            .from("expense_reports")
+            .update({ status: "submitted", submitted_at: new Date().toISOString() })
+            .eq("id", btn.dataset.submitReport)
+            .eq("status", "draft");
+          if (error) alert(error.message);
+          else await refreshDashboard();
+        });
+      });
+    }
+
+    async function refreshDashboard() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      await loadProfile(session.user.id);
+      await loadExpenses(session.user.id);
+      await loadReports(session.user.id);
+
+      const { data: reports } = await supabase
+        .from("expense_reports")
+        .select("grand_total, status")
+        .eq("user_id", session.user.id);
+
+      const draftTotal = (reports || []).filter((r) => r.status === "draft").reduce((s, r) => s + Number(r.grand_total || 0), 0);
+      const pending = (reports || []).filter((r) => r.status === "submitted").length;
+
+      $("statsRow").innerHTML = `
+        <div class="stat"><div class="stat-value">${fmt(draftTotal)}</div><div class="stat-label">Draft total</div></div>
+        <div class="stat"><div class="stat-value">${pending}</div><div class="stat-label">Pending review</div></div>
+        <div class="stat"><div class="stat-value">${REGIONS[profile?.region] || profile?.region || "—"}</div><div class="stat-label">Region</div></div>`;
+    }
+
+    async function showApp() {
+      hide($("authView"));
+      hide($("configWait"));
+      show($("appView"));
+      await refreshDashboard();
+    }
+
+    async function handleSignIn() {
+      const errEl = $("authError");
+      hide(errEl);
+      $("signInBtn").disabled = true;
+
+      try {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: $("email").value.trim(),
+          password: $("password").value,
+        });
+        if (error) throw error;
+        await showApp();
+      } catch (e) {
+        errEl.textContent = e.message;
+        show(errEl);
+      } finally {
+        $("signInBtn").disabled = false;
+      }
+    }
+
+    async function handleSubmitExpense() {
+      const errEl = $("submitError");
+      hide(errEl);
+      $("submitExpenseBtn").disabled = true;
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("Not signed in");
+
+        const amount = Math.round(parseFloat($("expAmount").value || "0") * 100) / 100;
+        const category = $("expCategory").value;
+        const expenseDate = $("expDate").value || new Date().toISOString().slice(0, 10);
+
+        if (amount <= 0) throw new Error("Enter an amount greater than zero");
+
+        const report = await getOrCreateDraftReport(session.user.id);
+
+        const { count } = await supabase
+          .from("expense_line_items")
+          .select("*", { count: "exact", head: true })
+          .eq("report_id", report.id);
+
+        const payload = {
+          report_id: report.id,
+          sort_order: count ?? 0,
+          expense_date: expenseDate,
+          description: $("expDesc").value.trim() || "Expense",
+          related_to: $("expRelated").value.trim() || null,
+          company: profile?.company || null,
+          travel_lodging: 0, tolls_parking: 0, miles: 0, mileage_calc: 0,
+          office_supplies: 0, meals_entertainment: 0, vehicle_maintenance: 0,
+          marketing: 0, misc: 0, row_total: amount,
+        };
+        payload[category] = amount;
+
+        const { error } = await supabase.from("expense_line_items").insert(payload);
+        if (error) throw error;
+
+        $("expAmount").value = "";
+        $("expDesc").value = "";
+        $("expRelated").value = "";
+        document.querySelector('[data-tab="expenses"]').click();
+        await refreshDashboard();
+      } catch (e) {
+        errEl.textContent = e.message;
+        show(errEl);
+      } finally {
+        $("submitExpenseBtn").disabled = false;
+      }
+    }
+
+    function setupTabs() {
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+          ["expenses", "reports", "submit"].forEach((name) => {
+            const el = $(`tab-${name}`);
+            name === tab.dataset.tab ? show(el) : hide(el);
+          });
+        });
+      });
+    }
+
+    function setupCategorySelect() {
+      $("expCategory").innerHTML = CATEGORIES.map((c) =>
+        `<option value="${c.key}">${c.label}</option>`
+      ).join("");
+    }
+
+    async function bootstrap() {
+      setupTabs();
+      setupCategorySelect();
+      $("expDate").value = new Date().toISOString().slice(0, 10);
+
+      $("signInBtn").addEventListener("click", handleSignIn);
+      $("password").addEventListener("keydown", (e) => { if (e.key === "Enter") handleSignIn(); });
+      $("signOutBtn").addEventListener("click", async () => {
+        await supabase.auth.signOut();
+        hide($("appView"));
+        show($("authView"));
+        hide($("userBar"));
+      });
+      $("submitExpenseBtn").addEventListener("click", handleSubmitExpense);
+
+      if (!initSupabase()) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) await showApp();
+      else {
+        hide($("configWait"));
+        show($("authView"));
+      }
+    }
+
+    window.addEventListener("message", (event) => {
+      const data = event.data;
+      if (data?.type === "config" && data.supabaseUrl && data.supabaseAnonKey) {
+        config = data;
+        hide($("configWait"));
+        bootstrap();
+      }
+    });
+
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: "ready" }, "*");
+    } else {
+      config = {
+        supabaseUrl: "https://fubgrrthbqdgxvggccwk.supabase.co",
+        supabaseAnonKey: "REPLACE_WITH_ANON_KEY",
+      };
+      bootstrap();
+    }
+  </script>
+</body>
+</html>

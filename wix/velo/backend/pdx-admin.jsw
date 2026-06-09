@@ -1,0 +1,254 @@
+import { supabaseRest, verifyAdminAccessToken } from "backend/supabase-client";
+
+const PROFILE_SELECT =
+  "id,first_name,last_name,email,phone,role,region,company,created_at";
+
+const REPORT_SELECT =
+  "id,user_id,pay_period_start,pay_period_end,status,grand_total,submitted_at,approved_at,approved_by,total_travel_lodging,total_tolls_parking,total_miles,total_mileage_calc,total_office_supplies,total_meals_entertainment,total_vehicle_maintenance,total_marketing,total_misc";
+
+async function withAdmin(accessToken, fn) {
+  const admin = await verifyAdminAccessToken(accessToken);
+  return fn(admin);
+}
+
+/**
+ * Reports awaiting finance review.
+ */
+export async function listPendingReports(accessToken) {
+  return withAdmin(accessToken, async () => {
+    const reports = await supabaseRest(
+      `expense_reports?status=eq.submitted&select=${REPORT_SELECT},profiles!expense_reports_user_id_fkey(${PROFILE_SELECT})&order=submitted_at.asc`
+    );
+
+    return (reports || []).map((row) => ({
+      ...row,
+      employee: row.profiles || null,
+      profiles: undefined,
+    }));
+  });
+}
+
+/**
+ * All reports for a pay-period window (defaults to current month).
+ */
+export async function listReports(accessToken, payPeriodStart, payPeriodEnd) {
+  return withAdmin(accessToken, async () => {
+    let query = `expense_reports?select=${REPORT_SELECT},profiles!expense_reports_user_id_fkey(${PROFILE_SELECT})&order=submitted_at.desc.nullslast`;
+
+    if (payPeriodStart) {
+      query += `&pay_period_start=gte.${payPeriodStart}`;
+    }
+    if (payPeriodEnd) {
+      query += `&pay_period_end=lte.${payPeriodEnd}`;
+    }
+
+    const reports = await supabaseRest(query);
+    return (reports || []).map((row) => ({
+      ...row,
+      employee: row.profiles || null,
+      profiles: undefined,
+    }));
+  });
+}
+
+/**
+ * Line items for a single report.
+ */
+export async function getReportLineItems(accessToken, reportId) {
+  return withAdmin(accessToken, async () => {
+    return supabaseRest(
+      `expense_line_items?report_id=eq.${reportId}&select=*&order=sort_order.asc`
+    );
+  });
+}
+
+/**
+ * Approve a submitted report.
+ */
+export async function approveReport(accessToken, reportId, approverName) {
+  return withAdmin(accessToken, async (admin) => {
+    const name =
+      approverName ||
+      `${admin.user_metadata?.first_name || ""} ${admin.user_metadata?.last_name || ""}`.trim() ||
+      admin.email;
+
+    const rows = await supabaseRest(
+      `expense_reports?id=eq.${reportId}&status=eq.submitted`,
+      {
+        method: "PATCH",
+        prefer: "return=representation",
+        body: {
+          status: "approved",
+          approved_at: new Date().toISOString(),
+          approved_by: name,
+        },
+      }
+    );
+
+    if (!rows || rows.length === 0) {
+      throw new Error("Report not found or not in submitted status");
+    }
+
+    return rows[0];
+  });
+}
+
+/**
+ * Reject a submitted report (employee can edit and resubmit).
+ */
+export async function rejectReport(accessToken, reportId, reason) {
+  return withAdmin(accessToken, async () => {
+    const rows = await supabaseRest(
+      `expense_reports?id=eq.${reportId}&status=eq.submitted`,
+      {
+        method: "PATCH",
+        prefer: "return=representation",
+        body: {
+          status: "rejected",
+          notes: reason || null,
+        },
+      }
+    );
+
+    if (!rows || rows.length === 0) {
+      throw new Error("Report not found or not in submitted status");
+    }
+
+    return rows[0];
+  });
+}
+
+/**
+ * Search/list employees.
+ */
+export async function listEmployees(accessToken, region) {
+  return withAdmin(accessToken, async () => {
+    let query = `profiles?select=${PROFILE_SELECT}&order=last_name.asc,first_name.asc`;
+    if (region) {
+      query += `&region=eq.${region}`;
+    }
+    return supabaseRest(query);
+  });
+}
+
+/**
+ * Region summary totals for a date range.
+ */
+export async function getRegionSummary(accessToken, payPeriodStart, payPeriodEnd) {
+  return withAdmin(accessToken, async () => {
+    let query =
+      "expense_reports?status=in.(submitted,approved)&select=grand_total,total_miles,total_mileage_calc,profiles!expense_reports_user_id_fkey(region)";
+
+    if (payPeriodStart) {
+      query += `&pay_period_start=gte.${payPeriodStart}`;
+    }
+    if (payPeriodEnd) {
+      query += `&pay_period_end=lte.${payPeriodEnd}`;
+    }
+
+    const rows = await supabaseRest(query);
+    const summary = {};
+
+    for (const row of rows || []) {
+      const region = row.profiles?.region || "unknown";
+      if (!summary[region]) {
+        summary[region] = {
+          region,
+          report_count: 0,
+          total_expenses: 0,
+          total_miles: 0,
+          total_mileage_dollars: 0,
+        };
+      }
+      summary[region].report_count += 1;
+      summary[region].total_expenses += Number(row.grand_total || 0);
+      summary[region].total_miles += Number(row.total_miles || 0);
+      summary[region].total_mileage_dollars += Number(row.total_mileage_calc || 0);
+    }
+
+    return Object.values(summary).sort((a, b) => a.region.localeCompare(b.region));
+  });
+}
+
+/**
+ * Flat export rows (matches v_expense_export shape).
+ */
+export async function exportExpenseData(accessToken, payPeriodStart, payPeriodEnd) {
+  return withAdmin(accessToken, async () => {
+    let query =
+      "expense_reports?status=in.(submitted,approved)&select=id,pay_period_start,pay_period_end,status,grand_total,submitted_at,approved_at,profiles!expense_reports_user_id_fkey(first_name,last_name,email,region,role,company),expense_line_items(sort_order,expense_date,description,related_to,travel_lodging,tolls_parking,miles,mileage_calc,office_supplies,meals_entertainment,vehicle_maintenance,marketing,misc,row_total)";
+
+    if (payPeriodStart) {
+      query += `&pay_period_start=gte.${payPeriodStart}`;
+    }
+    if (payPeriodEnd) {
+      query += `&pay_period_end=lte.${payPeriodEnd}`;
+    }
+
+    const reports = await supabaseRest(`${query}&order=submitted_at.desc`);
+    const flat = [];
+
+    for (const report of reports || []) {
+      const profile = report.profiles || {};
+      const items = report.expense_line_items || [];
+
+      if (items.length === 0) {
+        flat.push({
+          employee_name: `${profile.first_name || ""} ${profile.last_name || ""}`.trim(),
+          email: profile.email,
+          region: profile.region,
+          role: profile.role,
+          company: profile.company,
+          pay_period_start: report.pay_period_start,
+          pay_period_end: report.pay_period_end,
+          status: report.status,
+          grand_total: report.grand_total,
+          submitted_at: report.submitted_at,
+        });
+        continue;
+      }
+
+      for (const item of items) {
+        flat.push({
+          employee_name: `${profile.first_name || ""} ${profile.last_name || ""}`.trim(),
+          email: profile.email,
+          region: profile.region,
+          role: profile.role,
+          company: profile.company,
+          pay_period_start: report.pay_period_start,
+          pay_period_end: report.pay_period_end,
+          status: report.status,
+          grand_total: report.grand_total,
+          submitted_at: report.submitted_at,
+          expense_date: item.expense_date,
+          description: item.description,
+          related_to: item.related_to,
+          travel_lodging: item.travel_lodging,
+          tolls_parking: item.tolls_parking,
+          miles: item.miles,
+          mileage_calc: item.mileage_calc,
+          office_supplies: item.office_supplies,
+          meals_entertainment: item.meals_entertainment,
+          vehicle_maintenance: item.vehicle_maintenance,
+          marketing: item.marketing,
+          misc: item.misc,
+          row_total: item.row_total,
+        });
+      }
+    }
+
+    return flat;
+  });
+}
+
+/**
+ * Health check — confirms secrets + DB connectivity (no auth required).
+ * Restrict this page in Wix (password / members-only) if exposed publicly.
+ */
+export async function pingDatabase() {
+  const settings = await supabaseRest("app_settings?key=eq.mileage_rate&select=key,value");
+  return {
+    ok: true,
+    mileage_rate: settings?.[0]?.value ?? null,
+  };
+}

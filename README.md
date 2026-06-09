@@ -6,6 +6,7 @@ Native Expo app for Parts Distribution Xpress expense reporting.
 
 - `mobile/` - React Native / Expo iOS + Android app
 - `supabase/` - schema, migrations, and SQL helpers
+- `wix/` - Wix website HTML embeds + Velo backend (employee portal + admin dashboard)
 - `docs/NATIVE_APP.md` - native build + TestFlight workflow
 
 ## Run From Project Root

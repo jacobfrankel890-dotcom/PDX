@@ -1,5 +1,4 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { format, parseISO } from "date-fns";
 import { EXPENSE_CATEGORIES } from "../lib/categories";
 import { getCategoryFromItem, type ExpenseEntry } from "../lib/expenses";
@@ -10,24 +9,28 @@ type Props = {
   item: ExpenseEntry;
   colors: ThemeColors;
   onPress: () => void;
+  isLast?: boolean;
 };
 
 function formatDate(d: string | null | undefined): string {
   if (!d) return "No date";
   try {
-    return format(parseISO(d), "MMM d");
+    return format(parseISO(d), "MMM d, yyyy");
   } catch {
     return d;
   }
 }
 
-export function ExpenseCompactRow({ item, colors, onPress }: Props) {
+export function ExpenseCompactRow({ item, colors, onPress, isLast }: Props) {
   const cat = EXPENSE_CATEGORIES.find((c) => c.key === getCategoryFromItem(item)) ?? EXPENSE_CATEGORIES[6];
   const isPending = item.report_status === "draft";
   const styles = makeStyles(colors);
 
   return (
-    <Pressable style={({ pressed }) => [styles.row, pressed && styles.pressed]} onPress={onPress}>
+    <Pressable
+      style={({ pressed }) => [styles.row, !isLast && styles.rowBorder, pressed && styles.pressed]}
+      onPress={onPress}
+    >
       <View style={styles.icon}>
         <Text style={styles.emoji}>{cat.emoji}</Text>
       </View>
@@ -40,10 +43,13 @@ export function ExpenseCompactRow({ item, colors, onPress }: Props) {
         </Text>
       </View>
       <View style={styles.right}>
-        <Text style={styles.amount}>{formatCurrency(item.row_total ?? 0)}</Text>
-        <View style={[styles.dot, isPending ? styles.dotPending : styles.dotSubmitted]} />
+        <Text style={[styles.amount, isPending && styles.amountPending]}>
+          {formatCurrency(item.row_total ?? 0)}
+        </Text>
+        <Text style={[styles.status, isPending ? styles.statusPending : styles.statusSubmitted]}>
+          {isPending ? "Pending" : "Submitted"}
+        </Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
     </Pressable>
   );
 }
@@ -53,30 +59,32 @@ function makeStyles(colors: ThemeColors) {
     row: {
       flexDirection: "row",
       alignItems: "center",
-      gap: spacing.sm,
-      paddingVertical: 12,
+      gap: spacing.md,
+      paddingVertical: 14,
       paddingHorizontal: spacing.md,
-      backgroundColor: colors.surface,
+    },
+    rowBorder: {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
-    pressed: { backgroundColor: colors.greenLight },
+    pressed: { opacity: 0.7 },
     icon: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 40,
+      height: 40,
+      borderRadius: 12,
       backgroundColor: colors.bg,
       alignItems: "center",
       justifyContent: "center",
     },
-    emoji: { fontSize: 16 },
-    body: { flex: 1, minWidth: 0, gap: 2 },
-    title: { fontSize: 15, fontWeight: "600", color: colors.text },
-    meta: { fontSize: 12, color: colors.textSecondary },
-    right: { alignItems: "flex-end", gap: 4, marginRight: 2 },
-    amount: { fontSize: 14, fontWeight: "800", color: colors.primary },
-    dot: { width: 8, height: 8, borderRadius: 4 },
-    dotPending: { backgroundColor: colors.primary },
-    dotSubmitted: { backgroundColor: colors.textSecondary },
+    emoji: { fontSize: 18 },
+    body: { flex: 1, minWidth: 0, gap: 3 },
+    title: { fontSize: 16, fontWeight: "600", color: colors.text },
+    meta: { fontSize: 13, color: colors.textSecondary },
+    right: { alignItems: "flex-end", gap: 2 },
+    amount: { fontSize: 15, fontWeight: "700", color: colors.text },
+    amountPending: { color: colors.primary },
+    status: { fontSize: 11, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
+    statusPending: { color: colors.primary },
+    statusSubmitted: { color: colors.textSecondary },
   });
 }

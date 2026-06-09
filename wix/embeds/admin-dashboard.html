@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDX Expense Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface2: #243044;
+      --border: #2d3a4f;
+      --text: #e8edf4;
+      --muted: #8b9cb3;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --radius: 10px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .logo { font-size: 1.35rem; font-weight: 700; }
+    .logo span { color: var(--accent); }
+    .admin-tag { font-size: 0.7rem; background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; }
+    h2 { font-size: 1.05rem; margin-bottom: 16px; }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); color: var(--text); font-size: 0.95rem; margin-bottom: 14px; }
+    .btn { display: inline-flex; align-items: center; padding: 8px 16px; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .error { color: var(--danger); font-size: 0.85rem; margin-bottom: 12px; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    .hidden { display: none !important; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .tab { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 0.875rem; }
+    .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+    .badge-submitted { background: #1e3a5f; color: #93c5fd; }
+    .badge-approved { background: #14532d; color: #86efac; }
+    .badge-rejected { background: #450a0a; color: #fca5a5; }
+    .filters { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; margin-bottom: 16px; }
+    @media (max-width: 700px) { .filters { grid-template-columns: 1fr; } }
+    .detail-panel { background: var(--surface2); border-radius: 8px; padding: 16px; margin-top: 12px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .loading { text-align: center; padding: 32px; color: var(--muted); }
+    .user-bar { display: flex; align-items: center; gap: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">PDX <span>Expense</span><span class="admin-tag">ADMIN</span></div>
+      <div id="userBar" class="user-bar hidden">
+        <span class="muted" id="userName"></span>
+        <button class="btn btn-ghost btn-sm" id="signOutBtn">Sign out</button>
+      </div>
+    </div>
+
+    <div id="authView" class="card">
+      <h2>Admin sign in</h2>
+      <p class="muted" style="margin-bottom:16px">Sign in with a PDX Expense account listed in <code>ADMIN_EMAILS</code>.</p>
+      <div id="authError" class="error hidden"></div>
+      <label for="email">Email</label>
+      <input type="email" id="email" autocomplete="email" />
+      <label for="password">Password</label>
+      <input type="password" id="password" autocomplete="current-password" />
+      <button class="btn btn-primary" id="signInBtn" style="width:100%">Sign in</button>
+    </div>
+
+    <div id="appView" class="hidden">
+      <div class="tabs">
+        <button class="tab active" data-tab="pending">Pending approval</button>
+        <button class="tab" data-tab="export">Export</button>
+        <button class="tab" data-tab="employees">Employees</button>
+      </div>
+
+      <div id="tab-pending">
+        <div class="card">
+          <h2>Reports awaiting review</h2>
+          <div id="pendingTable"><div class="loading">Loading…</div></div>
+          <div id="detailPanel" class="detail-panel hidden"></div>
+        </div>
+      </div>
+
+      <div id="tab-export" class="hidden">
+        <div class="card">
+          <h2>Export expense data</h2>
+          <div class="filters">
+            <div>
+              <label for="exportStart">Pay period start (from)</label>
+              <input type="date" id="exportStart" />
+            </div>
+            <div>
+              <label for="exportEnd">Pay period end (to)</label>
+              <input type="date" id="exportEnd" />
+            </div>
+            <button class="btn btn-primary" id="exportBtn">Download CSV</button>
+          </div>
+          <div id="regionSummary"></div>
+        </div>
+      </div>
+
+      <div id="tab-employees" class="hidden">
+        <div class="card">
+          <h2>Employees</h2>
+          <label for="regionFilter">Filter by region</label>
+          <select id="regionFilter">
+            <option value="">All regions</option>
+            <option value="cpx">CPX</option>
+            <option value="pdx_north">PDX North</option>
+            <option value="apx">APX</option>
+            <option value="pdx">PDX</option>
+            <option value="pdx_south">PDX South</option>
+            <option value="pdx_west">PDX West</option>
+            <option value="apx_california">APX California</option>
+          </select>
+          <div id="employeesTable"><div class="loading">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="configWait" class="loading">Connecting…</div>
+  </div>
+
+  <script>
+    const REGIONS = {
+      cpx: "CPX", pdx_north: "PDX North", apx: "APX", pdx: "PDX",
+      pdx_south: "PDX South", pdx_west: "PDX West", apx_california: "APX California",
+    };
+
+    let supabase = null;
+    let config = null;
+    let accessToken = null;
+    let pendingRequestId = 0;
+    const pendingCallbacks = new Map();
+
+    function $(id) { return document.getElementById(id); }
+    function show(el) { el.classList.remove("hidden"); }
+    function hide(el) { el.classList.add("hidden"); }
+    function fmt(n) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0); }
+    function fmtDate(d) { if (!d) return "—"; return new Date(d + "T12:00:00").toLocaleDateString(); }
+
+    function isInWix() { return window.parent !== window; }
+
+    function callBackend(action, params = {}) {
+      if (!isInWix()) {
+        return Promise.reject(new Error("Admin API requires Wix Velo page bridge. Paste admin-dashboard.js into your Wix page code."));
+      }
+
+      return new Promise((resolve, reject) => {
+        const requestId = `req_${++pendingRequestId}`;
+        pendingCallbacks.set(requestId, { resolve, reject });
+        window.parent.postMessage({ requestId, action, accessToken, ...params }, "*");
+        setTimeout(() => {
+          if (pendingCallbacks.has(requestId)) {
+            pendingCallbacks.delete(requestId);
+            reject(new Error("Request timed out — check Velo page code is published"));
+          }
+        }, 30000);
+      });
+    }
+
+    window.addEventListener("message", (event) => {
+      const data = event.data;
+
+      if (data?.type === "init" || data?.type === "config") {
+        config = data;
+        if (config.supabaseUrl && config.supabaseAnonKey) initSupabase();
+        return;
+      }
+
+      if (data?.requestId && pendingCallbacks.has(data.requestId)) {
+        const { resolve, reject } = pendingCallbacks.get(data.requestId);
+        pendingCallbacks.delete(data.requestId);
+        if (data.ok) resolve(data.data);
+        else reject(new Error(data.error || "Request failed"));
+      }
+    });
+
+    function initSupabase() {
+      supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+        auth: { persistSession: true, autoRefreshToken: true },
+      });
+    }
+
+    async function ensureToken() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not signed in");
+      accessToken = session.access_token;
+      return session;
+    }
+
+    async function loadPending() {
+      $("pendingTable").innerHTML = '<div class="loading">Loading…</div>';
+      hide($("detailPanel"));
+
+      try {
+        const reports = await callBackend("listPending");
+
+        if (!reports?.length) {
+          $("pendingTable").innerHTML = '<p class="muted">No reports pending approval.</p>';
+          return;
+        }
+
+        $("pendingTable").innerHTML = `
+          <table>
+            <thead><tr>
+              <th>Employee</th><th>Region</th><th>Pay period</th><th>Total</th><th>Submitted</th><th></th>
+            </tr></thead>
+            <tbody>${reports.map((r) => {
+              const emp = r.employee || {};
+              return `<tr>
+                <td>${emp.first_name || ""} ${emp.last_name || ""}</td>
+                <td>${REGIONS[emp.region] || emp.region || "—"}</td>
+                <td>${fmtDate(r.pay_period_start)} – ${fmtDate(r.pay_period_end)}</td>
+                <td>${fmt(r.grand_total)}</td>
+                <td>${r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "—"}</td>
+                <td><button class="btn btn-ghost btn-sm" data-view="${r.id}">Review</button></td>
+              </tr>`;
+            }).join("")}</tbody>
+          </table>`;
+
+        document.querySelectorAll("[data-view]").forEach((btn) => {
+          btn.addEventListener("click", () => showReportDetail(btn.dataset.view, reports));
+        });
+      } catch (e) {
+        $("pendingTable").innerHTML = `<p class="error">${e.message}</p>`;
+      }
+    }
+
+    async function showReportDetail(reportId, reports) {
+      const report = reports.find((r) => r.id === reportId);
+      if (!report) return;
+
+      $("detailPanel").innerHTML = '<div class="loading">Loading line items…</div>';
+      show($("detailPanel"));
+
+      try {
+        const items = await callBackend("getLineItems", { reportId });
+        const emp = report.employee || {};
+
+        $("detailPanel").innerHTML = `
+          <h2 style="margin-bottom:8px">${emp.first_name} ${emp.last_name} — ${fmt(report.grand_total)}</h2>
+          <p class="muted" style="margin-bottom:12px">${fmtDate(report.pay_period_start)} – ${fmtDate(report.pay_period_end)} · ${REGIONS[emp.region] || emp.region}</p>
+          <table>
+            <thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead>
+            <tbody>${(items || []).map((i) => `<tr>
+              <td>${fmtDate(i.expense_date)}</td>
+              <td>${i.description || "—"}${i.related_to ? ` <span class="muted">(${i.related_to})</span>` : ""}</td>
+              <td>${fmt(i.row_total)}</td>
+            </tr>`).join("") || '<tr><td colspan="3" class="muted">No line items</td></tr>'}
+          </tbody></table>
+          <div class="actions" style="margin-top:16px">
+            <button class="btn btn-success btn-sm" id="approveBtn">Approve</button>
+            <button class="btn btn-danger btn-sm" id="rejectBtn">Reject</button>
+          </div>`;
+
+        $("approveBtn").addEventListener("click", async () => {
+          $("approveBtn").disabled = true;
+          try {
+            await callBackend("approve", { reportId });
+            await loadPending();
+          } catch (e) { alert(e.message); $("approveBtn").disabled = false; }
+        });
+
+        $("rejectBtn").addEventListener("click", async () => {
+          const reason = prompt("Rejection reason (optional):");
+          $("rejectBtn").disabled = true;
+          try {
+            await callBackend("reject", { reportId, reason });
+            await loadPending();
+          } catch (e) { alert(e.message); $("rejectBtn").disabled = false; }
+        });
+      } catch (e) {
+        $("detailPanel").innerHTML = `<p class="error">${e.message}</p>`;
+      }
+    }
+
+    async function loadEmployees() {
+      $("employeesTable").innerHTML = '<div class="loading">Loading…</div>';
+      try {
+        const region = $("regionFilter").value;
+        const employees = await callBackend("listEmployees", { region: region || undefined });
+
+        $("employeesTable").innerHTML = `
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Region</th></tr></thead>
+            <tbody>${(employees || []).map((e) => `<tr>
+              <td>${e.first_name} ${e.last_name}</td>
+              <td>${e.email}</td>
+              <td>${e.role === "regional_manager" ? "Regional Manager" : "KAM"}</td>
+              <td>${REGIONS[e.region] || e.region}</td>
+            </tr>`).join("")}</tbody>
+          </table>`;
+      } catch (e) {
+        $("employeesTable").innerHTML = `<p class="error">${e.message}</p>`;
+      }
+    }
+
+    async function loadRegionSummary() {
+      const start = $("exportStart").value;
+      const end = $("exportEnd").value;
+      if (!start || !end) return;
+
+      try {
+        const summary = await callBackend("regionSummary", { payPeriodStart: start, payPeriodEnd: end });
+        $("regionSummary").innerHTML = summary?.length ? `
+          <h2 style="margin-top:20px">Region summary</h2>
+          <table>
+            <thead><tr><th>Region</th><th>Reports</th><th>Total</th><th>Miles</th></tr></thead>
+            <tbody>${summary.map((s) => `<tr>
+              <td>${REGIONS[s.region] || s.region}</td>
+              <td>${s.report_count}</td>
+              <td>${fmt(s.total_expenses)}</td>
+              <td>${Number(s.total_miles).toFixed(1)}</td>
+            </tr>`).join("")}</tbody>
+          </table>` : '<p class="muted" style="margin-top:12px">No data for this period.</p>';
+      } catch (e) {
+        $("regionSummary").innerHTML = `<p class="error">${e.message}</p>`;
+      }
+    }
+
+    function toCsv(rows) {
+      if (!rows?.length) return "";
+      const headers = Object.keys(rows[0]);
+      const escape = (v) => {
+        const s = v == null ? "" : String(v);
+        return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      return [headers.join(","), ...rows.map((r) => headers.map((h) => escape(r[h])).join(","))].join("\n");
+    }
+
+    async function handleExport() {
+      const start = $("exportStart").value;
+      const end = $("exportEnd").value;
+      if (!start || !end) { alert("Select a date range"); return; }
+
+      $("exportBtn").disabled = true;
+      try {
+        const rows = await callBackend("export", { payPeriodStart: start, payPeriodEnd: end });
+        const csv = toCsv(rows);
+        const blob = new Blob([csv], { type: "text/csv" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `pdx-expenses_${start}_${end}.csv`;
+        a.click();
+        await loadRegionSummary();
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        $("exportBtn").disabled = false;
+      }
+    }
+
+    async function showApp(session) {
+      hide($("authView"));
+      hide($("configWait"));
+      show($("appView"));
+      $("userName").textContent = session.user.email;
+      show($("userBar"));
+      accessToken = session.access_token;
+      await loadPending();
+    }
+
+    async function handleSignIn() {
+      const errEl = $("authError");
+      hide(errEl);
+      $("signInBtn").disabled = true;
+
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: $("email").value.trim(),
+          password: $("password").value,
+        });
+        if (error) throw error;
+
+        accessToken = data.session.access_token;
+        await callBackend("listPending");
+        await showApp(data.session);
+      } catch (e) {
+        errEl.textContent = e.message;
+        show(errEl);
+      } finally {
+        $("signInBtn").disabled = false;
+      }
+    }
+
+    function setupTabs() {
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.addEventListener("click", async () => {
+          document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+          ["pending", "export", "employees"].forEach(async (name) => {
+            const el = $(`tab-${name}`);
+            name === tab.dataset.tab ? show(el) : hide(el);
+          });
+          if (tab.dataset.tab === "employees") await loadEmployees();
+          if (tab.dataset.tab === "export") await loadRegionSummary();
+        });
+      });
+    }
+
+    function setDefaultDates() {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      $("exportStart").value = start.toISOString().slice(0, 10);
+      $("exportEnd").value = end.toISOString().slice(0, 10);
+    }
+
+    async function bootstrap() {
+      if (!config?.supabaseUrl) return;
+
+      initSupabase();
+      setupTabs();
+      setDefaultDates();
+
+      $("signInBtn").addEventListener("click", handleSignIn);
+      $("password").addEventListener("keydown", (e) => { if (e.key === "Enter") handleSignIn(); });
+      $("signOutBtn").addEventListener("click", async () => {
+        await supabase.auth.signOut();
+        accessToken = null;
+        hide($("appView"));
+        show($("authView"));
+        hide($("userBar"));
+      });
+      $("exportBtn").addEventListener("click", handleExport);
+      $("regionFilter").addEventListener("change", loadEmployees);
+      $("exportStart").addEventListener("change", loadRegionSummary);
+      $("exportEnd").addEventListener("change", loadRegionSummary);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        try {
+          accessToken = session.access_token;
+          await callBackend("listPending");
+          await showApp(session);
+        } catch {
+          hide($("configWait"));
+          show($("authView"));
+        }
+      } else {
+        hide($("configWait"));
+        show($("authView"));
+      }
+    }
+
+    if (isInWix()) {
+      window.parent.postMessage({ type: "ready" }, "*");
+    } else {
+      config = {
+        supabaseUrl: "https://fubgrrthbqdgxvggccwk.supabase.co",
+        supabaseAnonKey: "REPLACE_WITH_ANON_KEY",
+      };
+      bootstrap();
+    }
+  </script>
+</body>
+</html>
