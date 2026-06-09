@@ -6,7 +6,7 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const EXPO_PUSH_URL = "https://exp-api.expo.dev/v2/push/send";
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
 type PushPayload = {
   to: string;
@@ -47,13 +47,26 @@ async function sendExpoPush(messages: PushPayload[]) {
       "Accept-encoding": "gzip, deflate",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify(messages),
   });
 
-  const body = await res.json();
+  const raw = await res.text();
+  let body: Record<string, unknown> = {};
+  try {
+    body = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(
+      raw.trimStart().startsWith("<?xml")
+        ? "Expo push service returned an unexpected response. Check push credentials in EAS."
+        : "Expo push service returned invalid JSON."
+    );
+  }
+
   if (!res.ok) {
     const detail =
-      typeof body?.errors?.[0]?.message === "string"
+      typeof body?.errors === "object" &&
+      Array.isArray(body.errors) &&
+      typeof body.errors[0]?.message === "string"
         ? body.errors[0].message
         : typeof body?.message === "string"
           ? body.message
@@ -61,7 +74,7 @@ async function sendExpoPush(messages: PushPayload[]) {
     throw new Error(detail);
   }
 
-  const tickets = Array.isArray(body?.data) ? body.data : [];
+  const tickets = Array.isArray(body?.data) ? body.data : body?.data ? [body.data] : [];
   const ticketError = tickets.find(
     (ticket: { status?: string; message?: string }) => ticket?.status === "error"
   );

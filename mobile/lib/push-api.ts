@@ -4,9 +4,15 @@ import { supabase } from "./supabase";
 async function readFunctionError(error: unknown): Promise<string | null> {
   if (!(error instanceof FunctionsHttpError)) return null;
   try {
-    const context = await error.context.json();
-    if (context && typeof context === "object" && "error" in context && context.error) {
-      return String(context.error);
+    const raw = await error.context.text();
+    if (!raw) return null;
+    try {
+      const context = JSON.parse(raw) as { error?: unknown };
+      if (context?.error) return String(context.error);
+    } catch {
+      if (raw.trimStart().startsWith("<?xml") || raw.trimStart().startsWith("<")) {
+        return "Push service returned an unexpected response. Try again in a moment.";
+      }
     }
   } catch {
     /* ignore */
