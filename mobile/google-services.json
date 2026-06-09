@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "535211621014",
+    "project_id": "reroute-65ab9",
+    "storage_bucket": "reroute-65ab9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:535211621014:android:0c87d6d09a1147856c60b7",
+        "android_client_info": {
+          "package_name": "com.jfrankel.rerouteexpo"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "535211621014-vjhscm9ppp0i52dvh4127bd5i3g9nrac.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOwCZASFw685e9f-x2xMsdOkxYNGIxPkI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "535211621014-vjhscm9ppp0i52dvh4127bd5i3g9nrac.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:535211621014:android:53cb6d0c30b5c5566c60b7",
+        "android_client_info": {
+          "package_name": "com.partsdistributionxpress.expense"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "535211621014-vjhscm9ppp0i52dvh4127bd5i3g9nrac.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOwCZASFw685e9f-x2xMsdOkxYNGIxPkI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "535211621014-vjhscm9ppp0i52dvh4127bd5i3g9nrac.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
