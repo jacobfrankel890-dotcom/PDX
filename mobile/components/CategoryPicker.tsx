@@ -18,8 +18,8 @@ type Props = {
 export function CategoryPicker({ value, onChange, embedded }: Props) {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const styles = makeStyles(colors);
+  const { colors, isDark } = useTheme();
+  const styles = makeStyles(colors, isDark);
   const selected = normalizeCategory(String(value));
 
   return (
@@ -64,12 +64,12 @@ export function CategoryPicker({ value, onChange, embedded }: Props) {
   );
 }
 
-function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+function makeStyles(colors: ReturnType<typeof useTheme>["colors"], isDark: boolean) {
   return StyleSheet.create({
   trigger: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -84,16 +84,18 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     paddingHorizontal: 2,
     paddingVertical: 10,
   },
-  triggerLabel: { fontSize: 13, fontWeight: "600", color: colors.slate500 },
-  triggerValue: { flex: 1, fontSize: 15, fontWeight: "600", color: colors.slate800, textAlign: "right" },
-  chevron: { fontSize: 14, color: colors.slate500 },
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
+  triggerLabel: { fontSize: 13, fontWeight: "600", color: colors.textSecondary },
+  triggerValue: { flex: 1, fontSize: 15, fontWeight: "600", color: colors.text, textAlign: "right" },
+  chevron: { fontSize: 14, color: colors.textSecondary },
+  backdrop: { flex: 1, backgroundColor: isDark ? "rgba(0,0,0,0.65)" : "rgba(0,0,0,0.4)" },
   sheet: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     padding: spacing.md,
     maxHeight: "72%",
+    borderTopWidth: 1,
+    borderColor: colors.border,
   },
   sheetTitle: { fontSize: 18, fontWeight: "700", color: colors.primary, marginBottom: spacing.md },
   option: {
@@ -103,14 +105,13 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     paddingHorizontal: 12,
     borderRadius: radius.sm,
     marginBottom: 4,
-    gap: 12,
   },
   optionActive: { backgroundColor: colors.greenLight },
   optionEmoji: { fontSize: 22, width: 28, textAlign: "center" },
   optionTextWrap: { flex: 1, gap: 2 },
-  optionText: { fontSize: 16, color: colors.slate800 },
-  optionTextActive: { color: colors.primary, fontWeight: "600" },
-  optionShort: { fontSize: 12, color: colors.slate500 },
+  optionText: { fontSize: 16, color: colors.text, fontWeight: "500" },
+  optionTextActive: { color: colors.primary, fontWeight: "700" },
+  optionShort: { fontSize: 12, color: colors.textSecondary },
   check: { color: colors.primary, fontWeight: "700", fontSize: 16 },
   });
 }

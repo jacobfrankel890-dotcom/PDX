@@ -30,11 +30,15 @@ import {
 import { scrollHapticHandlers, hapticSelection, hapticLight } from "../../../lib/haptics";
 import { useToast } from "../../../lib/toast-context";
 import { HapticSwitch } from "../../../components/HapticSwitch";
+import { ProfileCompanyPicker, companyToRegion } from "../../../components/ProfileCompanyPicker";
+import { RolePicker } from "../../../components/RolePicker";
 import {
   getCompanyLabel,
   getRegionLabel,
-  ROLES,
+  getRoleLabel,
+  type CompanyValue,
   type Profile,
+  type UserRole,
 } from "../../../lib/types";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 import { getTabBarStackHeight } from "../../../lib/tab-bar-layout";
@@ -136,6 +140,7 @@ export default function ProfileScreen() {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState("Biometrics");
   const [refreshing, setRefreshing] = useState(false);
+  const [savingWork, setSavingWork] = useState(false);
   const hasLoadedRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -199,6 +204,31 @@ export default function ProfileScreen() {
     setRefreshing(false);
   }
 
+  async function saveWorkDefaults(updates: { role?: UserRole; company?: CompanyValue }) {
+    if (!profile || savingWork) return;
+    setSavingWork(true);
+    try {
+      const payload: Partial<Profile> = { ...updates };
+      if (updates.company) {
+        payload.region = companyToRegion(updates.company);
+      }
+      const { data, error } = await supabase
+        .from("profiles")
+        .update(payload)
+        .eq("id", profile.id)
+        .select("*")
+        .single();
+      if (error) throw error;
+      setProfile(data as Profile);
+      hapticLight();
+      showToast("Work defaults updated");
+    } catch (error) {
+      Alert.alert("Could not save", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setSavingWork(false);
+    }
+  }
+
   async function toggleBiometric(enabled: boolean) {
     if (enabled) {
       try {
@@ -260,7 +290,7 @@ export default function ProfileScreen() {
     );
   }
 
-  const roleLabel = ROLES.find((r) => r.value === profile.role)?.label ?? profile.role;
+  const roleLabel = getRoleLabel(profile.role);
 
   return (
     <ScrollView
@@ -301,6 +331,19 @@ export default function ProfileScreen() {
           </View>
         </View>
       </View>
+
+      <Section title="Work defaults" colors={colors} isDark={isDark}>
+        <ProfileCompanyPicker
+          value={profile.company}
+          onChange={(company) => saveWorkDefaults({ company })}
+        />
+        <RolePicker value={profile.role} onChange={(role) => saveWorkDefaults({ role })} />
+        <View style={styles.workHintRow}>
+          <Text style={styles.workHint}>
+            Used as the default when submitting new receipts. Region: {getRegionLabel(profile.region)}.
+          </Text>
+        </View>
+      </Section>
 
       <Section title="Appearance" colors={colors} isDark={isDark}>
         <View style={styles.themeRow}>
@@ -534,6 +577,15 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     linkRowLabel: { fontSize: 16, fontWeight: "600", color: colors.primary },
     linkRowChevron: { fontSize: 20, color: colors.slate400, fontWeight: "300" },
     rowStatic: { padding: spacing.md },
+    workHintRow: {
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.md,
+    },
+    workHint: {
+      fontSize: 12,
+      lineHeight: 17,
+      color: colors.textSecondary,
+    },
     themeRow: { flexDirection: "row", padding: spacing.sm, gap: spacing.sm },
     themeChip: {
       flex: 1,

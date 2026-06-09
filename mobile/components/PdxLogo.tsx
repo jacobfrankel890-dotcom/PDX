@@ -1,11 +1,6 @@
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../lib/settings-context";
-import {
-  AUTH_GRAY_60,
-  AUTH_INPUT_BG,
-  AUTH_BORDER,
-  AUTH_WHITE,
-} from "../constants/auth-chrome";
+import { AUTH_GRAY_60 } from "../constants/auth-chrome";
 
 export type PdxLogoSize = "sm" | "md" | "lg" | "xl";
 
@@ -16,7 +11,7 @@ type Props = {
   onDark?: boolean;
 };
 
-const SIZES: Record<PdxLogoSize, number> = {
+const LOGO_HEIGHT: Record<PdxLogoSize, number> = {
   sm: 22,
   md: 30,
   lg: 40,
@@ -30,18 +25,22 @@ const TAGLINE: Record<PdxLogoSize, number> = {
   xl: 13,
 };
 
+/** Aspect ratio of `assets/pdx-logo.png` */
+const LOGO_ASPECT = 3.15;
+
 export function PdxLogo({ size = "md", tagline, style, onDark }: Props) {
   const { colors } = useTheme();
-  const fontSize = SIZES[size];
-  const pdColor = onDark ? AUTH_WHITE : colors.text;
+  const height = LOGO_HEIGHT[size];
   const taglineColor = onDark ? AUTH_GRAY_60 : colors.textSecondary;
 
   return (
     <View style={[styles.wrap, style]}>
-      <Text style={[styles.logo, { fontSize }]}>
-        <Text style={[styles.pd, { color: pdColor }]}>PD</Text>
-        <Text style={[styles.x, { color: colors.primary }]}>X</Text>
-      </Text>
+      <Image
+        source={require("../assets/pdx-logo.png")}
+        style={{ height, width: height * LOGO_ASPECT }}
+        resizeMode="contain"
+        accessibilityLabel="PDX Expense"
+      />
       {tagline ? (
         <Text style={[styles.tagline, { fontSize: TAGLINE[size], color: taglineColor }]}>{tagline}</Text>
       ) : null}
@@ -51,14 +50,6 @@ export function PdxLogo({ size = "md", tagline, style, onDark }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { alignItems: "flex-start" },
-  logo: {
-    fontStyle: "italic",
-    fontWeight: "800",
-    letterSpacing: -0.5,
-    includeFontPadding: false,
-  },
-  pd: {},
-  x: {},
   tagline: {
     fontWeight: "600",
     letterSpacing: 1.2,

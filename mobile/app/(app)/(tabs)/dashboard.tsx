@@ -26,7 +26,7 @@ import {
   type ExpenseCategory,
   type ExpenseEntry,
 } from "../../../lib/expenses";
-import { formatCurrency, getCompanyLabel, getRegionLabel, type Profile } from "../../../lib/types";
+import { formatCurrency, getCompanyLabel, type Profile } from "../../../lib/types";
 import { getErrorMessage } from "../../../lib/utils";
 import { hapticLight, hapticSelection, scrollHapticHandlers } from "../../../lib/haptics";
 import { useToast } from "../../../lib/toast-context";
@@ -187,19 +187,29 @@ export default function DashboardScreen() {
   const listHeader = (
     <View style={styles.listHeader}>
       <View style={styles.statsStrip}>
-        <View style={styles.statBlock}>
-          <Text style={styles.statValue}>{formatCurrency(weekTotal)}</Text>
-          <Text style={styles.statLabel}>Pending $</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statBlock}>
-          <Text style={styles.statValue}>{draftCount}</Text>
-          <Text style={styles.statLabel}>Pending</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statBlock}>
-          <Text style={styles.statValue}>{submittedCount}</Text>
-          <Text style={styles.statLabel}>Submitted</Text>
+        <View style={styles.statsRow}>
+          <View style={styles.statBlock}>
+            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+              {formatCurrency(weekTotal)}
+            </Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              Pending $
+            </Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBlock}>
+            <Text style={styles.statValue}>{draftCount}</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              Pending
+            </Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBlock}>
+            <Text style={styles.statValue}>{submittedCount}</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              Submitted
+            </Text>
+          </View>
         </View>
         {draftCount > 0 ? (
           <Pressable
@@ -278,11 +288,6 @@ export default function DashboardScreen() {
           <Text style={styles.greetingCompact} numberOfLines={1}>
             Hi, {profile?.first_name}
           </Text>
-          {profile ? (
-            <Text style={styles.regionCompact} numberOfLines={1}>
-              {getRegionLabel(profile.region)}
-            </Text>
-          ) : null}
         </View>
         <Pressable onPress={openProfile} style={styles.avatar}>
           <Text style={styles.avatarText}>{profile?.first_name?.[0]?.toUpperCase() ?? "?"}</Text>
@@ -406,7 +411,6 @@ function makeStyles(colors: ThemeColors) {
   },
   topBarCenter: { flex: 1, minWidth: 0 },
   greetingCompact: { fontSize: 16, fontWeight: "700", color: colors.text },
-  regionCompact: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   avatar: {
     width: 36,
     height: 36,
@@ -427,7 +431,7 @@ function makeStyles(colors: ThemeColors) {
     borderWidth: 1,
     borderColor: colors.border,
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     gap: 10,
     shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 4 },
@@ -435,29 +439,38 @@ function makeStyles(colors: ThemeColors) {
     shadowRadius: 10,
     elevation: 3,
   },
-  statBlock: {
+  statsRow: {
+    flex: 1,
     flexDirection: "row",
-    alignItems: "baseline",
-    gap: 6,
-    flexShrink: 1,
+    alignItems: "stretch",
+    minWidth: 0,
   },
-  statValue: { fontSize: 16, fontWeight: "800", color: colors.text },
+  statBlock: {
+    flex: 1,
+    flexDirection: "column",
+    justifyContent: "center",
+    gap: 2,
+    minWidth: 0,
+    paddingHorizontal: 2,
+  },
+  statValue: { fontSize: 15, fontWeight: "800", color: colors.text },
   statLabel: {
-    fontSize: 10,
-    fontWeight: "600",
+    fontSize: 9,
+    fontWeight: "700",
     color: colors.textSecondary,
     textTransform: "uppercase",
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
   },
-  statDivider: { width: 1, height: 18, backgroundColor: colors.border },
+  statDivider: { width: 1, alignSelf: "stretch", backgroundColor: colors.border, marginVertical: 2 },
   submitWeekBtn: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: radius.full,
     flexShrink: 0,
+    maxWidth: 96,
   },
-  submitWeekText: { color: colors.onPrimary, fontWeight: "700", fontSize: 13 },
+  submitWeekText: { color: colors.onPrimary, fontWeight: "700", fontSize: 12, textAlign: "center" },
   list: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.sm },
   listHeader: { gap: spacing.sm, marginBottom: spacing.sm },
   searchBox: {
