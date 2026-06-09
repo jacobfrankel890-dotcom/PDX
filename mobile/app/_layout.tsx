@@ -8,7 +8,9 @@ import { enableFreeze } from "react-native-screens";
 import { SettingsProvider, useTheme } from "../lib/settings-context";
 import { AppUpdateGate } from "../components/AppUpdateGate";
 import { initBiometricSessionSync } from "../lib/biometric-auth";
+import { configureNotificationHandler } from "../lib/push-notifications";
 import { getNavigationTheme } from "../lib/navigation-theme";
+import { useNotificationLinking } from "../lib/use-notification-linking";
 import { useRootBackground } from "../lib/use-root-background";
 
 // Screen freezing breaks tab re-renders (blank white scenes after switching tabs).
@@ -55,7 +57,12 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
-  useEffect(() => initBiometricSessionSync(), []);
+  useNotificationLinking();
+
+  useEffect(() => {
+    configureNotificationHandler();
+    initBiometricSessionSync();
+  }, []);
 
   return (
     <SafeAreaProvider>

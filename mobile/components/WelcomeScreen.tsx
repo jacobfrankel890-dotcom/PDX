@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 430,
     alignSelf: "center",
-    paddingHorizontal: authHorizontalPad,
+    paddingHorizontal: authHorizontalPad - grid(0.5),
     paddingTop: grid(2),
   },
   hero: {
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "rgba(255,255,255,0.92)",
     lineHeight: 22,
-    maxWidth: 340,
+    width: "100%",
   },
   actions: {
     gap: grid(3.5),

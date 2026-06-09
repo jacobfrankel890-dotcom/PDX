@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 430,
     alignSelf: "center",
-    paddingHorizontal: authHorizontalPad,
+    paddingHorizontal: authHorizontalPad - grid(0.5),
     paddingTop: grid(2),
   },
   badge: {
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.92)",
     lineHeight: 22,
     marginBottom: grid(3.5),
-    maxWidth: 340,
+    width: "100%",
   },
   form: {
     gap: grid(2.25),

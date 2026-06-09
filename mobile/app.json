@@ -35,13 +35,15 @@
       },
       "permissions": [
         "CAMERA",
-        "READ_MEDIA_IMAGES"
+        "READ_MEDIA_IMAGES",
+        "POST_NOTIFICATIONS"
       ]
     },
     "plugins": [
       "expo-router",
       "expo-updates",
       "expo-secure-store",
+      "expo-notifications",
       "@react-native-community/datetimepicker"
     ],
     "experiments": {

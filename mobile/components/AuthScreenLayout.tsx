@@ -18,7 +18,7 @@ export function AuthScreenLayout({ children }: Props) {
       <BlurView
         intensity={100}
         tint="dark"
-        style={StyleSheet.absoluteFillObject}
+        style={styles.overlay}
         pointerEvents="none"
       />
       <View style={styles.scrim} pointerEvents="none" />
@@ -33,11 +33,22 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  overlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
   image: {
     opacity: 0.45,
   },
   scrim: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundColor: "rgba(0,0,0,0.92)",
   },
   content: {

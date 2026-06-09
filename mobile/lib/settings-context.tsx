@@ -10,6 +10,10 @@ import {
 } from "react";
 import { Alert, useColorScheme } from "react-native";
 import { getColors, type ThemeColors } from "../constants/theme";
+import {
+  disablePushNotificationsForCurrentUser,
+  registerForPushNotificationsAsync,
+} from "./push-notifications";
 
 export type ThemeMode = "light" | "dark" | "system";
 
@@ -75,26 +79,51 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem(STORAGE_NOTIFICATIONS, JSON.stringify(next));
   }, []);
 
-  const registerForPush = useCallback(async (): Promise<boolean> => {
-    Alert.alert(
-      "Push not available yet",
-      "Push notifications will be enabled in a future app update. Your preferences are saved."
-    );
-    return false;
+  const registerForPush = useCallback(async (silent = false): Promise<boolean> => {
+    const result = await registerForPushNotificationsAsync();
+    if (!result.ok) {
+      if (!silent) {
+        Alert.alert("Push setup failed", result.error ?? "Could not enable push notifications.");
+      }
+      return false;
+    }
+
+    if (result.token) {
+      setPushToken(result.token);
+    }
+
+    if (result.syncError && !silent) {
+      Alert.alert(
+        "Push enabled with warning",
+        "Push is enabled on this device, but token sync to backend failed. Run the push-token migration in Supabase."
+      );
+    }
+
+    return true;
   }, []);
 
   const setPushEnabled = useCallback(
     async (enabled: boolean) => {
       if (enabled) {
-        const ok = await registerForPush();
+        const ok = await registerForPush(false);
         await persistNotifications({ ...notifications, pushEnabled: ok });
       } else {
+        await disablePushNotificationsForCurrentUser().catch(() => {
+          /* ignore */
+        });
         setPushToken(null);
         await persistNotifications({ ...notifications, pushEnabled: false });
       }
     },
     [notifications, persistNotifications, registerForPush]
   );
+
+  useEffect(() => {
+    if (!notifications.pushEnabled) return;
+    registerForPush(true).catch(() => {
+      /* ignore */
+    });
+  }, [notifications.pushEnabled, registerForPush]);
 
   const setExpenseReminders = useCallback(
     (enabled: boolean) => {
