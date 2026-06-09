@@ -5,42 +5,30 @@ import { PdxLogo } from "./PdxLogo";
 
 type Props = {
   title: string;
-  subtitle?: string;
   topInset: number;
   style?: StyleProp<ViewStyle>;
   avatarInitial?: string;
   onAvatarPress?: () => void;
 };
 
-export function AppScreenHeader({
-  title,
-  subtitle,
-  topInset,
-  style,
-  avatarInitial,
-  onAvatarPress,
-}: Props) {
+/** Compact home header: logo + greeting + avatar on one row. */
+export function AppScreenHeader({ title, topInset, style, avatarInitial, onAvatarPress }: Props) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
 
   return (
-    <View style={[styles.wrap, { paddingTop: topInset + spacing.sm }, style]}>
-      <View style={styles.logoRow}>
-        <PdxLogo size="app" />
-        {onAvatarPress && avatarInitial ? (
-          <Pressable onPress={onAvatarPress} style={styles.avatar} accessibilityRole="button">
-            <Text style={styles.avatarText}>{avatarInitial}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-      <Text style={styles.title} numberOfLines={2}>
+    <View style={[styles.wrap, { paddingTop: topInset + 4 }, style]}>
+      <PdxLogo size="md" />
+      <Text style={styles.title} numberOfLines={1}>
         {title}
       </Text>
-      {subtitle ? (
-        <Text style={styles.subtitle} numberOfLines={2}>
-          {subtitle}
-        </Text>
-      ) : null}
+      {onAvatarPress && avatarInitial ? (
+        <Pressable onPress={onAvatarPress} style={styles.avatar} accessibilityRole="button">
+          <Text style={styles.avatarText}>{avatarInitial}</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.avatarSpacer} />
+      )}
     </View>
   );
 }
@@ -48,46 +36,37 @@ export function AppScreenHeader({
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     wrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
       paddingHorizontal: spacing.md,
-      paddingBottom: spacing.md,
+      paddingBottom: 10,
       backgroundColor: colors.surface,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-      gap: spacing.sm,
-    },
-    logoRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
     },
     title: {
-      fontSize: 28,
-      fontWeight: "800",
+      flex: 1,
+      fontSize: 20,
+      fontWeight: "700",
       color: colors.text,
-      letterSpacing: -0.6,
-      lineHeight: 34,
-    },
-    subtitle: {
-      fontSize: 15,
-      fontWeight: "500",
-      color: colors.textSecondary,
-      lineHeight: 21,
-      marginTop: -2,
+      letterSpacing: -0.3,
     },
     avatar: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       backgroundColor: colors.greenLight,
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 2,
       borderColor: colors.primary,
     },
+    avatarSpacer: { width: 40 },
     avatarText: {
       color: colors.text,
       fontWeight: "800",
-      fontSize: 18,
+      fontSize: 16,
     },
   });
 }

@@ -1,156 +1,125 @@
+import { Ionicons } from "@expo/vector-icons";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { hapticNavigation } from "../lib/haptics";
 import { useTheme } from "../lib/settings-context";
-import {
-  TAB_BAR_BOTTOM_GAP,
-  TAB_BAR_FLOAT_MARGIN,
-  TAB_BAR_HEIGHT,
-  TAB_BAR_SIDE_INSET,
-} from "../lib/tab-bar-layout";
+import { TAB_BAR_HEIGHT } from "../lib/tab-bar-layout";
 
-const TAB_ICONS: Record<string, string> = {
-  dashboard: "🏠",
-  profile: "👤",
+type TabRoute = "dashboard" | "expenses" | "activity" | "profile";
+
+type TabConfig = {
+  outline: keyof typeof Ionicons.glyphMap;
+  filled: keyof typeof Ionicons.glyphMap;
+  label: string;
+};
+
+const TABS: Record<TabRoute, TabConfig> = {
+  dashboard: { outline: "home-outline", filled: "home", label: "Home" },
+  expenses: { outline: "receipt-outline", filled: "receipt", label: "Expenses" },
+  activity: { outline: "notifications-outline", filled: "notifications", label: "Activity" },
+  profile: { outline: "person-outline", filled: "person", label: "Profile" },
 };
 
 export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   return (
     <View
-      pointerEvents="box-none"
-      style={[styles.wrapper, { paddingBottom: insets.bottom + TAB_BAR_FLOAT_MARGIN + TAB_BAR_BOTTOM_GAP }]}
+      style={[
+        styles.bar,
+        {
+          paddingBottom: insets.bottom,
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
+      ]}
     >
-      <View
-        style={[
-          styles.pillBar,
-          {
-            backgroundColor: isDark ? colors.surface : colors.white,
-            borderColor: colors.tabBarBorder,
-            shadowColor: colors.cardShadow,
-          },
-        ]}
-      >
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const label =
-            typeof options.tabBarLabel === "string"
-              ? options.tabBarLabel
-              : typeof options.title === "string"
-                ? options.title
-                : route.name;
+      {state.routes.map((route, index) => {
+        const tab = TABS[route.name as TabRoute] ?? {
+          outline: "ellipse-outline" as const,
+          filled: "ellipse" as const,
+          label: route.name,
+        };
+        const { options } = descriptors[route.key];
+        const badge = options.tabBarBadge;
+        const isFocused = state.index === index;
 
-          const isFocused = state.index === index;
-          const icon = TAB_ICONS[route.name] ?? "•";
+        const onPress = () => {
+          const event = navigation.emit({
+            type: "tabPress",
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!isFocused && !event.defaultPrevented) {
+            hapticNavigation();
+            navigation.jumpTo(route.name);
+          }
+        };
 
-          const onPress = () => {
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!isFocused && !event.defaultPrevented) {
-              hapticNavigation();
-              navigation.jumpTo(route.name);
-            }
-          };
-
-          return (
-            <Pressable
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-              onPress={onPress}
-              style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
+        return (
+          <Pressable
+            key={route.key}
+            accessibilityRole="button"
+            accessibilityLabel={tab.label}
+            accessibilityState={isFocused ? { selected: true } : {}}
+            onPress={onPress}
+            style={styles.tab}
+          >
+            <View
+              style={[
+                styles.iconWrap,
+                isFocused && { backgroundColor: colors.greenLight },
+              ]}
             >
-              <View
-                style={[
-                  styles.tabPill,
-                  isFocused && {
-                    backgroundColor: colors.greenLight,
-                  },
-                ]}
-              >
-                <Text style={[styles.icon, isFocused && styles.iconFocused]}>{icon}</Text>
-                <Text
-                  style={[
-                    styles.label,
-                    { color: isFocused ? colors.primaryDark : colors.textSecondary },
-                    isFocused && styles.labelFocused,
-                  ]}
-                >
-                  {label}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
+              <Ionicons
+                name={isFocused ? tab.filled : tab.outline}
+                size={24}
+                color={isFocused ? colors.primaryDark : colors.textSecondary}
+              />
+              {badge != null && badge !== false ? (
+                <View style={[styles.badge, { backgroundColor: colors.primary }]} />
+              ) : null}
+            </View>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
+  bar: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: TAB_BAR_SIDE_INSET,
-  },
-  pillBar: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-around",
     minHeight: TAB_BAR_HEIGHT,
-    padding: 6,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    ...Platform.select({
-      ios: {
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.12,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 10,
-      },
-    }),
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   tab: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  tabPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.98 }],
-  },
-  tabPill: {
-    flexDirection: "row",
+  iconWrap: {
+    width: 48,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
   },
-  icon: {
-    fontSize: 18,
-    opacity: 0.75,
-  },
-  iconFocused: {
-    fontSize: 19,
-    opacity: 1,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    letterSpacing: 0.1,
-  },
-  labelFocused: {
-    fontWeight: "700",
+  badge: {
+    position: "absolute",
+    top: 7,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
 });

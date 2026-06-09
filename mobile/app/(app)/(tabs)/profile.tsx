@@ -16,7 +16,7 @@ import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../../lib/supabase";
-import { useSettings, useTheme, type ThemeMode } from "../../../lib/settings-context";
+import { useTheme, type ThemeMode } from "../../../lib/settings-context";
 import { useAppUpdates } from "../../../lib/use-app-updates";
 import {
   disableBiometricLogin,
@@ -29,8 +29,6 @@ import {
 } from "../../../lib/biometric-auth";
 import { hapticSelection, hapticLight } from "../../../lib/haptics";
 import { useToast } from "../../../lib/toast-context";
-import { sendMissingExpensePush, sendTestPushNotification } from "../../../lib/push-api";
-import { registerForPushNotificationsAsync } from "../../../lib/push-notifications";
 import { HapticSwitch } from "../../../components/HapticSwitch";
 import { ProfileCompanyPicker, companyToRegion } from "../../../components/ProfileCompanyPicker";
 import { RolePicker } from "../../../components/RolePicker";
@@ -44,7 +42,6 @@ import {
 } from "../../../lib/types";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 import { getTabBarStackHeight } from "../../../lib/tab-bar-layout";
-import { AppScreenHeader } from "../../../components/AppScreenHeader";
 
 function Section({
   title,
@@ -125,7 +122,6 @@ function ThemeOption({
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { colors, themeMode, setThemeMode, isDark } = useTheme();
-  const { notifications, setPushEnabled, setExpenseReminders, setReportUpdates, pushToken } = useSettings();
   const { info: updateInfo, checkForUpdate } = useAppUpdates(false);
   const { showToast } = useToast();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
@@ -143,7 +139,6 @@ export default function ProfileScreen() {
   const [biometricLabel, setBiometricLabel] = useState("Biometrics");
   const [refreshing, setRefreshing] = useState(false);
   const [savingWork, setSavingWork] = useState(false);
-  const [pushTesting, setPushTesting] = useState(false);
   const hasLoadedRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -232,54 +227,6 @@ export default function ProfileScreen() {
     }
   }
 
-  async function sendTestPush() {
-    if (!notifications.pushEnabled) {
-      Alert.alert("Enable push first", "Turn on push notifications above, then try again.");
-      return;
-    }
-    setPushTesting(true);
-    try {
-      await registerForPushNotificationsAsync();
-      const { sent, delivery } = await sendTestPushNotification();
-      if (sent <= 0) {
-        showToast("No devices registered");
-        return;
-      }
-      if (delivery?.status === "ok") {
-        showToast("Test notification sent");
-        return;
-      }
-      showToast(delivery?.message ?? "Test notification sent");
-    } catch (error) {
-      Alert.alert("Push failed", error instanceof Error ? error.message : "Could not send test notification.");
-    } finally {
-      setPushTesting(false);
-    }
-  }
-
-  async function sendSampleMissingExpensePush() {
-    if (!profile) return;
-    if (!notifications.pushEnabled) {
-      Alert.alert("Enable push first", "Turn on push notifications above, then try again.");
-      return;
-    }
-    setPushTesting(true);
-    try {
-      await sendMissingExpensePush({
-        userId: profile.id,
-        merchant: "Sample Merchant",
-        amount: 42.5,
-        expenseDate: new Date().toISOString().slice(0, 10),
-        note: "Sample missing expense — tap to open the submit form.",
-      });
-      showToast("Sample missing-expense push sent");
-    } catch (error) {
-      Alert.alert("Push failed", error instanceof Error ? error.message : "Could not send notification.");
-    } finally {
-      setPushTesting(false);
-    }
-  }
-
   async function toggleBiometric(enabled: boolean) {
     if (enabled) {
       try {
@@ -342,25 +289,23 @@ export default function ProfileScreen() {
   }
 
   const roleLabel = getRoleLabel(profile.role);
-  const isAdmin = profile.role === "regional_manager";
 
   return (
-    <View style={styles.flex}>
-      <AppScreenHeader title="Profile" topInset={insets.top} subtitle="Settings & account" />
-      <ScrollView
-        style={styles.flex}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.content,
-          {
-            paddingBottom: getTabBarStackHeight(insets) + spacing.lg,
-          },
-        ]}
-      >
+    <ScrollView
+      style={styles.flex}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+      }
+      keyboardDismissMode="on-drag"
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingTop: insets.top + spacing.sm,
+          paddingBottom: getTabBarStackHeight(insets) + spacing.lg,
+        },
+      ]}
+    >
       <View style={styles.userCard}>
         <View style={styles.avatarLarge}>
           <Text style={styles.avatarLargeText}>{profile.first_name?.[0]?.toUpperCase() ?? "?"}</Text>
@@ -369,23 +314,15 @@ export default function ProfileScreen() {
           <Text style={styles.userName}>
             {profile.first_name} {profile.last_name}
           </Text>
-          <Pressable onPress={copyEmail} hitSlop={8} style={styles.emailBlock}>
+          <Pressable onPress={copyEmail} hitSlop={8}>
             <Text style={styles.userEmail} numberOfLines={1}>
               {profile.email}
             </Text>
             <Text style={styles.copyHint}>Tap to copy email</Text>
           </Pressable>
           <View style={styles.userMeta}>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Company</Text>
-              <Text style={styles.metaPill}>{getCompanyShortLabel(profile.company)}</Text>
-            </View>
-            {roleLabel ? (
-              <View style={styles.metaRow}>
-                <Text style={styles.metaLabel}>Role</Text>
-                <Text style={styles.metaPill}>{roleLabel}</Text>
-              </View>
-            ) : null}
+            <Text style={styles.metaPill}>{getCompanyShortLabel(profile.company)}</Text>
+            {roleLabel ? <Text style={styles.metaPill}>{roleLabel}</Text> : null}
           </View>
         </View>
       </View>
@@ -431,75 +368,6 @@ export default function ProfileScreen() {
               thumbColor={colors.white}
             />
           </SettingRow>
-        </Section>
-      ) : null}
-
-      <Section title="Notifications" colors={colors} isDark={isDark}>
-        <SettingRow
-          label="Push notifications"
-          subtitle={pushToken ? "Enabled on this device" : "Get alerts for expense activity"}
-          colors={colors}
-          isDark={isDark}
-        >
-          <HapticSwitch
-            value={notifications.pushEnabled}
-            onValueChange={setPushEnabled}
-            trackColor={{ false: colors.border, true: colors.primaryLight }}
-            thumbColor={colors.white}
-          />
-        </SettingRow>
-        <SettingRow
-          label="Expense reminders"
-          subtitle="Weekly nudge to submit pending receipts"
-          colors={colors}
-          isDark={isDark}
-          last={!notifications.pushEnabled}
-        >
-          <HapticSwitch
-            value={notifications.expenseReminders}
-            onValueChange={setExpenseReminders}
-            disabled={!notifications.pushEnabled}
-            trackColor={{ false: colors.border, true: colors.primaryLight }}
-            thumbColor={colors.white}
-          />
-        </SettingRow>
-        {notifications.pushEnabled ? (
-          <SettingRow
-            label="Report status updates"
-            subtitle="When your expense report is approved or rejected"
-            colors={colors}
-            isDark={isDark}
-            last
-          >
-            <HapticSwitch
-              value={notifications.reportUpdates}
-              onValueChange={setReportUpdates}
-              trackColor={{ false: colors.border, true: colors.primaryLight }}
-              thumbColor={colors.white}
-            />
-          </SettingRow>
-        ) : null}
-      </Section>
-
-      {notifications.pushEnabled ? (
-        <Section title="Push testing" colors={colors} isDark={isDark}>
-          <Pressable style={styles.linkRow} onPress={sendTestPush} disabled={pushTesting}>
-            <Text style={styles.linkRowLabel}>{pushTesting ? "Sending…" : "Send test notification"}</Text>
-            <Text style={styles.linkRowChevron}>›</Text>
-          </Pressable>
-          {isAdmin ? (
-            <Pressable
-              style={[styles.linkRow, styles.linkRowLast]}
-              onPress={sendSampleMissingExpensePush}
-              disabled={pushTesting}
-            >
-              <View style={styles.rowText}>
-                <Text style={styles.linkRowLabel}>Send sample missing expense</Text>
-                <Text style={styles.rowSub}>Admin preview — opens submit form with prefill</Text>
-              </View>
-              <Text style={styles.linkRowChevron}>›</Text>
-            </Pressable>
-          ) : null}
         </Section>
       ) : null}
 
@@ -562,8 +430,7 @@ export default function ProfileScreen() {
       </Section>
 
       <Text style={styles.footer}>PDX Expense · Parts Distribution Xpress</Text>
-      </ScrollView>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -571,15 +438,15 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     flex: { flex: 1, backgroundColor: colors.bg },
     center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg },
-    content: { paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.lg },
-    pageTitle: { fontSize: 28, fontWeight: "800", color: colors.text, textAlign: "center" },
+    content: { paddingHorizontal: spacing.md, gap: spacing.lg },
+    pageTitle: { fontSize: 22, fontWeight: "800", color: colors.text, textAlign: "center" },
     userCard: {
       flexDirection: "row",
-      alignItems: "flex-start",
+      alignItems: "center",
       gap: spacing.md,
       backgroundColor: colors.surface,
       borderRadius: radius.lg,
-      padding: spacing.lg,
+      padding: spacing.md,
       borderWidth: 1,
       borderColor: colors.border,
       shadowColor: colors.cardShadow,
@@ -589,9 +456,9 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
       elevation: 2,
     },
     avatarLarge: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       backgroundColor: colors.greenLight,
       alignItems: "center",
       justifyContent: "center",
@@ -599,42 +466,25 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
       borderColor: colors.primary,
       flexShrink: 0,
     },
-    avatarLargeText: { color: colors.text, fontSize: 26, fontWeight: "800" },
-    userInfo: { flex: 1, minWidth: 0, gap: 4 },
-    userName: { fontSize: 20, fontWeight: "700", color: colors.text },
-    emailBlock: { gap: 2 },
+    avatarLargeText: { color: colors.text, fontSize: 22, fontWeight: "800" },
+    userInfo: { flex: 1, minWidth: 0, gap: 3 },
+    userName: { fontSize: 18, fontWeight: "700", color: colors.text },
     userEmail: { fontSize: 14, color: colors.textSecondary },
     copyHint: { fontSize: 11, color: colors.primary, fontWeight: "600" },
     userMeta: {
-      gap: 8,
-      marginTop: spacing.sm,
-      paddingTop: spacing.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
-    metaRow: {
       flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
-    },
-    metaLabel: {
-      width: 64,
-      fontSize: 11,
-      fontWeight: "700",
-      color: colors.textSecondary,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
+      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 6,
     },
     metaPill: {
-      flex: 1,
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "600",
       color: colors.primaryDark,
       backgroundColor: colors.greenLight,
       paddingHorizontal: 10,
-      paddingVertical: 6,
+      paddingVertical: 4,
       borderRadius: radius.full,
-      overflow: "hidden",
     },
     section: { gap: spacing.sm },
     sectionTitle: {

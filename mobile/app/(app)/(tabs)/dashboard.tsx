@@ -4,59 +4,33 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
-import { format, parseISO } from "date-fns";
 import { supabase } from "../../../lib/supabase";
-import { EXPENSE_CATEGORIES } from "../../../lib/categories";
 import {
   fetchRecentExpenses,
-  filterExpenses,
-  getCategoryFromItem,
-  getCategoryLabel,
   getOrCreateDraftReport,
   getPendingReportIds,
   submitDraftReports,
-  type ExpenseCategory,
   type ExpenseEntry,
 } from "../../../lib/expenses";
-import { formatCurrency, getCompanyLabel, type Profile } from "../../../lib/types";
+import { formatCurrency, type Profile } from "../../../lib/types";
 import { getErrorMessage } from "../../../lib/utils";
-import { hapticLight, hapticSelection } from "../../../lib/haptics";
+import { hapticLight } from "../../../lib/haptics";
 import { ListGap } from "../../../lib/list-separator";
 import { useToast } from "../../../lib/toast-context";
 import { useTheme } from "../../../lib/settings-context";
 import { DashboardSkeleton } from "../../../components/DashboardSkeleton";
+import { ExpenseListCard } from "../../../components/ExpenseListCard";
 import { getFabBottom, getHomeListBottomPadding, tabBarLayout } from "../../../lib/tab-bar-layout";
 import { AppScreenHeader } from "../../../components/AppScreenHeader";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 
-function StatusBadge({ status, colors }: { status?: string; colors: ThemeColors }) {
-  const styles = useMemo(() => makeStyles(colors), [colors]);
-  const isDraft = status === "draft";
-  return (
-    <View style={[styles.badge, isDraft ? styles.badgeDraft : styles.badgeSubmitted]}>
-      <Text style={[styles.badgeText, isDraft ? styles.badgeTextDraft : styles.badgeTextSubmitted]}>
-        {isDraft ? "Pending" : status === "submitted" ? "Submitted" : status ?? ""}
-      </Text>
-    </View>
-  );
-}
-
-function formatExpenseDate(d: string | null | undefined): string {
-  if (!d) return "";
-  try {
-    return format(parseISO(d), "MMM d");
-  } catch {
-    return d;
-  }
-}
+const RECENT_LIMIT = 8;
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
@@ -69,8 +43,6 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | "all">("all");
   const hasLoadedRef = useRef(false);
 
   const load = useCallback(async (silent = false) => {
@@ -111,10 +83,7 @@ export default function DashboardScreen() {
 
   const pendingReportIds = useMemo(() => getPendingReportIds(expenses), [expenses]);
 
-  const filtered = useMemo(
-    () => filterExpenses(expenses, search, categoryFilter),
-    [expenses, search, categoryFilter]
-  );
+  const recentExpenses = useMemo(() => expenses.slice(0, RECENT_LIMIT), [expenses]);
 
   const weekTotal = useMemo(
     () => expenses.filter((e) => e.report_status === "draft").reduce((s, e) => s + (e.row_total || 0), 0),
@@ -131,17 +100,9 @@ export default function DashboardScreen() {
     [expenses]
   );
 
-  const hasActiveFilters = search.length > 0 || categoryFilter !== "all";
-
-  function clearFilters() {
-    hapticSelection();
-    setSearch("");
-    setCategoryFilter("all");
-  }
-
-  function selectFilter(next: ExpenseCategory | "all") {
-    hapticSelection();
-    setCategoryFilter(next);
+  function openExpenses() {
+    hapticLight();
+    router.push("/(app)/(tabs)/expenses");
   }
 
   async function submitWeek() {
@@ -226,51 +187,14 @@ export default function DashboardScreen() {
         ) : null}
       </View>
 
-      <View style={styles.searchBox}>
-        <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput
-          style={styles.searchInput}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search receipts…"
-          placeholderTextColor={colors.slate400}
-          clearButtonMode="while-editing"
-        />
-      </View>
-      <ScrollView
-        horizontal
-        nestedScrollEnabled
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.filterRow}
-      >
-        <Pressable
-          style={[styles.filterChip, categoryFilter === "all" && styles.filterChipActive]}
-          onPress={() => selectFilter("all")}
-        >
-          <Text style={[styles.filterText, categoryFilter === "all" && styles.filterTextActive]}>All</Text>
-        </Pressable>
-        {EXPENSE_CATEGORIES.map((cat) => (
-          <Pressable
-            key={cat.key}
-            style={[styles.filterChip, categoryFilter === cat.key && styles.filterChipActive]}
-            onPress={() => selectFilter(cat.key)}
-          >
-            <Text style={styles.filterEmoji}>{cat.emoji}</Text>
-            <Text style={[styles.filterText, categoryFilter === cat.key && styles.filterTextActive]}>
-              {cat.shortLabel}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-      {hasActiveFilters ? (
-        <View style={styles.filterMetaRow}>
-          <Text style={styles.resultCount}>
-            {filtered.length} of {expenses.length} receipt{expenses.length === 1 ? "" : "s"}
-          </Text>
-          <Pressable onPress={clearFilters} hitSlop={8}>
-            <Text style={styles.clearFilters}>Clear filters</Text>
-          </Pressable>
+      {expenses.length > 0 ? (
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>Recent receipts</Text>
+          {expenses.length > RECENT_LIMIT ? (
+            <Pressable onPress={openExpenses} hitSlop={8}>
+              <Text style={styles.viewAll}>View all ({expenses.length})</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -295,7 +219,7 @@ export default function DashboardScreen() {
       />
 
       <FlatList
-        data={filtered}
+        data={recentExpenses}
         keyExtractor={(item) => item.id!}
         automaticallyAdjustKeyboardInsets
         keyboardDismissMode="on-drag"
@@ -316,65 +240,28 @@ export default function DashboardScreen() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>🧾</Text>
-            <Text style={styles.emptyTitle}>
-              {expenses.length === 0 ? "No receipts yet" : "No matching receipts"}
-            </Text>
-            <Text style={styles.emptySub}>
-              {expenses.length === 0
-                ? "Scan a receipt to start your expense report"
-                : "Try a different search or category filter"}
-            </Text>
-            {expenses.length === 0 ? (
-              <Pressable
-                style={({ pressed }) => [styles.emptyCta, pressed && styles.pressedBtn]}
-                onPress={() => {
-                  hapticLight();
-                  router.push("/(app)/submit");
-                }}
-              >
-                <Text style={styles.emptyCtaText}>Scan first receipt</Text>
-              </Pressable>
-            ) : hasActiveFilters ? (
-              <Pressable style={styles.emptyCtaGhost} onPress={clearFilters}>
-                <Text style={styles.clearFilters}>Clear filters</Text>
-              </Pressable>
-            ) : null}
+            <Text style={styles.emptyTitle}>No receipts yet</Text>
+            <Text style={styles.emptySub}>Scan a receipt to start your expense report</Text>
+            <Pressable
+              style={({ pressed }) => [styles.emptyCta, pressed && styles.pressedBtn]}
+              onPress={() => {
+                hapticLight();
+                router.push("/(app)/submit");
+              }}
+            >
+              <Text style={styles.emptyCtaText}>Scan first receipt</Text>
+            </Pressable>
           </View>
         }
         renderItem={({ item }) => (
-          <Pressable
-            style={({ pressed }) => [styles.expenseCard, pressed && styles.expenseCardPressed]}
+          <ExpenseListCard
+            item={item}
+            colors={colors}
             onPress={() => {
               hapticLight();
               router.push(`/(app)/expense/${item.id}`);
             }}
-          >
-            <View style={styles.categoryStripe}>
-              <Text style={styles.stripeEmoji}>
-                {EXPENSE_CATEGORIES.find((c) => c.key === getCategoryFromItem(item))?.emoji ?? "📋"}
-              </Text>
-            </View>
-            <View style={styles.expenseMain}>
-              <Text style={styles.expenseDesc} numberOfLines={1}>
-                {item.description || "Expense"}
-              </Text>
-              <Text style={styles.expenseMeta} numberOfLines={1}>
-                {getCategoryLabel(item)}
-                {item.company ? ` · ${getCompanyLabel(item.company)}` : ""}
-                {item.expense_date ? ` · ${formatExpenseDate(item.expense_date)}` : ""}
-              </Text>
-              {item.related_to ? (
-                <Text style={styles.relatedTo} numberOfLines={1}>
-                  Related to: {item.related_to}
-                </Text>
-              ) : null}
-            </View>
-            <View style={styles.expenseRight}>
-              <Text style={styles.expenseAmount}>{formatCurrency(item.row_total)}</Text>
-              <StatusBadge status={item.report_status} colors={colors} />
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
+          />
         )}
       />
 
@@ -453,41 +340,14 @@ function makeStyles(colors: ThemeColors) {
   submitWeekText: { color: colors.onPrimary, fontWeight: "700", fontSize: 12, textAlign: "center" },
   list: { paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   listHeader: { gap: spacing.sm, marginBottom: spacing.sm },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    gap: 8,
-  },
-  searchIcon: { fontSize: 15 },
-  searchInput: { flex: 1, paddingVertical: 10, fontSize: 15, color: colors.text },
-  filterRow: { gap: 6, paddingVertical: 0 },
-  filterChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterEmoji: { fontSize: 13 },
-  filterText: { fontSize: 12, fontWeight: "600", color: colors.slate700 },
-  filterTextActive: { color: colors.onPrimary },
-  filterMetaRow: {
+  sectionRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginTop: 2,
   },
-  resultCount: { fontSize: 12, color: colors.slate500, fontWeight: "500" },
-  clearFilters: { fontSize: 12, fontWeight: "700", color: colors.primary },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  viewAll: { fontSize: 13, fontWeight: "700", color: colors.primary },
   empty: { alignItems: "center", paddingTop: 48, gap: 8 },
   emptyEmoji: { fontSize: 40 },
   emptyTitle: { fontSize: 17, fontWeight: "700", color: colors.text },

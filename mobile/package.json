@@ -12,6 +12,7 @@
     "submit:ios": "eas submit --platform ios --profile preview --latest"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.1.0",
     "@supabase/supabase-js": "^2.49.8",
