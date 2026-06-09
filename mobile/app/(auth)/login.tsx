@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { Link, router } from "expo-router";
 import { Pressable, StyleSheet, Text } from "react-native";
 import { supabase } from "../../lib/supabase";
@@ -24,10 +25,20 @@ export default function LoginScreen() {
   const [biometricLabel, setBiometricLabel] = useState("Biometrics");
   const [showBiometric, setShowBiometric] = useState(false);
 
-  useEffect(() => {
-    isBiometricLoginEnabled().then(setShowBiometric);
-    getBiometricLabel().then(setBiometricLabel);
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      isBiometricLoginEnabled().then((enabled) => {
+        if (active) setShowBiometric(enabled);
+      });
+      getBiometricLabel().then((label) => {
+        if (active) setBiometricLabel(label);
+      });
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
 
   const goToApp = useCallback(async () => {
     await offerBiometricSetupAfterLogin();
