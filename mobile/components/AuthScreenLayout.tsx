@@ -13,10 +13,10 @@ type Props = {
 /** Full-screen tire photo, blurred + evenly darkened. UI sits on top as children. */
 export function AuthScreenLayout({ children }: Props) {
   return (
-    <ImageBackground source={TIRE_BG} style={styles.root} resizeMode="cover">
+    <ImageBackground source={TIRE_BG} style={styles.root} imageStyle={styles.image} resizeMode="cover">
       <StatusBar style="light" />
       <BlurView
-        intensity={Platform.OS === "ios" ? 72 : 84}
+        intensity={100}
         tint="dark"
         style={StyleSheet.absoluteFillObject}
         pointerEvents="none"
@@ -33,9 +33,12 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  image: {
+    opacity: 0.45,
+  },
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.86)",
+    backgroundColor: "rgba(0,0,0,0.92)",
   },
   content: {
     flex: 1,
