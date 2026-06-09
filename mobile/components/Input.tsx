@@ -1,5 +1,7 @@
-import { StyleSheet, Text, TextInput, TextInputProps, View } from "react-native";
+import { forwardRef, useRef, type ComponentProps, type Ref } from "react";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import { useTheme } from "../lib/settings-context";
+import { useAuthFormScroll, type AuthScrollMode } from "../lib/auth-form-scroll";
 import {
   AUTH_BORDER,
   AUTH_GRAY_60,
@@ -7,30 +9,54 @@ import {
   AUTH_WHITE,
 } from "../constants/auth-chrome";
 
-type Props = TextInputProps & {
+type Props = ComponentProps<typeof TextInput> & {
   label?: string;
   error?: string;
   hint?: string;
   tone?: "default" | "auth";
+  scrollOnFocus?: boolean;
+  scrollMode?: AuthScrollMode;
 };
 
-export function Input({ label, error, hint, style, tone = "default", ...props }: Props) {
+export const Input = forwardRef(function Input(
+  {
+    label,
+    error,
+    hint,
+    style,
+    tone = "default",
+    scrollOnFocus = true,
+    scrollMode = "default",
+    onFocus,
+    ...props
+  }: Props,
+  ref: Ref<TextInput>
+) {
   const { colors } = useTheme();
   const isAuth = tone === "auth";
   const styles = makeStyles(colors, isAuth);
+  const wrapRef = useRef<View>(null);
+  const authScroll = useAuthFormScroll();
 
   return (
-    <View style={styles.wrap}>
+    <View ref={wrapRef} style={styles.wrap} collapsable={false}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
+        ref={ref}
         placeholderTextColor={isAuth ? "rgba(255,255,255,0.35)" : colors.slate400}
         style={[styles.input, error && styles.inputError, style]}
+        onFocus={(event) => {
+          if (scrollOnFocus && authScroll) {
+            authScroll.scrollToField(wrapRef, scrollMode);
+          }
+          onFocus?.(event);
+        }}
         {...props}
       />
       {error ? <Text style={styles.error}>{error}</Text> : hint ? <Text style={styles.hint}>{hint}</Text> : null}
     </View>
   );
-}
+});
 
 function makeStyles(colors: ReturnType<typeof useTheme>["colors"], isAuth: boolean) {
   return StyleSheet.create({

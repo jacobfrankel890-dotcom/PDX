@@ -30,8 +30,17 @@ If set, the build adds:
 
 ### Android (FCM)
 
-- Create Firebase project / Android app
-- Upload FCM service account JSON via `eas credentials -p android`
+1. Create a [Firebase project](https://console.firebase.google.com/)
+2. Add an Android app with package name `com.partsdistributionxpress.expense`
+3. Download `google-services.json` and save it as `mobile/google-services.json`
+   - Template: `mobile/google-services.json.example`
+4. Upload FCM credentials to EAS:
+   - `eas credentials -p android`
+   - Choose **Google Service Account Key for Push Notifications (FCM V1)**
+   - Or follow https://docs.expo.dev/push-notifications/fcm-credentials/
+5. **Rebuild Android** — push will not work on existing installs until a new native build includes Firebase
+
+`app.json` already points Android at `./google-services.json`.
 
 ## 4) Notification payload deep links
 

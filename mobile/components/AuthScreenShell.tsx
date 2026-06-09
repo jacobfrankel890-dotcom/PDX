@@ -15,6 +15,7 @@ import {
   AUTH_WHITE_90,
   authHorizontalPad,
 } from "../constants/auth-chrome";
+import { AuthFormScrollProvider } from "../lib/auth-form-scroll";
 import { grid } from "../lib/grid";
 import { radius } from "../constants/theme";
 import { AuthScreenLayout } from "./AuthScreenLayout";
@@ -56,49 +57,51 @@ export function AuthScreenShell({
     <AuthScreenLayout>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
       >
-        <ScrollView
-          ref={scrollRef}
-          style={styles.flex}
-          contentContainerStyle={[styles.scrollContent, contentStyle]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          automaticallyAdjustKeyboardInsets
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.page}>
-            <AuthLogoHeader compact={compactHero} />
+        <AuthFormScrollProvider scrollRef={scrollRef}>
+          <ScrollView
+            ref={scrollRef}
+            style={styles.flex}
+            contentContainerStyle={[styles.scrollContent, contentStyle]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.page}>
+              <AuthLogoHeader compact={compactHero} />
 
-            {badge ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeIcon}>⚡</Text>
-                <Text style={styles.badgeText}>{badge}</Text>
-              </View>
-            ) : null}
+              {badge ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeIcon}>⚡</Text>
+                  <Text style={styles.badgeText}>{badge}</Text>
+                </View>
+              ) : null}
 
-            {sectionLabel ? <Text style={styles.sectionLabel}>{sectionLabel}</Text> : null}
+              {sectionLabel ? <Text style={styles.sectionLabel}>{sectionLabel}</Text> : null}
 
-            <Text style={styles.title}>{title}</Text>
-            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+              <Text style={styles.title}>{title}</Text>
+              {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
 
-            <View style={styles.form}>{children}</View>
+              <View style={styles.form}>{children}</View>
 
-            {showTrust ? (
-              <View style={styles.trustRow}>
-                {AUTH_TRUST_ITEMS.map((item) => (
-                  <View key={item.label} style={styles.trustItem}>
-                    <Text style={styles.trustIcon}>{item.icon}</Text>
-                    <Text style={styles.trustText}>{item.label}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
+              {showTrust ? (
+                <View style={styles.trustRow}>
+                  {AUTH_TRUST_ITEMS.map((item) => (
+                    <View key={item.label} style={styles.trustItem}>
+                      <Text style={styles.trustIcon}>{item.icon}</Text>
+                      <Text style={styles.trustText}>{item.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
 
-            {footer ? <View style={styles.footer}>{footer}</View> : null}
-          </View>
-        </ScrollView>
+              {footer ? <View style={styles.footer}>{footer}</View> : null}
+            </View>
+          </ScrollView>
+        </AuthFormScrollProvider>
       </KeyboardAvoidingView>
     </AuthScreenLayout>
   );

@@ -37,6 +37,29 @@ function resolveProjectId(): string | undefined {
   );
 }
 
+function formatPushRegistrationError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : "Failed to register for push notifications.";
+  const lower = raw.toLowerCase();
+
+  if (
+    Platform.OS === "android" &&
+    (lower.includes("firebase") ||
+      lower.includes("google-services") ||
+      lower.includes("firebaseapp is not initialized"))
+  ) {
+    return [
+      "Android push is not configured yet.",
+      "",
+      "Add google-services.json from Firebase (package: com.partsdistributionxpress.expense),",
+      "upload FCM credentials in EAS, then install a new Android build.",
+      "",
+      "See mobile/NATIVE_BUILD_CHECKLIST.md for the full setup.",
+    ].join("\n");
+  }
+
+  return raw;
+}
+
 async function upsertPushTokenForCurrentUser(token: string): Promise<string | null> {
   const {
     data: { user },
@@ -95,7 +118,7 @@ export async function registerForPushNotificationsAsync(): Promise<PushRegistrat
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed to register for push notifications.",
+      error: formatPushRegistrationError(error),
     };
   }
 }

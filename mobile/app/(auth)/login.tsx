@@ -111,6 +111,7 @@ export default function LoginScreen() {
         autoComplete="password"
         textContentType="password"
         returnKeyType="done"
+        scrollMode="top"
         onSubmitEditing={handleLogin}
       />
       <Button title="Sign In" onPress={handleLogin} loading={loading} style={styles.submitBtn} />

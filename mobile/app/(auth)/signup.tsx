@@ -11,6 +11,7 @@ import {
 import { Link, router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { offerBiometricSetupAfterLogin } from "../../lib/biometric-auth";
+import { getPasswordValidationError } from "../../lib/password-requirements";
 import { REGIONS, ROLES, getDefaultCompanyForRegion, type PdxRegion } from "../../lib/types";
 import { isValidEmail } from "../../lib/utils";
 import { AUTH_GRAY_60, AUTH_WHITE } from "../../constants/auth-chrome";
@@ -18,6 +19,7 @@ import { AuthScreenShell } from "../../components/AuthScreenShell";
 import { SignupStepIndicator } from "../../components/SignupStepIndicator";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
+import { PasswordRequirements } from "../../components/PasswordRequirements";
 import { radius, spacing } from "../../constants/theme";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -65,12 +67,9 @@ export default function SignupScreen() {
       setError("Please enter a valid email address");
       return false;
     }
-    if (form.password.length < 8) {
-      setError("Password must be at least 8 characters");
-      return false;
-    }
-    if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match");
+    const passwordError = getPasswordValidationError(form.password, form.confirmPassword);
+    if (passwordError) {
+      setError(passwordError);
       return false;
     }
     return true;
@@ -153,7 +152,17 @@ export default function SignupScreen() {
             keyboardType="email-address"
             autoComplete="email"
           />
-          <Input tone="auth" label="Password" value={form.password} onChangeText={(v) => update("password", v)} secureTextEntry autoComplete="new-password" />
+          <Input
+            tone="auth"
+            label="Password"
+            value={form.password}
+            onChangeText={(v) => update("password", v)}
+            secureTextEntry
+            autoComplete="new-password"
+            textContentType="newPassword"
+            scrollMode="top"
+          />
+          <PasswordRequirements password={form.password} />
           <Input
             tone="auth"
             label="Confirm password"
@@ -161,7 +170,10 @@ export default function SignupScreen() {
             onChangeText={(v) => update("confirmPassword", v)}
             secureTextEntry
             autoComplete="new-password"
+            textContentType="newPassword"
+            scrollMode="top"
           />
+          <PasswordRequirements password={form.password} confirmPassword={form.confirmPassword} showMatch />
           <Button
             title="Continue"
             onPress={() => {

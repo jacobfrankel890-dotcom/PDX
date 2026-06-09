@@ -63,12 +63,12 @@ export async function getBiometricLabel(): Promise<string> {
   if (!LocalAuthentication) return "Biometrics";
   try {
     const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-    if (types.includes(AUTHENTICATION_TYPE.FACIAL_RECOGNITION)) {
-      return Platform.OS === "ios" ? "Face ID" : "Face unlock";
+    if (Platform.OS === "android") {
+      if (types.includes(AUTHENTICATION_TYPE.FINGERPRINT)) return "Fingerprint";
+      return "Biometrics";
     }
-    if (types.includes(AUTHENTICATION_TYPE.FINGERPRINT)) {
-      return Platform.OS === "ios" ? "Touch ID" : "Fingerprint";
-    }
+    if (types.includes(AUTHENTICATION_TYPE.FACIAL_RECOGNITION)) return "Face ID";
+    if (types.includes(AUTHENTICATION_TYPE.FINGERPRINT)) return "Touch ID";
   } catch {
     /* native module not in this build */
   }
@@ -227,7 +227,7 @@ export async function signInWithBiometric(): Promise<{ ok: boolean; error?: stri
   return { ok: true };
 }
 
-/** Ask to enable Face ID after password login, then scan + save before returning. */
+/** Ask to enable biometric sign-in after password login, then scan + save before returning. */
 export async function offerBiometricSetupAfterLogin(): Promise<boolean> {
   if (!isBiometricNativeAvailable()) return false;
   if (!(await isBiometricHardwareAvailable())) return false;

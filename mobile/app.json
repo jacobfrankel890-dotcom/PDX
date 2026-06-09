@@ -27,6 +27,8 @@
     "android": {
       "package": "com.partsdistributionxpress.expense",
       "backgroundColor": "#FFFFFF",
+      "googleServicesFile": "./google-services.json",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/android-icon-foreground.png",
