@@ -2,7 +2,7 @@ import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "r
 import { useTheme } from "../lib/settings-context";
 import { AUTH_GRAY_60 } from "../constants/auth-chrome";
 
-export type PdxLogoSize = "sm" | "md" | "lg" | "xl";
+export type PdxLogoSize = "sm" | "md" | "lg" | "xl" | "app";
 
 type Props = {
   size?: PdxLogoSize;
@@ -13,10 +13,11 @@ type Props = {
 };
 
 const LOGO_HEIGHT: Record<PdxLogoSize, number> = {
-  sm: 22,
-  md: 30,
-  lg: 40,
-  xl: 52,
+  sm: 28,
+  md: 36,
+  lg: 48,
+  xl: 56,
+  app: 48,
 };
 
 const TAGLINE: Record<PdxLogoSize, number> = {
@@ -24,6 +25,7 @@ const TAGLINE: Record<PdxLogoSize, number> = {
   md: 11,
   lg: 12,
   xl: 13,
+  app: 11,
 };
 
 /** Aspect ratio of `assets/pdx-logo.png` */

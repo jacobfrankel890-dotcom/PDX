@@ -1,11 +1,14 @@
 import { Platform, StyleSheet } from "react-native";
 import type { EdgeInsets } from "react-native-safe-area-context";
 
-/** Visible height of the floating glass tab bar (excluding safe area). */
-export const TAB_BAR_HEIGHT = 48;
+/** Visible height of the floating tab bar pill (excluding safe area). */
+export const TAB_BAR_HEIGHT = 56;
 
 /** Horizontal inset for floating pill shape. */
 export const TAB_BAR_SIDE_INSET = 16;
+
+/** Float above the bottom edge of the screen. */
+export const TAB_BAR_FLOAT_MARGIN = 10;
 
 /** Extra gap above home indicator (0 = flush to bottom). */
 export const TAB_BAR_BOTTOM_GAP = 0;
@@ -17,7 +20,7 @@ export const FAB_HEIGHT = 50;
 export const FAB_TAB_GAP = 8;
 
 export function getTabBarStackHeight(insets: EdgeInsets): number {
-  return TAB_BAR_HEIGHT + insets.bottom + TAB_BAR_BOTTOM_GAP;
+  return TAB_BAR_HEIGHT + insets.bottom + TAB_BAR_FLOAT_MARGIN + TAB_BAR_BOTTOM_GAP;
 }
 
 export function getFabBottom(insets: EdgeInsets): number {

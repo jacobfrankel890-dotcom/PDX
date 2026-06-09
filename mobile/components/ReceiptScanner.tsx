@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { analyzeReceipt } from "../lib/api";
+import { RECEIPT_IMAGE_PICKER_OPTIONS, uploadReceiptToStorage } from "../lib/receipt-image";
 import {
   analysisToLineItems,
   RECEIPT_CATEGORIES,
@@ -47,8 +48,8 @@ export function ReceiptScanner({ reportId, disabled, onApply }: Props) {
       }
 
       const result = useCamera
-        ? await ImagePicker.launchCameraAsync({ quality: 0.8, base64: true })
-        : await ImagePicker.launchImageLibraryAsync({ quality: 0.8, base64: true });
+        ? await ImagePicker.launchCameraAsync(RECEIPT_IMAGE_PICKER_OPTIONS)
+        : await ImagePicker.launchImageLibraryAsync(RECEIPT_IMAGE_PICKER_OPTIONS);
 
       if (result.canceled || !result.assets[0]) return;
 
@@ -58,14 +59,18 @@ export function ReceiptScanner({ reportId, disabled, onApply }: Props) {
       setLoading(true);
 
       try {
-        const base64 = asset.base64;
-        if (!base64) throw new Error("Could not read receipt image");
         const mimeType = asset.mimeType ?? "image/jpeg";
         const fileName = asset.fileName ?? `receipt-${Date.now()}.jpg`;
+        const uploadedPath = await uploadReceiptToStorage({
+          reportId,
+          uri: asset.uri,
+          mimeType,
+          fileName,
+        });
 
         const data = await analyzeReceipt({
           reportId,
-          imageBase64: base64,
+          storagePath: uploadedPath,
           mimeType,
           fileName,
         });

@@ -171,3 +171,10 @@ export function getCompanyLabel(company: string): string {
   }
   return company;
 }
+
+/** Company name without the region prefix (e.g. "Parts Distribution Xpress" not "PDX — …"). */
+export function getCompanyShortLabel(company: string): string {
+  const full = getCompanyLabel(company);
+  const separator = full.indexOf(" — ");
+  return separator >= 0 ? full.slice(separator + 3) : full;
+}

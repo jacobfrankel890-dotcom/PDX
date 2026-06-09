@@ -1,29 +1,22 @@
-import { supabase } from "./supabase";
+import { invokeFunction } from "./functions-api";
 import { normalizeAnalysis } from "./receipt-analysis";
-
-async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke(name, { body });
-  if (error) throw new Error(error.message);
-  if (data?.error) throw new Error(data.error);
-  return data as T;
-}
 
 // Twilio OTP — disabled in signup UI for now; edge functions kept for re-enable later.
 export async function sendOtp(phone: string) {
-  return invoke<{ success: boolean; devMode?: boolean }>("send-otp", { phone });
+  return invokeFunction<{ success: boolean; devMode?: boolean }>("send-otp", { phone });
 }
 
 export async function verifyOtp(phone: string, code: string) {
-  return invoke<{ success: boolean; verified: boolean }>("verify-otp", { phone, code });
+  return invokeFunction<{ success: boolean; verified: boolean }>("verify-otp", { phone, code });
 }
 
 export async function analyzeReceipt(params: {
   reportId: string;
-  imageBase64: string;
+  storagePath: string;
   mimeType: string;
   fileName: string;
 }) {
-  const data = await invoke<{
+  const data = await invokeFunction<{
     success: boolean;
     storagePath: string;
     previewUrl: string | null;

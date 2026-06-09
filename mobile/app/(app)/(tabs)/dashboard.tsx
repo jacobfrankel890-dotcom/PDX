@@ -34,7 +34,7 @@ import { useToast } from "../../../lib/toast-context";
 import { useTheme } from "../../../lib/settings-context";
 import { DashboardSkeleton } from "../../../components/DashboardSkeleton";
 import { getFabBottom, getHomeListBottomPadding, tabBarLayout } from "../../../lib/tab-bar-layout";
-import { PdxLogo } from "../../../components/PdxLogo";
+import { AppScreenHeader } from "../../../components/AppScreenHeader";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 
 function StatusBadge({ status, colors }: { status?: string; colors: ThemeColors }) {
@@ -194,7 +194,7 @@ export default function DashboardScreen() {
               {formatCurrency(weekTotal)}
             </Text>
             <Text style={styles.statLabel} numberOfLines={1}>
-              Pending $
+              Pending total
             </Text>
           </View>
           <View style={styles.statDivider} />
@@ -279,9 +279,7 @@ export default function DashboardScreen() {
   if (loading && !profile) {
     return (
       <View style={styles.flex}>
-        <View style={[styles.topBar, { paddingTop: insets.top + spacing.xs }]}>
-          <PdxLogo size="sm" tagline="Expense" />
-        </View>
+        <AppScreenHeader title="Hi there" topInset={insets.top} />
         <DashboardSkeleton />
       </View>
     );
@@ -289,17 +287,12 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.flex}>
-      <View style={[styles.topBar, { paddingTop: insets.top + spacing.xs }]}>
-        <PdxLogo size="sm" tagline="Expense" />
-        <View style={styles.topBarCenter}>
-          <Text style={styles.greetingCompact} numberOfLines={1}>
-            Hi, {profile?.first_name}
-          </Text>
-        </View>
-        <Pressable onPress={openProfile} style={styles.avatar}>
-          <Text style={styles.avatarText}>{profile?.first_name?.[0]?.toUpperCase() ?? "?"}</Text>
-        </Pressable>
-      </View>
+      <AppScreenHeader
+        title={`Hi, ${profile?.first_name ?? "there"}`}
+        topInset={insets.top}
+        avatarInitial={profile?.first_name?.[0]?.toUpperCase() ?? "?"}
+        onAvatarPress={openProfile}
+      />
 
       <FlatList
         data={filtered}
@@ -409,29 +402,6 @@ function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    gap: spacing.sm,
-  },
-  topBarCenter: { flex: 1, minWidth: 0 },
-  greetingCompact: { fontSize: 16, fontWeight: "700", color: colors.text },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.greenLight,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-  },
-  avatarText: { color: colors.text, fontWeight: "800", fontSize: 14 },
   statsStrip: {
     flexDirection: "row",
     alignItems: "center",
@@ -440,8 +410,8 @@ function makeStyles(colors: ThemeColors) {
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     gap: 10,
     shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 4 },
@@ -463,13 +433,13 @@ function makeStyles(colors: ThemeColors) {
     minWidth: 0,
     paddingHorizontal: 2,
   },
-  statValue: { fontSize: 15, fontWeight: "800", color: colors.text },
+  statValue: { fontSize: 18, fontWeight: "800", color: colors.text },
   statLabel: {
-    fontSize: 9,
-    fontWeight: "700",
+    fontSize: 11,
+    fontWeight: "600",
     color: colors.textSecondary,
     textTransform: "uppercase",
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   statDivider: { width: 1, alignSelf: "stretch", backgroundColor: colors.border, marginVertical: 2 },
   submitWeekBtn: {

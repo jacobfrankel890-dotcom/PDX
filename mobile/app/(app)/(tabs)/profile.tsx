@@ -35,7 +35,7 @@ import { HapticSwitch } from "../../../components/HapticSwitch";
 import { ProfileCompanyPicker, companyToRegion } from "../../../components/ProfileCompanyPicker";
 import { RolePicker } from "../../../components/RolePicker";
 import {
-  getCompanyLabel,
+  getCompanyShortLabel,
   getRegionLabel,
   getRoleLabel,
   type CompanyValue,
@@ -44,7 +44,7 @@ import {
 } from "../../../lib/types";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
 import { getTabBarStackHeight } from "../../../lib/tab-bar-layout";
-import { PdxLogo } from "../../../components/PdxLogo";
+import { AppScreenHeader } from "../../../components/AppScreenHeader";
 
 function Section({
   title,
@@ -345,26 +345,22 @@ export default function ProfileScreen() {
   const isAdmin = profile.role === "regional_manager";
 
   return (
-    <ScrollView
-      style={styles.flex}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-      }
-      keyboardDismissMode="on-drag"
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={[
-        styles.content,
-        {
-          paddingTop: insets.top + spacing.md,
-          paddingBottom: getTabBarStackHeight(insets) + spacing.lg,
-        },
-      ]}
-    >
-      <View style={styles.pageHeader}>
-        <PdxLogo size="lg" tagline="Expense" style={styles.logoCenter} />
-        <Text style={styles.pageTitle}>Profile</Text>
-      </View>
-
+    <View style={styles.flex}>
+      <AppScreenHeader title="Profile" topInset={insets.top} subtitle="Settings & account" />
+      <ScrollView
+        style={styles.flex}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        }
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingBottom: getTabBarStackHeight(insets) + spacing.lg,
+          },
+        ]}
+      >
       <View style={styles.userCard}>
         <View style={styles.avatarLarge}>
           <Text style={styles.avatarLargeText}>{profile.first_name?.[0]?.toUpperCase() ?? "?"}</Text>
@@ -373,14 +369,23 @@ export default function ProfileScreen() {
           <Text style={styles.userName}>
             {profile.first_name} {profile.last_name}
           </Text>
-          <Pressable onPress={copyEmail} hitSlop={8}>
-            <Text style={styles.userEmail}>{profile.email}</Text>
+          <Pressable onPress={copyEmail} hitSlop={8} style={styles.emailBlock}>
+            <Text style={styles.userEmail} numberOfLines={1}>
+              {profile.email}
+            </Text>
             <Text style={styles.copyHint}>Tap to copy email</Text>
           </Pressable>
           <View style={styles.userMeta}>
-            <Text style={styles.metaPill}>{getRegionLabel(profile.region)}</Text>
-            <Text style={styles.metaPill}>{getCompanyLabel(profile.company)}</Text>
-            {roleLabel ? <Text style={styles.metaPill}>{roleLabel}</Text> : null}
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Company</Text>
+              <Text style={styles.metaPill}>{getCompanyShortLabel(profile.company)}</Text>
+            </View>
+            {roleLabel ? (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Role</Text>
+                <Text style={styles.metaPill}>{roleLabel}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </View>
@@ -557,7 +562,8 @@ export default function ProfileScreen() {
       </Section>
 
       <Text style={styles.footer}>PDX Expense · Parts Distribution Xpress</Text>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -565,17 +571,15 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     flex: { flex: 1, backgroundColor: colors.bg },
     center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg },
-    content: { paddingHorizontal: spacing.md, gap: spacing.lg },
-    pageHeader: { alignItems: "center", gap: spacing.xs, marginBottom: spacing.xs },
-    logoCenter: { alignItems: "center" },
-    pageTitle: { fontSize: 22, fontWeight: "800", color: colors.text, textAlign: "center" },
+    content: { paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.lg },
+    pageTitle: { fontSize: 28, fontWeight: "800", color: colors.text, textAlign: "center" },
     userCard: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       gap: spacing.md,
       backgroundColor: colors.surface,
       borderRadius: radius.lg,
-      padding: spacing.md,
+      padding: spacing.lg,
       borderWidth: 1,
       borderColor: colors.border,
       shadowColor: colors.cardShadow,
@@ -593,21 +597,44 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
       justifyContent: "center",
       borderWidth: 2,
       borderColor: colors.primary,
+      flexShrink: 0,
     },
     avatarLargeText: { color: colors.text, fontSize: 26, fontWeight: "800" },
-    userInfo: { flex: 1, gap: 4 },
+    userInfo: { flex: 1, minWidth: 0, gap: 4 },
     userName: { fontSize: 20, fontWeight: "700", color: colors.text },
+    emailBlock: { gap: 2 },
     userEmail: { fontSize: 14, color: colors.textSecondary },
-    copyHint: { fontSize: 11, color: colors.primary, marginTop: 2, fontWeight: "600" },
-    userMeta: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
+    copyHint: { fontSize: 11, color: colors.primary, fontWeight: "600" },
+    userMeta: {
+      gap: 8,
+      marginTop: spacing.sm,
+      paddingTop: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    metaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    metaLabel: {
+      width: 64,
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textSecondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
     metaPill: {
-      fontSize: 12,
+      flex: 1,
+      fontSize: 13,
       fontWeight: "600",
       color: colors.primaryDark,
       backgroundColor: colors.greenLight,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
       borderRadius: radius.full,
+      overflow: "hidden",
     },
     section: { gap: spacing.sm },
     sectionTitle: {

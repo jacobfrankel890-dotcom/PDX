@@ -42,6 +42,12 @@ Do NOT invent category names. Pick the closest match from the keys above.
 User region: ${ctx.userRegion}. Role: ${ctx.userRole}. Pay period: ${ctx.payPeriodStart} to ${ctx.payPeriodEnd}.`;
 }
 
+function normalizeMimeType(mimeType: string | undefined): string {
+  if (!mimeType) return "image/jpeg";
+  if (mimeType.includes("heic") || mimeType.includes("heif")) return "image/jpeg";
+  return mimeType;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -63,8 +69,9 @@ serve(async (req) => {
     const { data: { user } } = await supabase.auth.getUser(jwt);
     if (!user) throw new Error("Unauthorized");
 
-    const { reportId, imageBase64, mimeType, fileName } = await req.json();
-    if (!reportId || !imageBase64) throw new Error("reportId and imageBase64 required");
+    const { reportId, imageBase64, storagePath, mimeType, fileName } = await req.json();
+    if (!reportId) throw new Error("reportId required");
+    if (!storagePath && !imageBase64) throw new Error("storagePath required");
 
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openaiKey) throw new Error("OpenAI not configured");
@@ -82,15 +89,33 @@ serve(async (req) => {
 
     const { data: profile } = await supabase.from("profiles").select("region, role").eq("id", user.id).single();
 
-    const ext = fileName?.split(".").pop()?.toLowerCase() ?? "jpg";
-    const storagePath = `${user.id}/${reportId}/${crypto.randomUUID()}.${ext}`;
+    const normalizedMime = normalizeMimeType(mimeType);
+    let finalStoragePath = storagePath as string | undefined;
+    let imageUrlForAi: string;
 
-    const binary = Uint8Array.from(atob(imageBase64), (c) => c.charCodeAt(0));
-    const { error: uploadError } = await admin.storage.from("receipts").upload(storagePath, binary, {
-      contentType: mimeType || "image/jpeg",
-      upsert: false,
-    });
-    if (uploadError) throw new Error("Failed to store receipt");
+    if (storagePath) {
+      if (!storagePath.startsWith(`${user.id}/`)) throw new Error("Invalid receipt path");
+
+      const { data: signedUrlData, error: signError } = await admin.storage
+        .from("receipts")
+        .createSignedUrl(storagePath, 3600);
+      if (signError || !signedUrlData?.signedUrl) {
+        throw new Error(`Receipt file not found: ${signError?.message ?? "upload missing"}`);
+      }
+      imageUrlForAi = signedUrlData.signedUrl;
+    } else {
+      const ext = fileName?.split(".").pop()?.toLowerCase() ?? "jpg";
+      finalStoragePath = `${user.id}/${reportId}/${crypto.randomUUID()}.${ext}`;
+
+      const binary = Uint8Array.from(atob(imageBase64), (c) => c.charCodeAt(0));
+      const { error: uploadError } = await admin.storage.from("receipts").upload(finalStoragePath, binary, {
+        contentType: normalizedMime,
+        upsert: false,
+      });
+      if (uploadError) throw new Error(`Failed to store receipt: ${uploadError.message}`);
+
+      imageUrlForAi = `data:${normalizedMime};base64,${imageBase64}`;
+    }
 
     const prompt = buildPrompt({
       userRegion: profile ? REGIONS[profile.region] ?? profile.region : "PDX",
@@ -112,7 +137,7 @@ serve(async (req) => {
           role: "user",
           content: [
             { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: `data:${mimeType || "image/jpeg"};base64,${imageBase64}`, detail: "high" } },
+            { type: "image_url", image_url: { url: imageUrlForAi, detail: "high" } },
           ],
         }],
         response_format: { type: "json_object" },
@@ -121,32 +146,42 @@ serve(async (req) => {
     });
 
     const oaiData = await oaiRes.json();
+    if (!oaiRes.ok) {
+      const message = oaiData?.error?.message ?? `OpenAI request failed (${oaiRes.status})`;
+      throw new Error(message);
+    }
+
     const rawContent = oaiData.choices?.[0]?.message?.content;
     if (!rawContent) throw new Error("AI returned no analysis");
 
     const analysis = JSON.parse(rawContent.replace(/```json\n?|\n?```/g, "").trim());
 
-    const { data: signedUrlData } = await admin.storage.from("receipts").createSignedUrl(storagePath, 604800);
+    const { data: signedUrlData } = await admin.storage
+      .from("receipts")
+      .createSignedUrl(finalStoragePath!, 604800);
 
-    await admin.from("receipt_uploads").insert({
+    const { error: insertError } = await admin.from("receipt_uploads").insert({
       report_id: reportId,
       user_id: user.id,
-      storage_path: storagePath,
+      storage_path: finalStoragePath,
       file_name: fileName ?? "receipt.jpg",
-      mime_type: mimeType,
+      mime_type: normalizedMime,
       ai_analysis: analysis,
       status: "analyzed",
     });
+    if (insertError) throw new Error(`Failed to log receipt: ${insertError.message}`);
 
     return new Response(JSON.stringify({
       success: true,
-      storagePath,
+      storagePath: finalStoragePath,
       previewUrl: signedUrlData?.signedUrl ?? null,
       fileName: fileName ?? "receipt.jpg",
       analysis,
     }), { headers: { ...cors, "Content-Type": "application/json" } });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Error" }), {
+    const message = e instanceof Error ? e.message : "Error";
+    console.error("analyze-receipt error:", message);
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...cors, "Content-Type": "application/json" },
     });

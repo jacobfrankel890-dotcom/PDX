@@ -21,6 +21,7 @@ import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { analyzeReceipt } from "../lib/api";
 import { getOrCreateDraftReport, submitExpense } from "../lib/expenses";
+import { RECEIPT_IMAGE_PICKER_OPTIONS, uploadReceiptToStorage } from "../lib/receipt-image";
 import {
   getAnalysisTotal,
   normalizeAnalysis,
@@ -149,8 +150,8 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Pro
       }
 
       const result = useCamera
-        ? await ImagePicker.launchCameraAsync({ quality: 0.5, base64: true })
-        : await ImagePicker.launchImageLibraryAsync({ quality: 0.5, base64: true });
+        ? await ImagePicker.launchCameraAsync(RECEIPT_IMAGE_PICKER_OPTIONS)
+        : await ImagePicker.launchImageLibraryAsync(RECEIPT_IMAGE_PICKER_OPTIONS);
 
       if (result.canceled || !result.assets[0]) return;
 
@@ -160,15 +161,22 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Pro
       setStep("analyzing");
 
       try {
-        const base64 = asset.base64;
-        if (!base64) throw new Error("Could not read receipt image");
-
         const report = await getOrCreateDraftReport(userId);
+        const mimeType = asset.mimeType ?? "image/jpeg";
+        const fileName = asset.fileName ?? `receipt-${Date.now()}.jpg`;
+        const storagePath = await uploadReceiptToStorage({
+          userId,
+          reportId: report.id,
+          uri: asset.uri,
+          mimeType,
+          fileName,
+        });
+
         const data = await analyzeReceipt({
           reportId: report.id,
-          imageBase64: base64,
-          mimeType: asset.mimeType ?? "image/jpeg",
-          fileName: asset.fileName ?? `receipt-${Date.now()}.jpg`,
+          storagePath,
+          mimeType,
+          fileName,
         });
 
         if (!data?.analysis) throw new Error("Could not read this receipt");
