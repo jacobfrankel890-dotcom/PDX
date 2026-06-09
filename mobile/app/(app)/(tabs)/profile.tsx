@@ -22,6 +22,7 @@ import {
   isBiometricLoginEnabled,
   isBiometricNativeAvailable,
   promptBiometric,
+  signOutPreservingBiometric,
 } from "../../../lib/biometric-auth";
 import {
   getCompanyLabel,
@@ -152,20 +153,26 @@ export default function ProfileScreen() {
 
   async function toggleBiometric(enabled: boolean) {
     if (enabled) {
-      if (!(await isBiometricHardwareAvailable())) {
-        Alert.alert("Not available", "Set up Face ID, Touch ID, or fingerprint on this device first.");
-        return;
+      try {
+        if (!(await isBiometricHardwareAvailable())) {
+          Alert.alert("Not available", "Set up Face ID, Touch ID, or fingerprint on this device first.");
+          return;
+        }
+        const { data } = await supabase.auth.getSession();
+        const refreshToken = data.session?.refresh_token;
+        if (!refreshToken) {
+          Alert.alert("Sign in again", "Sign out and sign in with password to enable biometric sign-in.");
+          return;
+        }
+        const authed = await promptBiometric(`Enable ${biometricLabel}`);
+        if (!authed) return;
+        await enableBiometricLogin(refreshToken);
+        setBiometricEnabled(await isBiometricLoginEnabled());
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Biometric sign-in could not be enabled.";
+        Alert.alert("Couldn't enable biometrics", message);
+        setBiometricEnabled(false);
       }
-      const { data } = await supabase.auth.getSession();
-      const refreshToken = data.session?.refresh_token;
-      if (!refreshToken) {
-        Alert.alert("Sign in again", "Sign out and sign in with password to enable biometric sign-in.");
-        return;
-      }
-      const authed = await promptBiometric(`Enable ${biometricLabel}`);
-      if (!authed) return;
-      await enableBiometricLogin(refreshToken);
-      setBiometricEnabled(true);
     } else {
       await disableBiometricLogin();
       setBiometricEnabled(false);
@@ -179,8 +186,7 @@ export default function ProfileScreen() {
         text: "Sign out",
         style: "destructive",
         onPress: async () => {
-          await disableBiometricLogin();
-          await supabase.auth.signOut();
+          await signOutPreservingBiometric();
           router.replace("/(auth)/welcome");
         },
       },

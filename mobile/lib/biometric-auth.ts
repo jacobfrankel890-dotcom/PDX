@@ -24,9 +24,9 @@ type LocalAuthNative = {
 };
 
 type SecureStoreNative = {
-  getItemAsync(key: string): Promise<string | null>;
-  setItemAsync(key: string, value: string): Promise<void>;
-  deleteItemAsync(key: string): Promise<void>;
+  getValueWithKeyAsync(key: string, options?: Record<string, unknown>): Promise<string | null>;
+  setValueWithKeyAsync(value: string, key: string, options?: Record<string, unknown>): Promise<void>;
+  deleteValueWithKeyAsync(key: string, options?: Record<string, unknown>): Promise<void>;
 };
 
 function getLocalAuthNative(): LocalAuthNative | null {
@@ -45,7 +45,17 @@ function getErrorMessage(error: unknown): string | null {
 }
 
 export function isBiometricNativeAvailable(): boolean {
-  return getLocalAuthNative() != null && getSecureStoreNative() != null;
+  const LocalAuthentication = getLocalAuthNative();
+  const SecureStore = getSecureStoreNative();
+  return Boolean(
+    LocalAuthentication?.authenticateAsync &&
+      LocalAuthentication?.hasHardwareAsync &&
+      LocalAuthentication?.isEnrolledAsync &&
+      LocalAuthentication?.supportedAuthenticationTypesAsync &&
+      SecureStore?.getValueWithKeyAsync &&
+      SecureStore?.setValueWithKeyAsync &&
+      SecureStore?.deleteValueWithKeyAsync
+  );
 }
 
 export async function getBiometricLabel(): Promise<string> {
@@ -81,9 +91,9 @@ export async function isBiometricLoginEnabled(): Promise<boolean> {
   const enabled = await AsyncStorage.getItem(BIOMETRIC_ENABLED_KEY);
   if (enabled !== "true") return false;
   const SecureStore = getSecureStoreNative();
-  if (!SecureStore) return false;
+  if (!SecureStore?.getValueWithKeyAsync) return false;
   try {
-    const token = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    const token = await SecureStore.getValueWithKeyAsync(REFRESH_TOKEN_KEY, {});
     return Boolean(token);
   } catch {
     return false;
@@ -107,9 +117,11 @@ export async function promptBiometric(reason: string): Promise<boolean> {
 
 export async function enableBiometricLogin(refreshToken: string): Promise<void> {
   const SecureStore = getSecureStoreNative();
-  if (!SecureStore) throw new Error("Secure storage is not available on this device.");
+  if (!SecureStore?.setValueWithKeyAsync) {
+    throw new Error("Secure storage is not available on this device.");
+  }
   try {
-    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+    await SecureStore.setValueWithKeyAsync(refreshToken, REFRESH_TOKEN_KEY, {});
     await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, "true");
   } catch (error) {
     const detail = getErrorMessage(error);
@@ -124,12 +136,30 @@ export async function enableBiometricLogin(refreshToken: string): Promise<void> 
 export async function disableBiometricLogin(): Promise<void> {
   await AsyncStorage.removeItem(BIOMETRIC_ENABLED_KEY);
   const SecureStore = getSecureStoreNative();
-  if (!SecureStore) return;
+  if (!SecureStore?.deleteValueWithKeyAsync) return;
   try {
-    await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+    await SecureStore.deleteValueWithKeyAsync(REFRESH_TOKEN_KEY, {});
   } catch {
     /* ignore */
   }
+}
+
+async function isBiometricPreferenceEnabled(): Promise<boolean> {
+  return (await AsyncStorage.getItem(BIOMETRIC_ENABLED_KEY)) === "true";
+}
+
+/** Sign out of the app but keep Face ID credentials for quick sign-in. */
+export async function signOutPreservingBiometric(): Promise<void> {
+  if (await isBiometricPreferenceEnabled()) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.refresh_token) {
+      await syncBiometricRefreshToken(data.session.refresh_token);
+    }
+    await supabase.auth.signOut({ scope: "local" });
+    return;
+  }
+
+  await supabase.auth.signOut();
 }
 
 export async function syncBiometricRefreshToken(refreshToken: string | undefined): Promise<void> {
@@ -137,9 +167,9 @@ export async function syncBiometricRefreshToken(refreshToken: string | undefined
   const enabled = await AsyncStorage.getItem(BIOMETRIC_ENABLED_KEY);
   if (enabled !== "true") return;
   const SecureStore = getSecureStoreNative();
-  if (!SecureStore) return;
+  if (!SecureStore?.setValueWithKeyAsync) return;
   try {
-    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+    await SecureStore.setValueWithKeyAsync(refreshToken, REFRESH_TOKEN_KEY, {});
   } catch {
     /* ignore */
   }
@@ -158,13 +188,13 @@ export async function signInWithBiometric(): Promise<{ ok: boolean; error?: stri
   if (!authed) return { ok: false, error: "Authentication cancelled" };
 
   const SecureStore = getSecureStoreNative();
-  if (!SecureStore) {
+  if (!SecureStore?.getValueWithKeyAsync) {
     return { ok: false, error: "Biometric sign-in requires a new app build" };
   }
 
   let refreshToken: string | null = null;
   try {
-    refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    refreshToken = await SecureStore.getValueWithKeyAsync(REFRESH_TOKEN_KEY, {});
   } catch {
     return { ok: false, error: "Biometric sign-in requires a new app build" };
   }
