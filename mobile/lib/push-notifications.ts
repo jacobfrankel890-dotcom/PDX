@@ -133,9 +133,38 @@ export async function disablePushNotificationsForCurrentUser(): Promise<void> {
   await supabase.from("user_push_tokens").update({ enabled: false }).eq("user_id", user.id);
 }
 
-export function getNotificationTarget(data: unknown): string | null {
+export type NotificationData = {
+  type?: string;
+  route?: string;
+  path?: string;
+  url?: string;
+  reminderId?: string;
+  merchant?: string;
+  amount?: string;
+  expenseDate?: string;
+  note?: string;
+};
+
+export function parseNotificationData(data: unknown): NotificationData | null {
   if (!data || typeof data !== "object") return null;
-  const record = data as Record<string, unknown>;
+  return data as NotificationData;
+}
+
+export function buildNotificationRoute(data: unknown): string | null {
+  const record = parseNotificationData(data);
+  if (!record) return null;
+
+  if (record.type === "missing_expense") {
+    const params = new URLSearchParams();
+    params.set("prefill", "1");
+    if (record.reminderId) params.set("reminderId", record.reminderId);
+    if (record.merchant) params.set("merchant", record.merchant);
+    if (record.amount) params.set("amount", record.amount);
+    if (record.expenseDate) params.set("date", record.expenseDate);
+    if (record.note) params.set("note", record.note);
+    return `/(app)/submit?${params.toString()}`;
+  }
+
   const url = record.url;
   const route = record.route;
   const path = record.path;
@@ -144,4 +173,8 @@ export function getNotificationTarget(data: unknown): string | null {
   if (typeof route === "string" && route.length > 0) return route;
   if (typeof path === "string" && path.length > 0) return path;
   return null;
+}
+
+export function getNotificationTarget(data: unknown): string | null {
+  return buildNotificationRoute(data);
 }

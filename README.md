@@ -45,6 +45,15 @@ Run SQL in this order:
 1. `supabase/schema.sql`
 2. `supabase/receipts-migration.sql`
 3. `supabase/push-tokens-migration.sql`
+4. `supabase/expense-reminders-migration.sql`
+
+Deploy push sender:
+
+```bash
+supabase functions deploy send-push
+```
+
+See `docs/PUSH_AND_RECONCILIATION.md` for admin push + reconciliation roadmap.
 
 ## Notes
 

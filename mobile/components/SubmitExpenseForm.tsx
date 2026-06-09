@@ -39,6 +39,7 @@ import {
   type Profile,
 } from "../lib/types";
 import { getErrorMessage, toIsoDate } from "../lib/utils";
+import { markExpenseReminderSubmitted } from "../lib/push-api";
 import { useScrollToField } from "../lib/use-scroll-to-field";
 import { useTheme } from "../lib/settings-context";
 import { radius, spacing, type ThemeColors } from "../constants/theme";
@@ -55,13 +56,22 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 
 type Step = "scan" | "analyzing" | "review";
 
+export type ExpensePrefillDraft = {
+  merchant?: string;
+  amount?: string;
+  expenseDate?: string;
+  relatedTo?: string;
+  reminderId?: string;
+};
+
 type Props = {
   userId: string;
   profile: Profile;
   onSubmitted: () => void;
+  prefill?: ExpensePrefillDraft;
 };
 
-export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
+export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = makeStyles(colors);
@@ -86,6 +96,8 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
   const [showDetails, setShowDetails] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isManualEntry, setIsManualEntry] = useState(false);
+  const [reminderId, setReminderId] = useState<string | undefined>(prefill?.reminderId);
+  const prefillAppliedRef = useRef(false);
 
   const parsedTotal = parseFloat(totalAmount.replace(/[^0-9.]/g, "")) || 0;
   const itemCount = analysis?.line_items.length ?? 0;
@@ -101,6 +113,29 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
       hideSub.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (!prefill || prefillAppliedRef.current) return;
+    prefillAppliedRef.current = true;
+
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsManualEntry(true);
+    setStep("review");
+    setPreviewUri(null);
+    setAnalysis(null);
+    setReceiptPath(null);
+    setShowDetails(false);
+    setMerchantName(prefill.merchant?.trim() ?? "");
+    setTotalAmount(prefill.amount?.trim() ?? "");
+    setRelatedTo(prefill.relatedTo?.trim() ?? "");
+    setReminderId(prefill.reminderId);
+    setCompany(normalizeCompanyValue(profile.company, profile.region));
+
+    if (prefill.expenseDate) {
+      const iso = toIsoDate(prefill.expenseDate);
+      if (iso) setExpenseDate(iso);
+    }
+  }, [prefill, profile.company, profile.region]);
 
   const scanReceipt = useCallback(
     async (useCamera: boolean) => {
@@ -207,6 +242,15 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted }: Props) {
         receiptUrl: receiptPath,
         company,
       });
+
+      if (reminderId) {
+        try {
+          await markExpenseReminderSubmitted(reminderId);
+        } catch {
+          /* non-blocking */
+        }
+      }
+
       Alert.alert(
         "Saved!",
         isManualEntry

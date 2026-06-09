@@ -2,11 +2,11 @@ import { router } from "expo-router";
 import * as Linking from "expo-linking";
 import * as Notifications from "expo-notifications";
 import { useEffect } from "react";
-import { getNotificationTarget } from "./push-notifications";
+import { buildNotificationRoute } from "./push-notifications";
 
 function navigateFromResponse(response: Notifications.NotificationResponse | null) {
   if (!response) return;
-  const target = getNotificationTarget(response.notification.request.content.data);
+  const target = buildNotificationRoute(response.notification.request.content.data);
   if (!target) return;
 
   if (target.startsWith("/")) {

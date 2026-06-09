@@ -29,6 +29,7 @@ import {
 } from "../../../lib/biometric-auth";
 import { scrollHapticHandlers, hapticSelection, hapticLight } from "../../../lib/haptics";
 import { useToast } from "../../../lib/toast-context";
+import { sendMissingExpensePush, sendTestPushNotification } from "../../../lib/push-api";
 import { HapticSwitch } from "../../../components/HapticSwitch";
 import { ProfileCompanyPicker, companyToRegion } from "../../../components/ProfileCompanyPicker";
 import { RolePicker } from "../../../components/RolePicker";
@@ -141,6 +142,7 @@ export default function ProfileScreen() {
   const [biometricLabel, setBiometricLabel] = useState("Biometrics");
   const [refreshing, setRefreshing] = useState(false);
   const [savingWork, setSavingWork] = useState(false);
+  const [pushTesting, setPushTesting] = useState(false);
   const hasLoadedRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -229,6 +231,45 @@ export default function ProfileScreen() {
     }
   }
 
+  async function sendTestPush() {
+    if (!notifications.pushEnabled) {
+      Alert.alert("Enable push first", "Turn on push notifications above, then try again.");
+      return;
+    }
+    setPushTesting(true);
+    try {
+      const { sent } = await sendTestPushNotification();
+      showToast(sent > 0 ? "Test notification sent" : "No devices registered");
+    } catch (error) {
+      Alert.alert("Push failed", error instanceof Error ? error.message : "Could not send test notification.");
+    } finally {
+      setPushTesting(false);
+    }
+  }
+
+  async function sendSampleMissingExpensePush() {
+    if (!profile) return;
+    if (!notifications.pushEnabled) {
+      Alert.alert("Enable push first", "Turn on push notifications above, then try again.");
+      return;
+    }
+    setPushTesting(true);
+    try {
+      await sendMissingExpensePush({
+        userId: profile.id,
+        merchant: "Sample Merchant",
+        amount: 42.5,
+        expenseDate: new Date().toISOString().slice(0, 10),
+        note: "Sample missing expense — tap to open the submit form.",
+      });
+      showToast("Sample missing-expense push sent");
+    } catch (error) {
+      Alert.alert("Push failed", error instanceof Error ? error.message : "Could not send notification.");
+    } finally {
+      setPushTesting(false);
+    }
+  }
+
   async function toggleBiometric(enabled: boolean) {
     if (enabled) {
       try {
@@ -291,6 +332,7 @@ export default function ProfileScreen() {
   }
 
   const roleLabel = getRoleLabel(profile.role);
+  const isAdmin = profile.role === "regional_manager";
 
   return (
     <ScrollView
@@ -422,6 +464,28 @@ export default function ProfileScreen() {
           </SettingRow>
         ) : null}
       </Section>
+
+      {notifications.pushEnabled ? (
+        <Section title="Push testing" colors={colors} isDark={isDark}>
+          <Pressable style={styles.linkRow} onPress={sendTestPush} disabled={pushTesting}>
+            <Text style={styles.linkRowLabel}>{pushTesting ? "Sending…" : "Send test notification"}</Text>
+            <Text style={styles.linkRowChevron}>›</Text>
+          </Pressable>
+          {isAdmin ? (
+            <Pressable
+              style={[styles.linkRow, styles.linkRowLast]}
+              onPress={sendSampleMissingExpensePush}
+              disabled={pushTesting}
+            >
+              <View style={styles.rowText}>
+                <Text style={styles.linkRowLabel}>Send sample missing expense</Text>
+                <Text style={styles.rowSub}>Admin preview — opens submit form with prefill</Text>
+              </View>
+              <Text style={styles.linkRowChevron}>›</Text>
+            </Pressable>
+          ) : null}
+        </Section>
+      ) : null}
 
       <Section title="App updates" colors={colors} isDark={isDark}>
         <SettingRow
@@ -573,6 +637,9 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
       padding: spacing.md,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
+    },
+    linkRowLast: {
+      borderBottomWidth: 0,
     },
     linkRowLabel: { fontSize: 16, fontWeight: "600", color: colors.primary },
     linkRowChevron: { fontSize: 20, color: colors.slate400, fontWeight: "300" },
