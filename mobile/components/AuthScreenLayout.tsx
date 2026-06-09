@@ -15,7 +15,7 @@ export function AuthScreenLayout({ children }: Props) {
   return (
     <ImageBackground source={TIRE_BG} style={styles.root} imageStyle={styles.image} resizeMode="cover">
       <StatusBar style="light" />
-      <BlurView intensity={92} tint="dark" style={styles.overlay} pointerEvents="none" />
+      <BlurView intensity={96} tint="dark" style={styles.overlay} pointerEvents="none" />
       <View style={styles.scrim} pointerEvents="none" />
       <SafeAreaView style={styles.content} edges={["top", "bottom"]}>
         {children}
@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   image: {
-    opacity: 0.48,
+    opacity: 0.36,
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,
