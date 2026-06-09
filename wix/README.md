@@ -54,7 +54,7 @@ Add these in **Wix Dashboard → Settings → Secrets Manager**:
 | `SUPABASE_URL` | `https://fubgrrthbqdgxvggccwk.supabase.co` | All pages |
 | `SUPABASE_ANON_KEY` | Your Supabase **anon/public** key (Settings → API in Supabase dashboard) | Employee + Admin embeds |
 | `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase **service_role** key (keep private — never put in HTML) | Admin Velo backend only |
-| `ADMIN_EMAILS` | Comma-separated admin emails, e.g. `finance@pdx.com,jacob@pdx.com` | Admin access control |
+| `ADMIN_EMAILS` | Comma-separated admin emails, e.g. `jfrankel@routemessengers.com` | Admin access control |
 
 ### Where to find Supabase keys
 
@@ -138,6 +138,7 @@ After publishing:
 
 | Issue | Fix |
 |-------|-----|
+| Build error: `Cannot find module 'wix-secrets-backend'` | Page code cannot import secrets. Use `import { getPublicConfig } from "backend/supabase-client"` in pages — secrets stay in `.jsw` files only |
 | "Connecting…" forever | Check Wix Secrets are set; republish site; verify HTML element ID matches page code |
 | "You do not have admin access" | Add your email to `ADMIN_EMAILS` secret (lowercase, comma-separated) |
 | "Request timed out" | Admin page code not published or wrong embed ID `#pdxAdminEmbed` |

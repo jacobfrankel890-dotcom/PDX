@@ -2,6 +2,18 @@ import { fetch } from "wix-fetch";
 import { getSecret } from "wix-secrets-backend";
 
 /**
+ * Public Supabase config safe to pass to HTML embeds (anon key only).
+ * Call from page code — do NOT import wix-secrets-backend in pages.
+ */
+export async function getPublicConfig() {
+  const [supabaseUrl, supabaseAnonKey] = await Promise.all([
+    getSecret("SUPABASE_URL"),
+    getSecret("SUPABASE_ANON_KEY"),
+  ]);
+  return { supabaseUrl, supabaseAnonKey };
+}
+
+/**
  * Low-level Supabase REST helper using the service role key.
  * Only import from backend modules — never expose to the frontend.
  */
