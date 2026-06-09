@@ -7,14 +7,19 @@ const cors = {
 };
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
 
 type PushPayload = {
   to: string;
   title: string;
   body: string;
   sound?: "default";
+  priority?: "default" | "normal" | "high";
   data?: Record<string, unknown>;
 };
+
+type ExpoTicket = { status?: string; id?: string; message?: string };
+type ExpoReceipt = { status?: string; message?: string; details?: { error?: string } };
 
 type RequestBody = {
   action: "test" | "missing_expense";
@@ -85,6 +90,51 @@ async function sendExpoPush(messages: PushPayload[]) {
   return body;
 }
 
+async function fetchPushReceipts(ticketIds: string[]): Promise<Record<string, ExpoReceipt>> {
+  if (ticketIds.length === 0) return {};
+
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+
+  const res = await fetch(EXPO_RECEIPTS_URL, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ids: ticketIds }),
+  });
+
+  const raw = await res.text();
+  let body: Record<string, unknown> = {};
+  try {
+    body = raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+
+  const data = body?.data;
+  return data && typeof data === "object" ? (data as Record<string, ExpoReceipt>) : {};
+}
+
+function summarizeReceipts(receipts: Record<string, ExpoReceipt>) {
+  const entries = Object.values(receipts);
+  if (entries.length === 0) {
+    return { status: "pending" as const, message: "Delivery status pending. Check Notification Center." };
+  }
+
+  const errorReceipt = entries.find((receipt) => receipt?.status === "error");
+  if (errorReceipt) {
+    const code = errorReceipt.details?.error;
+    const message =
+      code === "DeviceNotRegistered"
+        ? "This device token is stale. Turn push off and on in Profile, then try again."
+        : errorReceipt.message ?? code ?? "Push delivery failed.";
+    return { status: "error" as const, message, code };
+  }
+
+  return { status: "ok" as const, message: "Apple accepted the notification." };
+}
+
 async function isAdmin(admin: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
   const { data: profile } = await admin
     .from("profiles")
@@ -148,6 +198,7 @@ serve(async (req) => {
           title: "PDX Expense",
           body: "Push notifications are working.",
           sound: "default",
+          priority: "high",
           data: {
             type: "test",
             route: "/(app)/(tabs)/dashboard",
@@ -155,7 +206,16 @@ serve(async (req) => {
         }))
       );
 
-      return json({ success: true, sent: pushTokens.length, result });
+      const tickets = Array.isArray(result?.data) ? (result.data as ExpoTicket[]) : [];
+      const ticketIds = tickets.map((ticket) => ticket.id).filter((id): id is string => Boolean(id));
+      const receipts = await fetchPushReceipts(ticketIds);
+      const delivery = summarizeReceipts(receipts);
+
+      if (delivery.status === "error") {
+        return json({ error: delivery.message, sent: pushTokens.length, delivery, receipts }, 400);
+      }
+
+      return json({ success: true, sent: pushTokens.length, delivery, result });
     }
 
     if (action === "missing_expense") {
@@ -213,6 +273,7 @@ serve(async (req) => {
           title,
           body: pushBody,
           sound: "default",
+          priority: "high",
           data: {
             type: "missing_expense",
             route: "/(app)/submit",

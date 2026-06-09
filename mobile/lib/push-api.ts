@@ -32,9 +32,17 @@ async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T
   return data as T;
 }
 
-export async function sendTestPushNotification(): Promise<{ sent: number }> {
-  const data = await invoke<{ success: boolean; sent: number }>("send-push", { action: "test" });
-  return { sent: data.sent };
+export type PushDeliveryStatus = {
+  status: "ok" | "pending" | "error";
+  message?: string;
+  code?: string;
+};
+
+export async function sendTestPushNotification(): Promise<{ sent: number; delivery?: PushDeliveryStatus }> {
+  const data = await invoke<{ success: boolean; sent: number; delivery?: PushDeliveryStatus }>("send-push", {
+    action: "test",
+  });
+  return { sent: data.sent, delivery: data.delivery };
 }
 
 export type MissingExpensePushInput = {

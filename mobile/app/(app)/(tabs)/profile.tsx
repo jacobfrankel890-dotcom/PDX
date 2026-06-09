@@ -30,6 +30,7 @@ import {
 import { scrollHapticHandlers, hapticSelection, hapticLight } from "../../../lib/haptics";
 import { useToast } from "../../../lib/toast-context";
 import { sendMissingExpensePush, sendTestPushNotification } from "../../../lib/push-api";
+import { registerForPushNotificationsAsync } from "../../../lib/push-notifications";
 import { HapticSwitch } from "../../../components/HapticSwitch";
 import { ProfileCompanyPicker, companyToRegion } from "../../../components/ProfileCompanyPicker";
 import { RolePicker } from "../../../components/RolePicker";
@@ -238,8 +239,20 @@ export default function ProfileScreen() {
     }
     setPushTesting(true);
     try {
-      const { sent } = await sendTestPushNotification();
-      showToast(sent > 0 ? "Test notification sent" : "No devices registered");
+      await registerForPushNotificationsAsync();
+      const { sent, delivery } = await sendTestPushNotification();
+      if (sent <= 0) {
+        showToast("No devices registered");
+        return;
+      }
+      if (delivery?.status === "ok") {
+        Alert.alert(
+          "Notification sent",
+          "If you don't see a banner:\n\n• Turn off Focus / Do Not Disturb\n• Swipe down to check Notification Center\n• Background the app and try again\n• Toggle push off/on if needed"
+        );
+        return;
+      }
+      showToast(delivery?.message ?? "Test notification sent");
     } catch (error) {
       Alert.alert("Push failed", error instanceof Error ? error.message : "Could not send test notification.");
     } finally {
