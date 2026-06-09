@@ -2,12 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
+  Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../../lib/supabase";
@@ -22,7 +27,8 @@ import {
   isBiometricPreferenceEnabled,
   signOutPreservingBiometric,
 } from "../../../lib/biometric-auth";
-import { scrollHapticHandlers, hapticSelection } from "../../../lib/haptics";
+import { scrollHapticHandlers, hapticSelection, hapticLight } from "../../../lib/haptics";
+import { useToast } from "../../../lib/toast-context";
 import { HapticSwitch } from "../../../components/HapticSwitch";
 import {
   getCompanyLabel,
@@ -115,13 +121,21 @@ export default function ProfileScreen() {
   const { colors, themeMode, setThemeMode, isDark } = useTheme();
   const { notifications, setPushEnabled, setExpenseReminders, setReportUpdates, pushToken } = useSettings();
   const { info: updateInfo, checkForUpdate } = useAppUpdates(false);
+  const { showToast } = useToast();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
+
+  const appVersion = Constants.expoConfig?.version ?? "1.0.0";
+  const buildNumber =
+    Platform.OS === "ios"
+      ? Constants.expoConfig?.ios?.buildNumber
+      : Constants.expoConfig?.android?.versionCode?.toString();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState("Biometrics");
+  const [refreshing, setRefreshing] = useState(false);
   const hasLoadedRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -160,6 +174,31 @@ export default function ProfileScreen() {
     }, [])
   );
 
+  async function copyEmail() {
+    if (!profile?.email) return;
+    await Clipboard.setStringAsync(profile.email);
+    hapticLight();
+    showToast("Email copied");
+  }
+
+  async function contactSupport() {
+    hapticLight();
+    const url = "mailto:support@partsdistributionxpress.com?subject=PDX%20Expense%20Support";
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      await Linking.openURL(url);
+      return;
+    }
+    await Clipboard.setStringAsync("support@partsdistributionxpress.com");
+    showToast("Support email copied");
+  }
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }
+
   async function toggleBiometric(enabled: boolean) {
     if (enabled) {
       try {
@@ -175,6 +214,7 @@ export default function ProfileScreen() {
         }
         const saved = await enableBiometricLoginWithPrompt(refreshToken);
         setBiometricEnabled(saved && (await isBiometricPreferenceEnabled()));
+        if (saved) showToast(`${biometricLabel} sign-in enabled`);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Biometric sign-in could not be enabled.";
         Alert.alert("Couldn't enable biometrics", message);
@@ -226,6 +266,9 @@ export default function ProfileScreen() {
     <ScrollView
       style={styles.flex}
       {...scrollHapticHandlers}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+      }
       contentContainerStyle={[
         styles.content,
         {
@@ -247,7 +290,10 @@ export default function ProfileScreen() {
           <Text style={styles.userName}>
             {profile.first_name} {profile.last_name}
           </Text>
-          <Text style={styles.userEmail}>{profile.email}</Text>
+          <Pressable onPress={copyEmail} hitSlop={8}>
+            <Text style={styles.userEmail}>{profile.email}</Text>
+            <Text style={styles.copyHint}>Tap to copy email</Text>
+          </Pressable>
           <View style={styles.userMeta}>
             <Text style={styles.metaPill}>{getRegionLabel(profile.region)}</Text>
             <Text style={styles.metaPill}>{getCompanyLabel(profile.company)}</Text>
@@ -268,7 +314,11 @@ export default function ProfileScreen() {
         <Section title="Security" colors={colors} isDark={isDark}>
           <SettingRow
             label={`${biometricLabel} sign-in`}
-            subtitle={`Sign in quickly with ${biometricLabel}`}
+            subtitle={
+              biometricEnabled
+                ? `${biometricLabel} is enabled on this device`
+                : `Sign in quickly with ${biometricLabel}`
+            }
             colors={colors}
             isDark={isDark}
             last
@@ -366,6 +416,22 @@ export default function ProfileScreen() {
         </Pressable>
       </Section>
 
+      <Section title="Support" colors={colors} isDark={isDark}>
+        <Pressable style={styles.linkRow} onPress={contactSupport}>
+          <Text style={styles.linkRowLabel}>Contact support</Text>
+          <Text style={styles.linkRowChevron}>›</Text>
+        </Pressable>
+        <View style={[styles.rowStatic, styles.rowBorder]}>
+          <View style={styles.rowText}>
+            <Text style={styles.rowLabel}>App version</Text>
+            <Text style={styles.rowSub}>
+              v{appVersion}
+              {buildNumber ? ` (${buildNumber})` : ""}
+            </Text>
+          </View>
+        </View>
+      </Section>
+
       <Section title="Account" colors={colors} isDark={isDark}>
         <Pressable style={styles.signOutBtn} onPress={signOut}>
           <Text style={styles.signOutText}>Sign out</Text>
@@ -394,6 +460,11 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
       padding: spacing.md,
       borderWidth: 1,
       borderColor: colors.border,
+      shadowColor: colors.cardShadow,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: isDark ? 0.2 : 0.06,
+      shadowRadius: 8,
+      elevation: 2,
     },
     avatarLarge: {
       width: 64,
@@ -409,6 +480,7 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     userInfo: { flex: 1, gap: 4 },
     userName: { fontSize: 20, fontWeight: "700", color: colors.text },
     userEmail: { fontSize: 14, color: colors.textSecondary },
+    copyHint: { fontSize: 11, color: colors.primary, marginTop: 2, fontWeight: "600" },
     userMeta: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
     metaPill: {
       fontSize: 12,
@@ -430,10 +502,15 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     },
     sectionCard: {
       backgroundColor: colors.surface,
-      borderRadius: radius.md,
+      borderRadius: radius.lg,
       borderWidth: 1,
       borderColor: colors.border,
       overflow: "hidden",
+      shadowColor: colors.cardShadow,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: isDark ? 0.2 : 0.06,
+      shadowRadius: 8,
+      elevation: 2,
     },
     row: {
       flexDirection: "row",
@@ -446,6 +523,17 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     rowText: { flex: 1 },
     rowLabel: { fontSize: 16, fontWeight: "600", color: colors.text },
     rowSub: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+    linkRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    linkRowLabel: { fontSize: 16, fontWeight: "600", color: colors.primary },
+    linkRowChevron: { fontSize: 20, color: colors.slate400, fontWeight: "300" },
+    rowStatic: { padding: spacing.md },
     themeRow: { flexDirection: "row", padding: spacing.sm, gap: spacing.sm },
     themeChip: {
       flex: 1,

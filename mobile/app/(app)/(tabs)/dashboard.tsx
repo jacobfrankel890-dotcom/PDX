@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
@@ -29,8 +28,10 @@ import {
 } from "../../../lib/expenses";
 import { formatCurrency, getCompanyLabel, getRegionLabel, type Profile } from "../../../lib/types";
 import { getErrorMessage } from "../../../lib/utils";
-import { hapticLight, scrollHapticHandlers } from "../../../lib/haptics";
+import { hapticLight, hapticSelection, scrollHapticHandlers } from "../../../lib/haptics";
+import { useToast } from "../../../lib/toast-context";
 import { useTheme } from "../../../lib/settings-context";
+import { DashboardSkeleton } from "../../../components/DashboardSkeleton";
 import { getFabBottom, getHomeListBottomPadding, tabBarLayout } from "../../../lib/tab-bar-layout";
 import { PdxLogo } from "../../../components/PdxLogo";
 import { radius, spacing, type ThemeColors } from "../../../constants/theme";
@@ -60,6 +61,7 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
@@ -124,6 +126,24 @@ export default function DashboardScreen() {
     [expenses]
   );
 
+  const submittedCount = useMemo(
+    () => expenses.filter((e) => e.report_status === "submitted").length,
+    [expenses]
+  );
+
+  const hasActiveFilters = search.length > 0 || categoryFilter !== "all";
+
+  function clearFilters() {
+    hapticSelection();
+    setSearch("");
+    setCategoryFilter("all");
+  }
+
+  function selectFilter(next: ExpenseCategory | "all") {
+    hapticSelection();
+    setCategoryFilter(next);
+  }
+
   async function submitWeek() {
     const reportIds = pendingReportIds.length
       ? pendingReportIds
@@ -147,7 +167,7 @@ export default function DashboardScreen() {
             setSubmitting(true);
             try {
               await submitDraftReports(reportIds);
-              Alert.alert("Submitted!", "Your expenses are now pending approval.");
+              showToast("Expenses submitted for approval");
               await load(true);
             } catch (err) {
               Alert.alert("Submit failed", getErrorMessage(err));
@@ -169,15 +189,27 @@ export default function DashboardScreen() {
       <View style={styles.statsStrip}>
         <View style={styles.statBlock}>
           <Text style={styles.statValue}>{formatCurrency(weekTotal)}</Text>
-          <Text style={styles.statLabel}>This week</Text>
+          <Text style={styles.statLabel}>Pending $</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statBlock}>
           <Text style={styles.statValue}>{draftCount}</Text>
           <Text style={styles.statLabel}>Pending</Text>
         </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statBlock}>
+          <Text style={styles.statValue}>{submittedCount}</Text>
+          <Text style={styles.statLabel}>Submitted</Text>
+        </View>
         {draftCount > 0 ? (
-          <Pressable style={styles.submitWeekBtn} onPress={submitWeek} disabled={submitting}>
+          <Pressable
+            style={({ pressed }) => [styles.submitWeekBtn, pressed && styles.pressedBtn]}
+            onPress={() => {
+              hapticLight();
+              submitWeek();
+            }}
+            disabled={submitting}
+          >
             <Text style={styles.submitWeekText}>{submitting ? "…" : "Submit all"}</Text>
           </Pressable>
         ) : null}
@@ -197,7 +229,7 @@ export default function DashboardScreen() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
         <Pressable
           style={[styles.filterChip, categoryFilter === "all" && styles.filterChipActive]}
-          onPress={() => setCategoryFilter("all")}
+          onPress={() => selectFilter("all")}
         >
           <Text style={[styles.filterText, categoryFilter === "all" && styles.filterTextActive]}>All</Text>
         </Pressable>
@@ -205,7 +237,7 @@ export default function DashboardScreen() {
           <Pressable
             key={cat.key}
             style={[styles.filterChip, categoryFilter === cat.key && styles.filterChipActive]}
-            onPress={() => setCategoryFilter(cat.key)}
+            onPress={() => selectFilter(cat.key)}
           >
             <Text style={styles.filterEmoji}>{cat.emoji}</Text>
             <Text style={[styles.filterText, categoryFilter === cat.key && styles.filterTextActive]}>
@@ -214,18 +246,26 @@ export default function DashboardScreen() {
           </Pressable>
         ))}
       </ScrollView>
-      {filtered.length !== expenses.length ? (
-        <Text style={styles.resultCount}>
-          {filtered.length} of {expenses.length} receipt{expenses.length === 1 ? "" : "s"}
-        </Text>
+      {hasActiveFilters ? (
+        <View style={styles.filterMetaRow}>
+          <Text style={styles.resultCount}>
+            {filtered.length} of {expenses.length} receipt{expenses.length === 1 ? "" : "s"}
+          </Text>
+          <Pressable onPress={clearFilters} hitSlop={8}>
+            <Text style={styles.clearFilters}>Clear filters</Text>
+          </Pressable>
+        </View>
       ) : null}
     </View>
   );
 
   if (loading && !profile) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.flex}>
+        <View style={[styles.topBar, { paddingTop: insets.top + spacing.xs }]}>
+          <PdxLogo size="sm" tagline="Expense" />
+        </View>
+        <DashboardSkeleton />
       </View>
     );
   }
@@ -273,14 +313,29 @@ export default function DashboardScreen() {
             </Text>
             <Text style={styles.emptySub}>
               {expenses.length === 0
-                ? "Tap Add Receipt below to scan your first one"
+                ? "Scan a receipt to start your expense report"
                 : "Try a different search or category filter"}
             </Text>
+            {expenses.length === 0 ? (
+              <Pressable
+                style={({ pressed }) => [styles.emptyCta, pressed && styles.pressedBtn]}
+                onPress={() => {
+                  hapticLight();
+                  router.push("/(app)/submit");
+                }}
+              >
+                <Text style={styles.emptyCtaText}>Scan first receipt</Text>
+              </Pressable>
+            ) : hasActiveFilters ? (
+              <Pressable style={styles.emptyCtaGhost} onPress={clearFilters}>
+                <Text style={styles.clearFilters}>Clear filters</Text>
+              </Pressable>
+            ) : null}
           </View>
         }
         renderItem={({ item }) => (
           <Pressable
-            style={styles.expenseCard}
+            style={({ pressed }) => [styles.expenseCard, pressed && styles.expenseCardPressed]}
             onPress={() => {
               hapticLight();
               router.push(`/(app)/expense/${item.id}`);
@@ -316,12 +371,16 @@ export default function DashboardScreen() {
       />
 
       <Pressable
-        style={[
+        style={({ pressed }) => [
           styles.fab,
           tabBarLayout.fabShadow,
           { bottom: getFabBottom(insets), shadowColor: colors.primary },
+          pressed && styles.pressedBtn,
         ]}
-        onPress={() => router.push("/(app)/submit")}
+        onPress={() => {
+          hapticLight();
+          router.push("/(app)/submit");
+        }}
       >
         <Text style={styles.fabIcon}>+</Text>
         <Text style={styles.fabText}>Add Receipt</Text>
@@ -362,12 +421,19 @@ function makeStyles(colors: ThemeColors) {
   statsStrip: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: colors.greenLight,
-    borderRadius: radius.md,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    alignSelf: "stretch",
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     gap: 10,
+    shadowColor: colors.cardShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
   },
   statBlock: {
     flexDirection: "row",
@@ -375,7 +441,7 @@ function makeStyles(colors: ThemeColors) {
     gap: 6,
     flexShrink: 1,
   },
-  statValue: { fontSize: 17, fontWeight: "800", color: colors.text },
+  statValue: { fontSize: 16, fontWeight: "800", color: colors.text },
   statLabel: {
     fontSize: 10,
     fontWeight: "600",
@@ -422,20 +488,42 @@ function makeStyles(colors: ThemeColors) {
   filterEmoji: { fontSize: 13 },
   filterText: { fontSize: 12, fontWeight: "600", color: colors.slate700 },
   filterTextActive: { color: colors.onPrimary },
-  resultCount: { fontSize: 11, color: colors.slate500 },
-  empty: { alignItems: "center", paddingTop: 40, gap: 6 },
+  filterMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  resultCount: { fontSize: 12, color: colors.slate500, fontWeight: "500" },
+  clearFilters: { fontSize: 12, fontWeight: "700", color: colors.primary },
+  empty: { alignItems: "center", paddingTop: 48, gap: 8 },
   emptyEmoji: { fontSize: 40 },
   emptyTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
-  emptySub: { fontSize: 14, color: colors.textSecondary, textAlign: "center", paddingHorizontal: 24 },
+  emptySub: { fontSize: 14, color: colors.textSecondary, textAlign: "center", paddingHorizontal: 24, lineHeight: 20 },
+  emptyCta: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: radius.full,
+  },
+  emptyCtaText: { color: colors.onPrimary, fontWeight: "700", fontSize: 14 },
+  emptyCtaGhost: { marginTop: spacing.sm, paddingVertical: 8 },
   expenseCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: "hidden",
+    shadowColor: colors.cardShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
+  expenseCardPressed: { opacity: 0.92, transform: [{ scale: 0.995 }] },
+  pressedBtn: { opacity: 0.9, transform: [{ scale: 0.98 }] },
   categoryStripe: {
     width: 40,
     alignSelf: "stretch",

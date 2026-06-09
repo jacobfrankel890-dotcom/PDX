@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { enableFreeze } from "react-native-screens";
 import { SettingsProvider, useTheme } from "../lib/settings-context";
+import { ToastProvider } from "../lib/toast-context";
 import { AppUpdateGate } from "../components/AppUpdateGate";
 import { initBiometricSessionSync } from "../lib/biometric-auth";
 import { configureNotificationHandler } from "../lib/push-notifications";
@@ -59,8 +60,10 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <SettingsProvider>
-        <AppUpdateGate />
-        <RootNavigator />
+        <ToastProvider>
+          <AppUpdateGate />
+          <RootNavigator />
+        </ToastProvider>
       </SettingsProvider>
     </SafeAreaProvider>
   );
