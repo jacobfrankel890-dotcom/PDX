@@ -238,7 +238,7 @@ function makeStyles() {
     optionTextActive: { color: "#99C221", fontWeight: "600", fontSize: 15 },
     row: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
     half: { flex: 1 },
-    footerLink: { color: AUTH_GRAY_60, fontSize: 15 },
+    footerLink: { color: AUTH_GRAY_60, fontSize: 15, lineHeight: 22, textAlign: "center" },
     footerLinkBold: { color: "#99C221", fontWeight: "700" },
   });
 }

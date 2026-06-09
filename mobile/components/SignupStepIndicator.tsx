@@ -30,7 +30,7 @@ export function SignupStepIndicator({ step, total, labels, tone = "default" }: P
 
 function makeStyles(colors: ThemeColors, isAuth: boolean) {
   return StyleSheet.create({
-    wrap: { gap: spacing.sm, marginBottom: spacing.xs },
+    wrap: { gap: spacing.sm, marginBottom: spacing.sm },
     track: { flexDirection: "row", gap: 8 },
     dot: {
       flex: 1,

@@ -34,9 +34,9 @@ export function Input({ label, error, hint, style, tone = "default", ...props }:
 
 function makeStyles(colors: ReturnType<typeof useTheme>["colors"], isAuth: boolean) {
   return StyleSheet.create({
-    wrap: { gap: 6 },
+    wrap: { gap: isAuth ? 8 : 6 },
     label: {
-      fontSize: 13,
+      fontSize: isAuth ? 14 : 13,
       fontWeight: "600",
       color: isAuth ? AUTH_GRAY_60 : colors.textSecondary,
       letterSpacing: isAuth ? 0.2 : 0,
@@ -44,9 +44,9 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"], isAuth: boole
     input: {
       borderWidth: 1,
       borderColor: isAuth ? AUTH_BORDER : colors.border,
-      borderRadius: 14,
+      borderRadius: isAuth ? 16 : 14,
       paddingHorizontal: 14,
-      paddingVertical: 13,
+      paddingVertical: isAuth ? 14 : 13,
       fontSize: 16,
       backgroundColor: isAuth ? AUTH_INPUT_BG : colors.bg,
       color: isAuth ? AUTH_WHITE : colors.text,

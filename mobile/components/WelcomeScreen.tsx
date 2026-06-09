@@ -81,19 +81,19 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: grid(4),
+    paddingBottom: grid(5),
   },
   page: {
     width: "100%",
     maxWidth: 430,
     alignSelf: "center",
     paddingHorizontal: authHorizontalPad,
-    paddingTop: grid(1.5),
+    paddingTop: grid(2),
   },
   hero: {
     gap: grid(1.5),
-    marginTop: grid(1),
-    marginBottom: grid(4),
+    marginTop: grid(1.5),
+    marginBottom: grid(4.5),
   },
   badge: {
     flexDirection: "row",
@@ -128,13 +128,13 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "rgba(255,255,255,0.92)",
     lineHeight: 22,
-    maxWidth: 320,
+    maxWidth: 340,
   },
   actions: {
-    gap: grid(3),
+    gap: grid(3.5),
   },
   actionBlock: {
-    gap: grid(1),
+    gap: grid(1.25),
   },
   hint: {
     fontSize: 13,
@@ -145,10 +145,10 @@ const styles = StyleSheet.create({
   trustRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: grid(4.5),
+    marginTop: grid(5.5),
     columnGap: grid(2.5),
     rowGap: grid(1),
-    paddingBottom: grid(1),
+    paddingBottom: grid(2),
   },
   trustItem: {
     flexDirection: "row",
