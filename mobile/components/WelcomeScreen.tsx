@@ -88,12 +88,12 @@ const styles = StyleSheet.create({
     maxWidth: 430,
     alignSelf: "center",
     paddingHorizontal: authHorizontalPad,
-    paddingTop: grid(1),
+    paddingTop: grid(1.5),
   },
   hero: {
-    gap: grid(1.75),
-    marginTop: grid(1.5),
-    marginBottom: grid(3.5),
+    gap: grid(1.5),
+    marginTop: grid(1),
+    marginBottom: grid(4),
   },
   badge: {
     flexDirection: "row",
@@ -131,21 +131,21 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   actions: {
-    gap: grid(3.5),
+    gap: grid(3),
   },
   actionBlock: {
-    gap: grid(0.75),
+    gap: grid(1),
   },
   hint: {
     fontSize: 13,
     color: "rgba(255,255,255,0.76)",
     lineHeight: 18,
-    marginTop: grid(0.5),
+    marginTop: grid(1),
   },
   trustRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: grid(5),
+    marginTop: grid(4.5),
     columnGap: grid(2.5),
     rowGap: grid(1),
     paddingBottom: grid(1),

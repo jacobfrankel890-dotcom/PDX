@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.72)",
     letterSpacing: 1,
     textTransform: "uppercase",
-    marginBottom: grid(1),
+    marginBottom: grid(1.25),
   },
   pressed: {
     opacity: 0.88,

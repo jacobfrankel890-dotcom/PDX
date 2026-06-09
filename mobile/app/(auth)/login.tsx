@@ -125,7 +125,7 @@ function makeStyles() {
       fontSize: 14,
       overflow: "hidden",
     },
-    submitBtn: { marginTop: spacing.xs },
+    submitBtn: { marginTop: spacing.sm },
     footerLink: { color: AUTH_GRAY_60, fontSize: 15 },
     footerLinkBold: { color: "#99C221", fontWeight: "700" },
   });

@@ -16,6 +16,6 @@ export function AuthLogoHeader({ compact }: Props) {
 
 const styles = StyleSheet.create({
   wrap: {
-    marginBottom: grid(1.25),
+    marginBottom: grid(2),
   },
 });
