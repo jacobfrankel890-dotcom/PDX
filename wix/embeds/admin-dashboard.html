@@ -510,11 +510,23 @@
     }
 
     async function callBackend(action, params = {}, opts = {}) {
+      const adminMode = DIRECT_ADMIN_MODES[action];
+      if (adminMode && opts.preferDirect !== false) {
+        try {
+          return await callAdminDirect(adminMode, params);
+        } catch (directErr) {
+          if (opts.directOnly) throw directErr;
+        }
+      }
+
       const timeoutMs = opts.timeoutMs || 8000;
       if (useHttp) return httpBackend(action, params);
       try {
         return await callBackendBridge(action, params, timeoutMs);
       } catch (e) {
+        if (/unknown action/i.test(String(e.message || e)) && adminMode) {
+          return callAdminDirect(adminMode, params);
+        }
         if (e.message === "bridge-timeout" && (await tryHttpConnect())) {
           return httpBackend(action, params);
         }
@@ -553,9 +565,60 @@
     function defaultSupabaseFn() {
       return {
         analyzeUrl: `${PDX_SUPABASE.fnBase}/analyze-statement`,
+        adminUrl: `${PDX_SUPABASE.fnBase}/pdx-admin-api`,
         itemsUrl: `${PDX_SUPABASE.fnBase}/reconcile-items`,
         apikey: PDX_SUPABASE.anonKey,
       };
+    }
+
+    /** Wix page code often lags — these go browser → Supabase first. */
+    const DIRECT_ADMIN_MODES = {
+      stats: "dashboard_stats",
+      listPending: "list_pending_reports",
+      listEmployees: "list_employees",
+      exportCreditCardBill: "export_credit_card_bill",
+      getExportDownloadUrls: "get_export_download_urls",
+    };
+
+    async function callSupabaseEdge(url, body, label, timeoutMs = 45000) {
+      const cfg = defaultSupabaseFn();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${cfg.apikey}`,
+            apikey: cfg.apikey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        const text = await res.text();
+        let json = {};
+        try {
+          json = text ? JSON.parse(text) : {};
+        } catch (_) {
+          const snippet = text.slice(0, 120).replace(/\s+/g, " ");
+          throw new Error(`${label} failed (HTTP ${res.status}). ${snippet || "Non-JSON response"}`);
+        }
+        if (!res.ok || !json.ok) {
+          throw new Error(json.error || `${label} failed (HTTP ${res.status})`);
+        }
+        return json;
+      } catch (e) {
+        if (e?.name === "AbortError") throw new Error(`${label} timed out — try again.`);
+        throw e;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    async function callAdminDirect(mode, params = {}) {
+      const cfg = defaultSupabaseFn();
+      const json = await callSupabaseEdge(cfg.adminUrl, { mode, ...params }, mode);
+      return json.data;
     }
 
     function rememberSupabaseFn(cfg) {
@@ -1298,21 +1361,27 @@
       btn.textContent = label || (ready ? "Export .xls" : "Preparing…");
     }
 
-    function exportXls() {
+    async function exportXls() {
       if (!lastExportData) {
         alert("Run Preview totals first.");
         return;
       }
       const p = exportParams();
-      $("exportHint").textContent = "Preparing download via Wix page…";
-      postToParent({
-        type: "pdx-export-xls",
-        dateFrom: p.dateFrom,
-        dateTo: p.dateTo,
-        employeeId: p.employeeId || null,
-        statementTotal: p.statementTotal || null,
-        filenameHint: exportFilename("xls"),
-      });
+      $("exportHint").textContent = "Preparing download…";
+      try {
+        const links = await callAdminDirect("get_export_download_urls", p);
+        postToParent({ type: "pdx-download", url: links.xlsUrl, filename: links.filename });
+        $("exportHint").textContent = `Download started: ${links.filename || "export.xls"}`;
+      } catch (_) {
+        postToParent({
+          type: "pdx-export-xls",
+          dateFrom: p.dateFrom,
+          dateTo: p.dateTo,
+          employeeId: p.employeeId || null,
+          statementTotal: p.statementTotal || null,
+          filenameHint: exportFilename("xls"),
+        });
+      }
     }
 
     function scheduleExportRefresh() {
@@ -1574,40 +1643,10 @@
       return json.items || [];
     }
 
-    /** Flagged pending / bookkeeping — browser → Supabase (bypasses Wix 14s timeout). */
+    /** Flagged pending / bookkeeping — browser → analyze-statement (bypasses Wix). */
     async function callFlaggedDirect(mode, params = {}) {
       const cfg = defaultSupabaseFn();
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 45000);
-      try {
-        const res = await fetch(cfg.analyzeUrl, {
-          method: "POST",
-          signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${cfg.apikey}`,
-            apikey: cfg.apikey,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ mode, ...params }),
-        });
-        const text = await res.text();
-        let json = {};
-        try {
-          json = text ? JSON.parse(text) : {};
-        } catch (_) {
-          const snippet = text.slice(0, 120).replace(/\s+/g, " ");
-          throw new Error(`${mode} failed (HTTP ${res.status}). ${snippet || "Non-JSON response"}`);
-        }
-        if (!res.ok || !json.ok) {
-          throw new Error(json.error || `${mode} failed (HTTP ${res.status})`);
-        }
-        return json;
-      } catch (e) {
-        if (e?.name === "AbortError") throw new Error("Request timed out — try again.");
-        throw e;
-      } finally {
-        clearTimeout(timer);
-      }
+      return callSupabaseEdge(cfg.analyzeUrl, { mode, ...params }, mode);
     }
 
     /** Flag missing charge → reminder + push (browser → Supabase, never Wix). */
