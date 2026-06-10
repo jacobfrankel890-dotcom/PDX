@@ -622,6 +622,13 @@ function rcRoundMoney(n) {
   return Math.round(Number(n || 0) * 100) / 100;
 }
 
+function normalizeParseSource(source) {
+  const s = String(source || "manual");
+  if (s === "pdf_vision" || s === "pdf_text" || s === "pdf_ai") return "pdf_ai";
+  if (s === "xlsx" || s === "csv" || s === "manual") return s;
+  return "manual";
+}
+
 function rcNormMerchant(value) {
   return String(value || "")
     .toLowerCase()
@@ -648,6 +655,10 @@ function rcMerchantScore(a, b) {
   let overlap = 0;
   xw.forEach((w) => { if (yw.has(w)) overlap += 1; });
   return overlap ? overlap / Math.max(xw.size, yw.size, 1) : 0;
+}
+
+export async function fetchStatementLineItems(dateFrom, dateTo, employeeId) {
+  return fetchLineItemsForStatement(dateFrom, dateTo, employeeId || null);
 }
 
 /**
@@ -772,7 +783,7 @@ export async function saveCreditCardStatement(payload) {
       statement_total: payload.statementTotal != null ? rcRoundMoney(payload.statementTotal) : null,
       file_name: payload.fileName || null,
       storage_path: payload.storagePath || null,
-      parse_source: payload.parseSource === "pdf_vision" ? "pdf_ai" : (payload.parseSource || "manual"),
+      parse_source: normalizeParseSource(payload.parseSource),
       transactions: payload.transactions || [],
     },
     prefer: "return=representation",
@@ -926,6 +937,8 @@ export async function handlePdxAdminRequest(action, params = {}) {
         params.statementTotal,
         params.transactions
       );
+    case "fetchStatementLineItems":
+      return fetchStatementLineItems(params.dateFrom, params.dateTo, params.employeeId);
     case "getStatementAnalyzeInvoke":
       return getStatementAnalyzeInvokeConfig();
     case "prepareStatementUpload":

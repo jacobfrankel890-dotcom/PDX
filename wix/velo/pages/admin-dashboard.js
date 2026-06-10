@@ -24,6 +24,7 @@ import {
   exportCreditCardBill,
   getCreditCardBillDownloadUrls,
   reconcileCreditCardStatement,
+  fetchStatementLineItems,
   analyzeStatementFile,
   prepareStatementUpload,
   uploadStatementPdf,
@@ -63,6 +64,8 @@ async function runAdminAction(action, msg) {
         msg.statementTotal,
         msg.transactions
       );
+    case "fetchStatementLineItems":
+      return fetchStatementLineItems(msg.dateFrom, msg.dateTo, msg.employeeId);
     case "getStatementAnalyzeInvoke":
       return getStatementAnalyzeInvokeConfig();
     case "prepareStatementUpload":

@@ -476,8 +476,8 @@
       const msg = String(err?.message || err || "");
       if (/unable to handle the request/i.test(msg)) {
         return (
-          "Wix backend error — republish all 4 admin files: supabase-client.jsw (invokeSendPush), " +
-          "pdx-admin.jsw, admin-dashboard.js, and this HTML embed, then Publish the site."
+          "Wix backend error — republish pdx-admin.jsw, admin-dashboard.js, and this HTML embed, then Publish. " +
+          "If this persists, use Refresh and try again."
         );
       }
       if (/unknown action.*flagandnotifyemployee/i.test(msg)) {
@@ -1159,6 +1159,109 @@
       return Math.round((transactions || []).reduce((s, t) => s + Number(t.amount || 0), 0) * 100) / 100;
     }
 
+    // --- Client-side reconciliation (avoids sending full PDF parse through Wix postMessage) ---
+    function rcRoundMoney(n) {
+      return Math.round(Number(n || 0) * 100) / 100;
+    }
+
+    function rcNormMerchant(value) {
+      return String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9 ]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function rcDaysBetween(a, b) {
+      if (!a || !b) return 99;
+      const da = new Date(`${a}T12:00:00`);
+      const db = new Date(`${b}T12:00:00`);
+      return Math.abs(Math.round((da - db) / 86400000));
+    }
+
+    function rcMerchantScore(a, b) {
+      const x = rcNormMerchant(a);
+      const y = rcNormMerchant(b);
+      if (!x || !y) return 0;
+      if (x === y) return 1;
+      if (x.includes(y) || y.includes(x)) return 0.85;
+      const xw = new Set(x.split(" ").filter((w) => w.length > 2));
+      const yw = new Set(y.split(" ").filter((w) => w.length > 2));
+      let overlap = 0;
+      xw.forEach((w) => { if (yw.has(w)) overlap += 1; });
+      return overlap ? overlap / Math.max(xw.size, yw.size, 1) : 0;
+    }
+
+    function reconcileLocally(items, transactions, statementTotal) {
+      const appLines = (items || []).map((item) => ({
+        line_item_id: item.id,
+        user_id: item.user_id,
+        employee: [item.profile?.first_name, item.profile?.last_name].filter(Boolean).join(" "),
+        date: item.expense_date ? String(item.expense_date).slice(0, 10) : null,
+        vendor: item.description || item.related_to || "",
+        amount: rcRoundMoney(item.row_total),
+        matched: false,
+      }));
+
+      const stmtLines = (transactions || []).map((t, index) => ({
+        id: `stmt_${index}`,
+        date: t.date ? String(t.date).slice(0, 10) : null,
+        merchant: t.merchant || t.description || "",
+        amount: rcRoundMoney(Math.abs(Number(t.amount))),
+        matched: false,
+      }));
+
+      const matches = [];
+      for (const stmt of stmtLines) {
+        let bestIdx = -1;
+        let bestScore = 0;
+        for (let i = 0; i < appLines.length; i++) {
+          const app = appLines[i];
+          if (app.matched) continue;
+          if (Math.abs(app.amount - stmt.amount) > 0.02) continue;
+          const dateDiff = rcDaysBetween(app.date, stmt.date);
+          if (dateDiff > 5) continue;
+          const score = rcMerchantScore(app.vendor, stmt.merchant) + (dateDiff === 0 ? 0.25 : dateDiff <= 2 ? 0.12 : 0);
+          if (score > bestScore) {
+            bestScore = score;
+            bestIdx = i;
+          }
+        }
+        if (bestIdx >= 0 && bestScore >= 0.2) {
+          appLines[bestIdx].matched = true;
+          stmt.matched = true;
+          matches.push({
+            statement: stmt,
+            expense: appLines[bestIdx],
+            confidence: Math.round(bestScore * 100) / 100,
+          });
+        }
+      }
+
+      const missingOnApp = stmtLines.filter((s) => !s.matched);
+      const missingOnBill = appLines.filter((a) => !a.matched);
+      const statementSum = rcRoundMoney(stmtLines.reduce((sum, t) => sum + t.amount, 0));
+      const appSum = rcRoundMoney(appLines.reduce((sum, t) => sum + t.amount, 0));
+      const billTotal = statementTotal != null ? rcRoundMoney(statementTotal) : statementSum;
+
+      return {
+        summary: {
+          statement_count: stmtLines.length,
+          app_count: appLines.length,
+          matched_count: matches.length,
+          missing_on_app_count: missingOnApp.length,
+          missing_on_bill_count: missingOnBill.length,
+          statement_total: billTotal,
+          statement_parsed_total: statementSum,
+          app_total: appSum,
+          difference: rcRoundMoney(billTotal - appSum),
+        },
+        matches,
+        missing_on_app: missingOnApp,
+        missing_on_bill: missingOnBill,
+      };
+    }
+
     function findStatementTotalInSheet(rows) {
       for (let i = rows.length - 1; i >= 0; i--) {
         const row = rows[i];
@@ -1488,21 +1591,27 @@
       $("reconResults").innerHTML = '<div class="loading">Matching statement to app expenses…</div>';
       $("reconRunBtn").disabled = true;
       try {
-        const data = await callBackend("reconcileCreditCardStatement", {
-          ...p,
-          transactions: reconTransactions,
-        });
-        await callBackend("saveCreditCardStatement", {
-          cardType: $("reconCardType").value || null,
-          statementEnd: p.dateTo,
+        const items = await callBackend("fetchStatementLineItems", {
           dateFrom: p.dateFrom,
           dateTo: p.dateTo,
-          statementTotal: p.statementTotal,
-          fileName: reconFileMeta?.name || null,
-          storagePath: reconFileMeta?.storagePath || null,
-          parseSource: reconParseMeta?.parse_source || "pdf_ai",
-          transactions: reconTransactions,
+          employeeId: p.employeeId,
         });
+        const data = reconcileLocally(items, reconTransactions, p.statementTotal);
+        try {
+          await callBackend("saveCreditCardStatement", {
+            cardType: $("reconCardType").value || null,
+            statementEnd: p.dateTo,
+            dateFrom: p.dateFrom,
+            dateTo: p.dateTo,
+            statementTotal: p.statementTotal,
+            fileName: reconFileMeta?.name || null,
+            storagePath: reconFileMeta?.storagePath || null,
+            parseSource: reconParseMeta?.parse_source || "pdf_ai",
+            transactions: reconTransactions,
+          });
+        } catch (_) {
+          /* archive optional — results still shown */
+        }
         renderReconResults(data);
       } catch (e) {
         showReconMessage(friendlyBackendError(e), true);
