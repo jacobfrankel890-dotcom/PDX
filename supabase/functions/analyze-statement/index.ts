@@ -48,12 +48,29 @@ const MONTHS: Record<string, number> = {
 };
 
 const SKIP_MERCHANT =
-  /payment thank|autopay|automatic payment|online payment|payment received|credit\s*$|returned payment|balance transfer|annual fee credit|credit card credit|rewards redemption/i;
+  /payment thank|autopay|automatic payment|online payment|payment received|returned payment|balance transfer|annual fee credit|credit card credit|rewards redemption|transactions this cycle|including payments received|total fees charged|total interest charged/i;
 const SKIP_LINE =
-  /^total|^subtotal|^balance|^fees charged|^interest charged|^new balance|^minimum payment|^account total|^purchases$|^payments$|^credits$|^debits$|^summary|^page \d|^continued|^amount$/i;
+  /^total|^subtotal|^balance|^fees charged|^interest charged|^new balance|^minimum payment|^account total|^purchases$|^payments$|^credits$|^debits$|^summary|^page \d|^continued|^amount$|^opening\/closing|^previous balance|^cash advances|^balance transfers|^revolving credit|^available credit|^past due|^card \d{4}$/i;
 
 function roundMoney(n: number): number {
   return Math.round(Number(n) * 100) / 100;
+}
+
+/** Parse dollar amount preserving sign. Parentheses and leading minus = credit/payment. */
+function parseSignedMoney(raw: string | number | null | undefined): number {
+  if (raw == null || raw === "") return 0;
+  if (typeof raw === "number") return Number.isFinite(raw) ? roundMoney(raw) : 0;
+  const s = String(raw).trim();
+  const paren = /^\([\d,$\s.]+\)$/.test(s);
+  const neg = paren || s.startsWith("-") || /\s-\s*$/.test(s);
+  const n = Number(s.replace(/[$,\s()]/g, ""));
+  if (!Number.isFinite(n)) return 0;
+  return roundMoney(neg ? -Math.abs(n) : Math.abs(n));
+}
+
+/** Absolute value for statement summary lines (always positive totals). */
+function parseMoney(raw: string): number {
+  return Math.abs(parseSignedMoney(raw));
 }
 
 function parseChaseTotals(text: string): ChaseTotals {
@@ -69,6 +86,7 @@ function parseChaseTotals(text: string): ChaseTotals {
   };
   return {
     purchases_total: pick([
+      /Purchases\s*[:\s]*\+?\$?\s*([\d,]+\.\d{2})/i,
       /Total Purchases(?:\s+(?:and|&)\s+Other Debits)?\s+\$?\s*([\d,]+\.\d{2})/i,
       /Purchases(?:\s+(?:and|&)\s+Other Debits)\s+\$?\s*([\d,]+\.\d{2})/i,
       /Total Account Activity\s+\$?\s*([\d,]+\.\d{2})/i,
@@ -112,8 +130,49 @@ function filterValidCharges(transactions: ParsedTxn[]): ParsedTxn[] {
     if (SKIP_LINE.test(t.merchant.trim())) return false;
     if (/^\d+$/.test(t.merchant.trim())) return false;
     if (t.amount > 50000) return false;
+    // Cardholder section headers (e.g. "KIMBERLY BRISCO") misread as merchants
+    const m = t.merchant.trim();
+    if (
+      /^[A-Z][A-Z\s'.-]+$/.test(m) &&
+      !/[0-9*#@/]/.test(m) &&
+      m.split(/\s+/).length === 2 &&
+      m.length <= 32
+    ) {
+      return false;
+    }
     return true;
   });
+}
+
+function filterByStatementPeriod(
+  transactions: ParsedTxn[],
+  period: { start: string | null; end: string | null },
+  graceDays = 1
+): ParsedTxn[] {
+  if (!period.start || !period.end) return transactions;
+  const startMs = Date.parse(`${period.start}T00:00:00`) - graceDays * 86400000;
+  const endMs = Date.parse(`${period.end}T23:59:59`) + graceDays * 86400000;
+  return transactions.filter((t) => {
+    if (!t.date) return true;
+    const ms = Date.parse(`${t.date}T12:00:00`);
+    if (Number.isNaN(ms)) return true;
+    return ms >= startMs && ms <= endMs;
+  });
+}
+
+/** Strip phones/digits for overlap dedupe when OCR varies merchant suffixes. */
+function merchantDedupKey(merchant: string): string {
+  return String(merchant || "")
+    .toLowerCase()
+    .replace(/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/g, "")
+    .replace(/\b\d+\b/g, "")
+    .replace(/[^a-z ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter((w) => w.length > 2)
+    .slice(0, 4)
+    .join(" ");
 }
 
 function merchantSimilarity(a: string, b: string): number {
@@ -138,13 +197,29 @@ function merchantSimilarity(a: string, b: string): number {
 function removeNearDuplicates(transactions: ParsedTxn[]): { kept: ParsedTxn[]; removed: ParsedTxn[] } {
   const kept: ParsedTxn[] = [];
   const removed: ParsedTxn[] = [];
+
+  function daysApart(a: string | null, b: string | null): number {
+    if (!a || !b) return 999;
+    const ms = Math.abs(Date.parse(`${a}T12:00:00`) - Date.parse(`${b}T12:00:00`));
+    return Number.isNaN(ms) ? 999 : Math.round(ms / 86400000);
+  }
+
   for (const t of transactions) {
-    const dupIdx = kept.findIndex(
-      (k) =>
-        k.date === t.date &&
-        Math.abs(k.amount - t.amount) < 0.01 &&
-        merchantSimilarity(k.merchant, t.merchant) >= 0.85
-    );
+    const tKey = merchantDedupKey(t.merchant);
+    const dupIdx = kept.findIndex((k) => {
+      const amtClose =
+        Math.abs(k.amount - t.amount) < 0.011 ||
+        (t.amount >= 200 &&
+          Math.abs(k.amount - t.amount) <= Math.max(1, t.amount * 0.002));
+      if (!amtClose) return false;
+      const sameMerchant =
+        merchantSimilarity(k.merchant, t.merchant) >= 0.85 ||
+        (tKey.length >= 4 && tKey === merchantDedupKey(k.merchant));
+      if (!sameMerchant) return false;
+      if (k.date === t.date) return true;
+      // Vision strip overlap: same large charge misread on nearby dates
+      return t.amount >= 250 && daysApart(k.date, t.date) <= 7;
+    });
     if (dupIdx >= 0) {
       if (t.merchant.length > kept[dupIdx].merchant.length) {
         removed.push(kept[dupIdx]);
@@ -163,9 +238,13 @@ function removeNearDuplicates(transactions: ParsedTxn[]): { kept: ParsedTxn[]; r
 function accuracyReconcile(
   transactions: ParsedTxn[],
   targetTotal: number | null,
+  period?: { start: string | null; end: string | null },
   tolerance = 0.02
 ): AccuracyResult {
   let txns = filterValidCharges(transactions);
+  if (period?.start && period?.end) {
+    txns = filterByStatementPeriod(txns, period);
+  }
   const dupPass = removeNearDuplicates(txns);
   txns = dupPass.kept;
   const removed = [...dupPass.removed];
@@ -253,11 +332,6 @@ function mergeCandidateStatements(
   };
 }
 
-function parseMoney(raw: string): number {
-  const n = Number(String(raw).replace(/[$,\s]/g, ""));
-  return Number.isFinite(n) ? Math.abs(n) : 0;
-}
-
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -274,6 +348,12 @@ function parseUsDate(str: string): { y: number; m: number; d: number } | null {
     const month = MONTHS[m[1].toLowerCase()];
     if (!month) return null;
     return { y: Number(m[3]), m: month, d: Number(m[2]) };
+  }
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+  if (m) {
+    let y = Number(m[3]);
+    if (y < 100) y += 2000;
+    return { y, m: Number(m[1]), d: Number(m[2]) };
   }
   m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) return { y: Number(m[3]), m: Number(m[1]), d: Number(m[2]) };
@@ -315,7 +395,9 @@ function normalizeParsedTransactions(
 
 function parsePeriod(text: string): { start: string | null; end: string | null } {
   const patterns = [
+    /(?:Opening\/Closing Date|Billing Period|Statement Period|Account Period)[:\s]*(\d{2}\/\d{2}\/\d{2,4})\s*(?:through|to|–|-)\s*(\d{2}\/\d{2}\/\d{2,4})/i,
     /(?:Opening\/Closing Date|Billing Period|Statement Period|Account Period)[:\s]*([A-Za-z]+\s+\d{1,2},?\s+\d{4})\s*(?:through|to|–|-)\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i,
+    /(\d{2}\/\d{2}\/\d{2,4})\s*(?:through|to|–|-)\s*(\d{2}\/\d{2}\/\d{2,4})/i,
     /([A-Za-z]+\s+\d{1,2},?\s+\d{4})\s*(?:through|to|–|-)\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i,
   ];
   for (const re of patterns) {
@@ -397,7 +479,7 @@ function parseChaseStatementText(text: string): ParsedStatement {
     let match = dualDateRe.exec(line);
     if (match) {
       const [, transDate, , merchantRaw, amountRaw] = match;
-      const amount = parseMoney(amountRaw);
+      const amount = parseSignedMoney(amountRaw);
       const merchant = normalizeMerchant(merchantRaw);
       if (amount <= 0 || SKIP_MERCHANT.test(merchant) || SKIP_LINE.test(merchant)) continue;
       const [mm, dd] = transDate.split("/").map(Number);
@@ -414,7 +496,7 @@ function parseChaseStatementText(text: string): ParsedStatement {
     match = singleDateRe.exec(line);
     if (match) {
       const [, transDate, merchantRaw, amountRaw] = match;
-      const amount = parseMoney(amountRaw);
+      const amount = parseSignedMoney(amountRaw);
       const merchant = normalizeMerchant(merchantRaw);
       if (amount <= 0 || SKIP_MERCHANT.test(merchant) || SKIP_LINE.test(merchant)) continue;
       const [mm, dd] = transDate.split("/").map(Number);
@@ -439,7 +521,7 @@ function parseChaseStatementText(text: string): ParsedStatement {
         const next = lines[j];
         if (dateOnlyRe.test(next) || dualDateRe.test(next) || singleDateRe.test(next)) break;
         if (amountOnlyRe.test(next)) {
-          amount = parseMoney(next);
+          amount = parseSignedMoney(next);
           j++;
           break;
         }
@@ -473,7 +555,7 @@ function parseChaseStatementText(text: string): ParsedStatement {
     const inlineRe = /(\d{2}\/\d{2})\s+(?:\d{2}\/\d{2}\s+)?([A-Z0-9][A-Z0-9\s\*\#\.\,\-\&\/\']{4,}?)\s+(-?\$?[\d,]+\.\d{2})/g;
     let m: RegExpExecArray | null;
     while ((m = inlineRe.exec(flat)) !== null) {
-      const amount = parseMoney(m[3]);
+      const amount = parseSignedMoney(m[3]);
       const merchant = normalizeMerchant(m[2]);
       if (amount <= 0 || SKIP_MERCHANT.test(merchant) || SKIP_LINE.test(merchant)) continue;
       const [mm, dd] = m[1].split("/").map(Number);
@@ -505,17 +587,28 @@ function normalizeTransactions(
     start: parsed.period_start ? String(parsed.period_start).slice(0, 10) : null,
     end: parsed.period_end ? String(parsed.period_end).slice(0, 10) : null,
   };
-  return ((parsed.transactions as Record<string, unknown>[]) || [])
-    .map((t) => ({
+  const out: ParsedTxn[] = [];
+  for (const t of (parsed.transactions as Record<string, unknown>[]) || []) {
+    const merchant = String(t.merchant || t.description || "").trim();
+    const signed =
+      t.is_credit === true || t.is_payment === true
+        ? -1
+        : parseSignedMoney(t.amount as string | number);
+    if (signed <= 0 || !merchant) continue;
+    if (SKIP_MERCHANT.test(merchant) || SKIP_LINE.test(merchant)) continue;
+    out.push({
       date: normalizeTransactionDate(t.date, p),
-      merchant: String(t.merchant || t.description || "").trim(),
-      amount: Math.abs(Number(t.amount) || 0),
+      merchant,
+      amount: signed,
       category: t.category ? String(t.category) : null,
-    }))
-    .filter((t) => t.merchant && t.amount > 0);
+    });
+  }
+  return out.filter((t) => t.merchant && t.amount > 0);
 }
 
-function mergePageParses(pages: Record<string, unknown>[]) {
+function mergePageParses(
+  pages: Array<{ pageNum: number; pageType: "summary" | "activity"; data: Record<string, unknown> }>
+) {
   let period_start: string | null = null;
   let period_end: string | null = null;
   let purchases_total: number | null = null;
@@ -523,19 +616,24 @@ function mergePageParses(pages: Record<string, unknown>[]) {
   let statement_total: number | null = null;
   const transactions: ParsedTxn[] = [];
 
-  for (const page of pages) {
-    if (page.period_start) period_start = String(page.period_start).slice(0, 10);
-    if (page.period_end) period_end = String(page.period_end).slice(0, 10);
-    if (page.purchases_total != null && !Number.isNaN(Number(page.purchases_total))) {
-      purchases_total = Number(page.purchases_total);
+  for (const { pageType, data: page } of pages) {
+    if (pageType === "summary") {
+      if (page.period_start) period_start = String(page.period_start).slice(0, 10);
+      if (page.period_end) period_end = String(page.period_end).slice(0, 10);
+      if (page.purchases_total != null && !Number.isNaN(Number(page.purchases_total))) {
+        purchases_total = Number(page.purchases_total);
+      }
+      if (page.new_balance != null && !Number.isNaN(Number(page.new_balance))) {
+        new_balance = Number(page.new_balance);
+      }
+      continue;
     }
-    if (page.new_balance != null && !Number.isNaN(Number(page.new_balance))) {
-      new_balance = Number(page.new_balance);
-    }
-    if (page.statement_total != null && !Number.isNaN(Number(page.statement_total))) {
-      statement_total = Number(page.statement_total);
-    }
-    transactions.push(...normalizeTransactions(page));
+
+    if (page.period_start && !period_start) period_start = String(page.period_start).slice(0, 10);
+    if (page.period_end && !period_end) period_end = String(page.period_end).slice(0, 10);
+    transactions.push(
+      ...normalizeTransactions(page, { start: period_start, end: period_end })
+    );
   }
 
   return {
@@ -544,10 +642,12 @@ function mergePageParses(pages: Record<string, unknown>[]) {
     purchases_total,
     new_balance,
     statement_total: purchases_total ?? statement_total ?? new_balance,
-    transactions: normalizeParsedTransactions(dedupeTransactions(transactions), {
-      start: period_start,
-      end: period_end,
-    }),
+    transactions: removeNearDuplicates(
+      normalizeParsedTransactions(dedupeTransactions(transactions), {
+        start: period_start,
+        end: period_end,
+      })
+    ).kept,
   };
 }
 
@@ -592,7 +692,7 @@ function buildParseWarning(
   let hint = "";
   if (purchasesTotal && newBalance && Math.abs(purchasesTotal - newBalance) > 1) {
     hint =
-      " Note: New Balance includes payments/credits — validate against Total Purchases, not New Balance.";
+      " Use Total Purchases from Account Summary (not New Balance or per-card TRANSACTIONS THIS CYCLE subtotals).";
   }
   return (
     `Parsed ${transactions.length} charges totaling $${sum.toLocaleString("en-US", { minimumFractionDigits: 2 })} ` +
@@ -601,11 +701,19 @@ function buildParseWarning(
   );
 }
 
-const TEXT_PROMPT = `Parse this Chase business credit card statement text.
-Extract EVERY purchase/charge row from Account Activity sections (all cardholders).
-Skip payments, autopay credits, balance transfers, and subtotal lines.
+const TEXT_PROMPT = `Parse this Chase Ink business credit card statement text.
+Extract ONLY purchase/charge rows from "ACCOUNT ACTIVITY" sections (all cardholders).
 
-IMPORTANT: "New Balance" is NOT the sum of charges. Extract "Total Purchases" or "Purchases and Other Debits" separately.
+CRITICAL — amount signs on Chase statements:
+- POSITIVE amounts (no minus sign) = purchases/charges → INCLUDE
+- NEGATIVE amounts (leading minus, e.g. -141.00) = credits/refunds → EXCLUDE
+- "Payment Thank You" rows = payments → EXCLUDE
+- "TRANSACTIONS THIS CYCLE" subtotals = section totals → EXCLUDE as transactions
+
+From Account Summary on page 1, extract:
+- purchases_total from the "Purchases" line (e.g. +$5,531.92) — NOT per-card "TRANSACTIONS THIS CYCLE" subtotals
+- new_balance from "New Balance"
+- period from "Opening/Closing Date"
 
 Return JSON only:
 {
@@ -619,24 +727,21 @@ Return JSON only:
   ]
 }
 
-amount is POSITIVE for charges. Use the transaction date column.
+amount must be POSITIVE for included charges only.
 
 Statement text:
 `;
 
-function pageVisionPrompt(pageNum: number, totalPages: number) {
-  return `Chase Ink / Chase business credit card statement — PAGE ${pageNum} of ${totalPages}.
+function summaryPageVisionPrompt() {
+  return `Chase Ink credit card statement — PAGE 1 (Account Summary page).
 
-This page may be a scan/photo. Extract EVERY charge/purchase row from "Account Activity" or transaction tables on THIS PAGE ONLY.
-
-Layout hints:
-- Columns are often: Transaction Date | Post Date | Description/Merchant | Amount
-- Cardholder subsections (e.g. employee names in ALL CAPS) group rows — include ALL subsections
-- Each merchant line is ONE transaction — never merge rows
-- Amounts at end of row; purchases are POSITIVE numbers
-- Skip: payments, autopay, credits/refunds, "Total fees", balance lines, section headers
-- Extract purchases_total from summary if visible (Total Purchases / Purchases and Other Debits)
-- Do NOT use New Balance as purchases_total
+This page has NO transaction detail. Extract ONLY summary fields from the Account Summary box:
+- period_start / period_end from "Opening/Closing Date" (e.g. 04/21/26 - 05/20/26 → 2026-04-21, 2026-05-20)
+- purchases_total from the "Purchases" row (positive, e.g. +$5,531.92)
+- payments_total from "Payment, Credits" row (negative, for reference only)
+- new_balance from "New Balance"
+- Do NOT extract individual transactions from this page
+- Do NOT use per-card "TRANSACTIONS THIS CYCLE" subtotals as purchases_total
 
 Return JSON only:
 {
@@ -644,11 +749,109 @@ Return JSON only:
   "period_end": "YYYY-MM-DD or null",
   "purchases_total": number or null,
   "new_balance": number or null,
-  "statement_total": number or null,
+  "payments_total": number or null,
+  "transactions": []
+}`;
+}
+
+function activityPageVisionPrompt(
+  pageNum: number,
+  totalPages: number,
+  summary?: {
+    purchases_total?: number | null;
+    period_start?: string | null;
+    period_end?: string | null;
+  }
+) {
+  const hint = summary?.purchases_total
+    ? `\nStatement Total Purchases (from page 1 summary): $${summary.purchases_total.toFixed(2)} — charges on activity pages are a subset.`
+    : "";
+  const periodHint =
+    summary?.period_start && summary?.period_end
+      ? `\nStatement period: ${summary.period_start} to ${summary.period_end}.`
+      : "";
+
+  return `Chase Ink credit card statement — PAGE ${pageNum} of ${totalPages} (ACCOUNT ACTIVITY).${periodHint}${hint}
+
+Extract ONLY purchase/charge rows from the transaction table on THIS PAGE.
+
+Chase layout:
+- Columns: Date of Transaction | Merchant Name or Transaction Description | $ Amount
+- Cardholder sections (name in ALL CAPS + CARD ####) — parse ALL sections on this page
+
+CRITICAL — read the $ Amount column sign carefully:
+- POSITIVE amount (e.g. 141.00, 400.00) = purchase/charge → INCLUDE with positive amount
+- NEGATIVE amount with MINUS sign (e.g. -141.00) = credit/refund → EXCLUDE entirely
+- "Payment Thank You" with negative amount = payment → EXCLUDE
+- Parentheses like (141.00) = credit → EXCLUDE
+
+NEVER flip negative amounts to positive. If you see -141.00, that is NOT a charge.
+
+SKIP these lines entirely:
+- "TRANSACTIONS THIS CYCLE (CARD ####) $X,XXX.XX" subtotals
+- "INCLUDING PAYMENTS RECEIVED" summary lines
+- "Total fees charged in 2026" / "Total interest charged in 2026"
+
+Return JSON only:
+{
+  "period_start": null,
+  "period_end": null,
+  "purchases_total": null,
+  "new_balance": null,
   "transactions": [
     { "date": "YYYY-MM-DD", "merchant": "string", "amount": number }
   ]
+}
+
+Use MM/DD from the date column; amount must be POSITIVE for every included row.`;
+}
+
+function activityStripVisionPrompt(
+  stripIndex: number,
+  stripCount: number,
+  summary?: {
+    purchases_total?: number | null;
+    period_start?: string | null;
+    period_end?: string | null;
+  }
+) {
+  const targetHint = summary?.purchases_total
+    ? `\nFull statement Total Purchases: $${summary.purchases_total.toFixed(2)} — extract every charge visible; strips combine to reach this total.`
+    : "";
+  return `Chase Ink ACCOUNT ACTIVITY — vertical STRIP ${stripIndex} of ${stripCount} (scanned page crop).${targetHint}
+
+This image is only PART of a long activity page. Extract EVERY purchase/charge row visible in THIS crop — including rows at the very top and bottom edges.
+
+Cardholder blocks (NAME IN ALL CAPS + CARD ####) may start or end mid-crop — still extract all complete rows you see.
+When a new cardholder section starts (e.g. MICHAEL P FRANKEL, VINCENT LAMBERT), parse their charge rows too — do not skip lower sections.
+
+Rules:
+- POSITIVE $ Amount = charge → INCLUDE
+- Negative amount (-141.00) or Payment Thank You = credit/payment → EXCLUDE
+- Skip TRANSACTIONS THIS CYCLE subtotals, cardholder name-only lines, and fee footers
+- Do NOT duplicate the same merchant+amount from overlapping strip edges if already listed
+
+Return JSON only:
+{
+  "transactions": [
+    { "date": "YYYY-MM-DD or MM/DD", "merchant": "string", "amount": number }
+  ]
 }`;
+}
+
+function gapFillVisionPrompt(existingCount: number, existingSum: number, target: number, gap: number) {
+  return `Chase statement re-scan — we are MISSING charges.
+
+Already extracted: ${existingCount} charges totaling $${existingSum.toFixed(2)}.
+Statement Total Purchases: $${target.toFixed(2)}.
+Still missing approximately $${gap.toFixed(2)} in positive charges.
+
+This crop is from the ACCOUNT ACTIVITY page. Find rows we skipped — often in lower cardholder sections (second or third employee on the page).
+
+ONLY include positive purchase amounts. EXCLUDE negative credits and payments.
+
+Return JSON only:
+{ "transactions": [ { "date": "...", "merchant": "...", "amount": number } ] }`;
 }
 
 async function loadPdfBytes(fileBase64?: string, storagePath?: string): Promise<Uint8Array> {
@@ -707,29 +910,154 @@ async function callOpenAI(model: string, content: string | unknown[], maxTokens 
   return JSON.parse(raw);
 }
 
-async function parseVisionPages(pageImages: string[], visionModel: string) {
-  const totalPages = pageImages.length;
-  const pageResults: Record<string, unknown>[] = [];
-  const batchSize = 3;
+async function parseVisionPages(
+  pageImages: string[],
+  visionModel: string,
+  opts?: { visionLayout?: string; pdfPageCount?: number }
+) {
+  const layout = opts?.visionLayout === "summary_strips" ? "summary_strips" : "pages";
+  const pageResults: Array<{ pageNum: number; pageType: "summary" | "activity"; data: Record<string, unknown> }> = [];
+  let summary: Record<string, unknown> = {};
 
-  for (let i = 0; i < totalPages; i += batchSize) {
-    const batch = pageImages.slice(i, i + batchSize);
-    const batchParsed = await Promise.all(
-      batch.map((image, batchIdx) => {
-        const pageNum = i + batchIdx + 1;
-        return callOpenAI(visionModel, [
-          { type: "text", text: pageVisionPrompt(pageNum, totalPages) },
+  if (layout === "summary_strips" && pageImages.length >= 2) {
+    summary = await callOpenAI(
+      visionModel,
+      [
+        { type: "text", text: summaryPageVisionPrompt() },
+        {
+          type: "image_url",
+          image_url: { url: `data:image/jpeg;base64,${pageImages[0]}`, detail: "high" },
+        },
+      ],
+      4096
+    );
+    pageResults.push({ pageNum: 1, pageType: "summary", data: summary });
+
+    const strips = pageImages.slice(1);
+    for (let i = 0; i < strips.length; i++) {
+      const data = await callOpenAI(
+        visionModel,
+        [
+          {
+            type: "text",
+            text: activityStripVisionPrompt(i + 1, strips.length, {
+              purchases_total:
+                summary.purchases_total != null ? Number(summary.purchases_total) : null,
+              period_start: summary.period_start ? String(summary.period_start) : null,
+              period_end: summary.period_end ? String(summary.period_end) : null,
+            }),
+          },
           {
             type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${image}`, detail: "high" },
+            image_url: { url: `data:image/jpeg;base64,${strips[i]}`, detail: "high" },
           },
-        ]);
-      })
-    );
-    pageResults.push(...batchParsed);
+        ],
+        16384
+      );
+      pageResults.push({ pageNum: 2, pageType: "activity", data });
+    }
+  } else {
+    const totalPages = pageImages.length;
+    if (totalPages > 1 && pageImages[0]) {
+      summary = await callOpenAI(
+        visionModel,
+        [
+          { type: "text", text: summaryPageVisionPrompt() },
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${pageImages[0]}`, detail: "high" },
+          },
+        ],
+        4096
+      );
+      pageResults.push({ pageNum: 1, pageType: "summary", data: summary });
+    }
+
+    const batchSize = 3;
+    const activityStart = totalPages > 1 ? 1 : 0;
+
+    for (let i = activityStart; i < totalPages; i += batchSize) {
+      const batch = pageImages.slice(i, i + batchSize);
+      const batchParsed = await Promise.all(
+        batch.map((image, batchIdx) => {
+          const pageNum = i + batchIdx + 1;
+          return callOpenAI(
+            visionModel,
+            [
+              {
+                type: "text",
+                text: activityPageVisionPrompt(pageNum, totalPages, {
+                  purchases_total:
+                    summary.purchases_total != null ? Number(summary.purchases_total) : null,
+                  period_start: summary.period_start ? String(summary.period_start) : null,
+                  period_end: summary.period_end ? String(summary.period_end) : null,
+                }),
+              },
+              {
+                type: "image_url",
+                image_url: { url: `data:image/jpeg;base64,${image}`, detail: "high" },
+              },
+            ],
+            16384
+          ).then((data) => ({ pageNum, pageType: "activity" as const, data }));
+        })
+      );
+      pageResults.push(...batchParsed);
+    }
   }
 
-  return mergePageParses(pageResults);
+  let merged = mergePageParses(pageResults);
+  merged = await refineVisionIfGap(pageImages, merged, visionModel, layout, summary);
+  return merged;
+}
+
+async function refineVisionIfGap(
+  pageImages: string[],
+  merged: ParsedStatement,
+  visionModel: string,
+  layout: string,
+  summary: Record<string, unknown>
+): Promise<ParsedStatement> {
+  const target = merged.purchases_total ?? (summary.purchases_total != null ? Number(summary.purchases_total) : null);
+  if (!target || target <= 0) return merged;
+
+  const period = { start: merged.period_start, end: merged.period_end };
+  let txns = [...merged.transactions];
+  let sum = parsedSum(txns);
+  let gap = roundMoney(target - sum);
+  if (gap <= Math.max(5, target * 0.015)) return merged;
+
+  const activityImages = layout === "summary_strips" ? pageImages.slice(1) : pageImages.slice(pageImages.length > 1 ? 1 : 0);
+  const retryImages = activityImages.length > 1 ? activityImages.slice(-2) : activityImages;
+
+  for (const img of retryImages) {
+    if (gap <= Math.max(5, target * 0.015)) break;
+    try {
+      const extra = await callOpenAI(
+        visionModel,
+        [
+          { type: "text", text: gapFillVisionPrompt(txns.length, sum, target, gap) },
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${img}`, detail: "high" },
+          },
+        ],
+        16384
+      );
+      const added = normalizeTransactions(extra, period);
+      if (!added.length) continue;
+      txns = dedupeTransactions([...txns, ...added]);
+      sum = parsedSum(txns);
+      gap = roundMoney(target - sum);
+    } catch {
+      /* optional refine pass */
+    }
+  }
+
+  return {
+    ...merged,
+    transactions: normalizeParsedTransactions(txns, period),
+  };
 }
 
 async function extractPdfText(bytes: Uint8Array): Promise<string> {
@@ -1306,7 +1634,10 @@ serve(async (req) => {
 
     if (pageImages?.length) {
       const visionMerged = attachChaseTotals(
-        await parseVisionPages((pageImages as string[]).slice(0, 20), visionModel),
+        await parseVisionPages((pageImages as string[]).slice(0, 24), visionModel, {
+          visionLayout: typeof body.visionLayout === "string" ? body.visionLayout : undefined,
+          pdfPageCount: body.pdfPageCount != null ? Number(body.pdfPageCount) : undefined,
+        }),
         pdfText
       );
       candidates.push({ data: visionMerged, source: "pdf_vision" });
@@ -1348,7 +1679,7 @@ serve(async (req) => {
     const reconcileTarget = targetHint ?? purchases_total ?? statement_total;
     const period = { start: period_start, end: period_end };
     transactions = normalizeParsedTransactions(transactions, period);
-    const accuracy = accuracyReconcile(transactions, reconcileTarget);
+    const accuracy = accuracyReconcile(transactions, reconcileTarget, period);
     transactions = accuracy.transactions;
 
     const parsed_sum = accuracy.parsed_sum;

@@ -1,15 +1,11 @@
 /**
  * WIX: Employee PAGE code (Page panel → code icon on Employee/Home page)
  * HtmlComponent Velo ID must be: pdxEmployeeEmbed
+ *
+ * Sends Supabase public config only — the embed talks to Supabase directly (RLS).
  */
 
-import {
-  pingDatabase,
-  getDashboardStats,
-  listRecentExpenses,
-  listReports,
-  listEmployees,
-} from "backend/pdx-admin";
+import { getPublicConfig } from "backend/supabase-client";
 
 const EMBED_ID = "#pdxEmployeeEmbed";
 
@@ -24,37 +20,21 @@ function parseEmbedMessage(raw) {
   }
   if (typeof raw !== "object") return null;
   if (typeof raw.type === "string") return raw;
-  if (raw.requestId && raw.action) return raw;
   const keys = ["data", "message", "payload", "body"];
   for (let i = 0; i < keys.length; i++) {
     const inner = raw[keys[i]];
-    if (inner && typeof inner === "object") {
-      if (typeof inner.type === "string" || (inner.requestId && inner.action)) return inner;
-    }
+    if (inner && typeof inner === "object" && typeof inner.type === "string") return inner;
   }
   return null;
 }
 
 function postToEmbed(embed, payload) {
   try {
-    embed.postMessage(payload);
     embed.postMessage(JSON.stringify(payload));
   } catch (_) {}
 }
 
-async function runAction(action, msg) {
-  switch (action) {
-    case "ping": return pingDatabase();
-    case "stats": return getDashboardStats();
-    case "listRecentExpenses": return listRecentExpenses(msg.limit || 100);
-    case "listReports": return listReports(msg.payPeriodStart, msg.payPeriodEnd);
-    case "listEmployees": return listEmployees(msg.region);
-    default:
-      throw new Error(`Unknown action: ${action}`);
-  }
-}
-
-$w.onReady(function () {
+$w.onReady(async function () {
   let embed;
   try {
     embed = $w(EMBED_ID);
@@ -62,23 +42,21 @@ $w.onReady(function () {
     return;
   }
 
-  const onMsg = async (raw) => {
+  let config = null;
+  try {
+    config = await getPublicConfig();
+  } catch (_) {
+    /* embed uses hardcoded fallback */
+  }
+
+  const onMsg = (raw) => {
     const msg = parseEmbedMessage(raw);
-    if (!msg) return;
-
-    if (msg.type === "ready") {
-      postToEmbed(embed, { type: "pdx-connected" });
-      return;
-    }
-
-    if (!msg.requestId || !msg.action) return;
-
-    try {
-      const data = await runAction(msg.action, msg);
-      postToEmbed(embed, { requestId: msg.requestId, ok: true, data });
-    } catch (err) {
-      postToEmbed(embed, { requestId: msg.requestId, ok: false, error: err.message || "Request failed" });
-    }
+    if (!msg || msg.type !== "ready") return;
+    postToEmbed(embed, {
+      type: "pdx-config",
+      supabaseUrl: config?.supabaseUrl,
+      supabaseAnonKey: config?.supabaseAnonKey,
+    });
   };
 
   embed.onMessage((event) => {
@@ -93,5 +71,9 @@ $w.onReady(function () {
     window.addEventListener("message", (ev) => onMsg(ev.data));
   } catch (_) {}
 
-  postToEmbed(embed, { type: "pdx-connected" });
+  postToEmbed(embed, {
+    type: "pdx-config",
+    supabaseUrl: config?.supabaseUrl,
+    supabaseAnonKey: config?.supabaseAnonKey,
+  });
 });

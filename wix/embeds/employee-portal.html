@@ -4,140 +4,210 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PDX Expense</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --bg: #0f1419; --surface: #1a2332; --surface2: #243044; --border: #2d3a4f;
-      --text: #e8edf4; --muted: #8b9cb3; --accent: #3b82f6; --success: #22c55e;
-      --danger: #ef4444; --warn: #f59e0b; --radius: 10px;
+      --text: #e8edf4; --muted: #8b9cb3; --accent: #3b82f6; --accent-hover: #2563eb;
+      --success: #22c55e; --danger: #ef4444; --warn: #f59e0b; --radius: 10px;
       --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
-    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .container { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
     .logo { font-size: 1.35rem; font-weight: 700; }
     .logo span { color: var(--accent); }
-    .dev-banner { background: #422006; color: #fcd34d; font-size: 0.8rem; padding: 8px 14px; border-radius: 8px; border: 1px solid #78350f; margin-bottom: 16px; }
+    .user-pill { font-size: 0.8rem; color: var(--muted); }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; }
     h2 { font-size: 1.05rem; margin-bottom: 16px; }
-    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }
-    .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
-    .stat-value { font-size: 1.35rem; font-weight: 700; }
-    .stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+    .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; text-align: center; }
+    .stat-value { font-size: 1.25rem; font-weight: 700; }
+    .stat-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
     .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-    .tab { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 0.875rem; }
+    .tab { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 0.85rem; font-weight: 600; }
     .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
-    th { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; }
-    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+    input, select, textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--surface2); color: var(--text); font-size: 0.95rem; margin-bottom: 14px;
+    }
+    textarea { min-height: 72px; resize: vertical; }
+    .btn {
+      padding: 10px 18px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; background: var(--accent); color: #fff;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-success { background: var(--success); }
+    .btn-block { width: 100%; }
+    .hidden { display: none !important; }
+    .loading { text-align: center; padding: 32px; color: var(--muted); }
+    .error { color: var(--danger); font-size: 0.85rem; margin-bottom: 12px; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; }
     .badge-draft { background: #374151; color: #d1d5db; }
     .badge-submitted { background: #1e3a5f; color: #93c5fd; }
     .badge-approved { background: #14532d; color: #86efac; }
     .badge-rejected { background: #450a0a; color: #fca5a5; }
-    .hidden { display: none !important; }
-    .loading { text-align: center; padding: 32px; color: var(--muted); }
-    .error { color: var(--danger); font-size: 0.85rem; }
-    .muted { color: var(--muted); font-size: 0.85rem; }
-    .btn { padding: 6px 12px; border: none; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; background: var(--accent); color: #fff; }
-    .btn:disabled { opacity: 0.5; }
+    .expense-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .expense-row:last-child { border-bottom: none; }
+    .expense-main { flex: 1; min-width: 0; }
+    .expense-title { font-weight: 600; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .expense-meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+    .expense-amt { font-weight: 800; color: var(--accent); flex-shrink: 0; }
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--surface2); border: 1px solid var(--border); padding: 12px 20px;
+      border-radius: 999px; font-size: 0.85rem; font-weight: 600; z-index: 1000;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .auth-logo { text-align: center; margin-bottom: 24px; }
+    .auth-logo h1 { font-size: 1.75rem; margin-top: 8px; }
+    .link-btn { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; text-decoration: underline; }
+    .app-note { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; font-size: 0.82rem; color: var(--muted); margin-bottom: 16px; }
+    .app-note strong { color: var(--text); }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <div class="logo">PDX <span>Expense</span></div>
-      <button class="btn" id="refreshBtn">Refresh</button>
+    <div id="authView">
+      <div class="auth-logo">
+        <div style="font-size:2rem">🧾</div>
+        <h1>PDX <span style="color:var(--accent)">Expense</span></h1>
+        <p class="muted" style="margin-top:8px">Sign in with your mobile app account</p>
+      </div>
+      <div class="card">
+        <div id="authError" class="error hidden"></div>
+        <label for="authEmail">Email</label>
+        <input type="email" id="authEmail" autocomplete="email" placeholder="you@company.com" />
+        <label for="authPassword">Password</label>
+        <input type="password" id="authPassword" autocomplete="current-password" placeholder="••••••••" />
+        <button type="button" class="btn btn-block" id="signInBtn">Sign in</button>
+        <p class="muted" style="margin-top:14px;text-align:center">
+          Use the same credentials as the PDX Expense mobile app.
+          Receipt scanning is available in the app — here you can add expenses manually and submit reports.
+        </p>
+      </div>
     </div>
 
-    <div class="dev-banner">Dev mode — no sign-in. Showing all data from Supabase. Auth will be added later.</div>
-
-    <div id="configWait" class="loading">Connecting to database…</div>
-    <div id="errorBox" class="error hidden"></div>
-
     <div id="appView" class="hidden">
-      <div class="stats" id="statsRow"></div>
-      <div class="tabs">
-        <button class="tab active" data-tab="expenses">All Expenses</button>
-        <button class="tab" data-tab="reports">All Reports</button>
-        <button class="tab" data-tab="employees">Employees</button>
+      <div class="header">
+        <div>
+          <div class="logo">PDX <span>Expense</span></div>
+          <div class="user-pill" id="userGreeting"></div>
+        </div>
+        <button type="button" class="btn btn-ghost" id="signOutBtn">Sign out</button>
       </div>
 
-      <div id="tab-expenses">
+      <div class="app-note">
+        <strong>Tip:</strong> Scan receipts in the mobile app for fastest entry. This web portal lets you review expenses and submit your pay-period report.
+      </div>
+
+      <div id="errorBox" class="error hidden"></div>
+      <div class="stats" id="statsRow"></div>
+
+      <div class="tabs">
+        <button type="button" class="tab active" data-tab="home">Overview</button>
+        <button type="button" class="tab" data-tab="expenses">My expenses</button>
+        <button type="button" class="tab" data-tab="add">Add expense</button>
+        <button type="button" class="tab" data-tab="reports">Reports</button>
+      </div>
+
+      <div id="tab-home">
         <div class="card">
-          <h2>Recent expenses (all employees)</h2>
-          <div id="expensesTable"><div class="loading">Loading…</div></div>
+          <h2>Current pay period</h2>
+          <p class="muted" id="periodLabel" style="margin-bottom:16px">—</p>
+          <button type="button" class="btn btn-success btn-block" id="submitReportBtn" disabled>
+            Submit for approval
+          </button>
+          <p class="muted" id="submitHint" style="margin-top:10px;font-size:0.8rem"></p>
+        </div>
+        <div class="card">
+          <h2>Recent expenses</h2>
+          <div id="homeExpenses"><div class="loading">Loading…</div></div>
+        </div>
+      </div>
+
+      <div id="tab-expenses" class="hidden">
+        <div class="card">
+          <h2>All my expenses</h2>
+          <label for="expenseSearch">Search</label>
+          <input type="text" id="expenseSearch" placeholder="Merchant, category…" />
+          <div id="expensesList"><div class="loading">Loading…</div></div>
+        </div>
+      </div>
+
+      <div id="tab-add" class="hidden">
+        <div class="card">
+          <h2>Add expense</h2>
+          <div id="addError" class="error hidden"></div>
+          <label for="addDate">Date</label>
+          <input type="date" id="addDate" />
+          <label for="addDesc">Vendor / description</label>
+          <input type="text" id="addDesc" placeholder="Amazon, Shell, etc." />
+          <label for="addCategory">Category</label>
+          <select id="addCategory"></select>
+          <label for="addAmount">Amount ($)</label>
+          <input type="number" id="addAmount" step="0.01" min="0" placeholder="0.00" />
+          <label for="addRelated">Related to (optional)</label>
+          <input type="text" id="addRelated" placeholder="Customer, job, trip…" />
+          <button type="button" class="btn btn-block" id="addExpenseBtn">Save to draft report</button>
         </div>
       </div>
 
       <div id="tab-reports" class="hidden">
         <div class="card">
-          <h2>All pay period reports</h2>
-          <div id="reportsTable"><div class="loading">Loading…</div></div>
-        </div>
-      </div>
-
-      <div id="tab-employees" class="hidden">
-        <div class="card">
-          <h2>Employees</h2>
-          <div id="employeesTable"><div class="loading">Loading…</div></div>
+          <h2>My reports</h2>
+          <div id="reportsList"><div class="loading">Loading…</div></div>
         </div>
       </div>
     </div>
   </div>
 
-  <script>
-    const COMPANIES = [
-      { value: "cpx", label: "CPX — Canada" },
-      { value: "pdx_north", label: "PDX North — Northeast US" },
-      { value: "apx", label: "APX — Auto Parts Xpress" },
-      { value: "pdx", label: "PDX — Parts Distribution Xpress" },
-      { value: "pdx_south", label: "PDX South — Southeast US" },
-      { value: "pdx_west", label: "PDX West — Northwest US" },
-      { value: "apx_california", label: "APX California — Southwest US / California" },
-    ];
-    const POSITIONS = [
-      { value: "kam", label: "KAM" },
-      { value: "regional_manager", label: "Regional" },
-    ];
-    const CARD_TYPES = [
-      { value: "rho", label: "Rho" },
-      { value: "credit", label: "Credit" },
-    ];
-    const LEGACY_COMPANY = {
-      "Parts Distribution Xpress": "pdx",
-      "All Parts Xpress": "apx",
-      "Auto Parts Xpress": "apx",
-      CPX: "cpx",
-    };
-    function roleLabel(role) {
-      return POSITIONS.find((p) => p.value === role)?.label || role || "—";
-    }
-    function normalizeCompanyKey(e) {
-      const company = e?.company;
-      const region = e?.region;
-      if (!company) return region || "";
-      if (COMPANIES.some((c) => c.value === company)) return company;
-      if (LEGACY_COMPANY[company]) return LEGACY_COMPANY[company];
-      if (COMPANIES.some((c) => c.value === region)) return region;
-      return company;
-    }
-    function companyLabel(keyOrLegacy) {
-      if (!keyOrLegacy) return "—";
-      let key = keyOrLegacy;
-      if (LEGACY_COMPANY[keyOrLegacy]) key = LEGACY_COMPANY[keyOrLegacy];
-      const match = COMPANIES.find((c) => c.value === key);
-      return match ? match.label : keyOrLegacy;
-    }
-    function cardLabel(c) {
-      if (!c) return "—";
-      return CARD_TYPES.find((t) => t.value === c)?.label || c;
-    }
-    const CATEGORIES = ["travel_lodging","tolls_parking","office_supplies","meals_entertainment","vehicle_maintenance","marketing","misc"];
+  <div id="toast" class="toast hidden"></div>
 
-    let connected = false;
-    let reqId = 0;
-    const callbacks = new Map();
+  <script>
+    const PDX_FALLBACK = {
+      url: "https://fubgrrthbqdgxvggccwk.supabase.co",
+      anonKey:
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1YmdycnRoYnFkZ3h2Z2djY3drIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MzQxNDIsImV4cCI6MjA5NjUxMDE0Mn0._S54tw8MhvkHgkna2OoWbT-inklblikZV2rH__zvOjE",
+    };
+
+    const CATEGORIES = [
+      { key: "travel_lodging", label: "Travel / Lodging" },
+      { key: "tolls_parking", label: "Tolls / Parking" },
+      { key: "office_supplies", label: "Office supplies" },
+      { key: "meals_entertainment", label: "Meals & entertainment" },
+      { key: "vehicle_maintenance", label: "Cell / vehicle" },
+      { key: "marketing", label: "Marketing" },
+      { key: "misc", label: "Misc" },
+    ];
+
+    let sb = null;
+    let session = null;
+    let profile = null;
+    let draftReport = null;
+    let allExpenses = [];
+    let allReports = [];
+
+    function $(id) { return document.getElementById(id); }
+    function show(el) { el.classList.remove("hidden"); }
+    function hide(el) { el.classList.add("hidden"); }
+    function fmt(n) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0); }
+    function fmtDate(d) { if (!d) return "—"; return new Date(d + "T12:00:00").toLocaleDateString(); }
+
+    function showToast(msg) {
+      const el = $("toast");
+      el.textContent = msg;
+      show(el);
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => hide(el), 2800);
+    }
 
     function parseMsg(raw) {
       if (raw == null) return null;
@@ -148,164 +218,349 @@
     function postToParent(msg) {
       try {
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage(msg, "*");
           window.parent.postMessage(JSON.stringify(msg), "*");
         }
       } catch (_) {}
     }
 
-    function onConnected() {
-      if (connected) return;
-      connected = true;
-      hide($("configWait"));
-      show($("appView"));
-      loadAll();
+    function initSupabase(url, anonKey) {
+      const u = url || PDX_FALLBACK.url;
+      const k = anonKey || PDX_FALLBACK.anonKey;
+      sb = window.supabase.createClient(u, k);
     }
 
-    function $(id) { return document.getElementById(id); }
-    function show(el) { el.classList.remove("hidden"); }
-    function hide(el) { el.classList.add("hidden"); }
-    function fmt(n) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0); }
-    function fmtDate(d) { if (!d) return "—"; return new Date(d + "T12:00:00").toLocaleDateString(); }
-    function badge(s) { return `<span class="badge badge-${s}">${s}</span>`; }
+    function categoryLabel(item) {
+      for (const c of CATEGORIES) {
+        if (Number(item[c.key] || 0) > 0) return c.label;
+      }
+      if (Number(item.mileage_calc || 0) > 0) return "Mileage";
+      return "—";
+    }
 
-    function callBackend(action, params = {}) {
-      return new Promise((resolve, reject) => {
-        const requestId = `req_${++reqId}`;
-        callbacks.set(requestId, { resolve, reject });
-        postToParent({ requestId, action, ...params });
-        setTimeout(() => {
-          if (callbacks.has(requestId)) {
-            callbacks.delete(requestId);
-            reject(new Error("Timed out — check Velo page code is published and element ID is pdxEmployeeEmbed"));
-          }
-        }, 30000);
+    function badge(status) {
+      return `<span class="badge badge-${status || "draft"}">${status || "draft"}</span>`;
+    }
+
+    function weekBounds(date = new Date()) {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const mon = new Date(d.setDate(diff));
+      const sun = new Date(mon);
+      sun.setDate(mon.getDate() + 6);
+      const iso = (x) => x.toISOString().slice(0, 10);
+      return { start: iso(mon), end: iso(sun) };
+    }
+
+    async function getOrCreateDraftReport(userId) {
+      const { start, end } = weekBounds();
+      const { data: existing } = await sb
+        .from("expense_reports")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("status", "draft")
+        .eq("pay_period_start", start)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (existing?.[0]) return existing[0];
+
+      const { data, error } = await sb
+        .from("expense_reports")
+        .insert({ user_id: userId, pay_period_start: start, pay_period_end: end, status: "draft" })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+
+    async function fetchMyExpenses(userId) {
+      const { data: reports } = await sb.from("expense_reports").select("id, status, pay_period_start").eq("user_id", userId);
+      if (!reports?.length) return [];
+      const map = new Map(reports.map((r) => [r.id, r]));
+      const { data: items, error } = await sb
+        .from("expense_line_items")
+        .select("*")
+        .in("report_id", reports.map((r) => r.id))
+        .order("expense_date", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (items || []).map((item) => ({
+        ...item,
+        report_status: map.get(item.report_id)?.status,
+        pay_period_start: map.get(item.report_id)?.pay_period_start,
+      }));
+    }
+
+    async function fetchMyReports(userId) {
+      const { data, error } = await sb
+        .from("expense_reports")
+        .select("*")
+        .eq("user_id", userId)
+        .order("pay_period_start", { ascending: false })
+        .limit(24);
+      if (error) throw error;
+      return data || [];
+    }
+
+    function renderExpenseRows(items, containerId, limit) {
+      const el = $(containerId);
+      const list = limit ? items.slice(0, limit) : items;
+      if (!list.length) {
+        el.innerHTML = '<p class="muted">No expenses yet — add one or scan a receipt in the mobile app.</p>';
+        return;
+      }
+      el.innerHTML = list
+        .map(
+          (i) => `<div class="expense-row">
+          <div class="expense-main">
+            <div class="expense-title">${i.description || "Expense"}</div>
+            <div class="expense-meta">${fmtDate(i.expense_date)} · ${categoryLabel(i)} · ${badge(i.report_status)}</div>
+          </div>
+          <div class="expense-amt">${fmt(i.row_total)}</div>
+        </div>`
+        )
+        .join("");
+    }
+
+    function filterExpenses(items, q) {
+      const query = (q || "").trim().toLowerCase();
+      if (!query) return items;
+      return items.filter((i) => {
+        const hay = [i.description, i.related_to, categoryLabel(i), i.expense_date].join(" ").toLowerCase();
+        return hay.includes(query);
       });
     }
+
+    async function loadDashboard() {
+      const draftItems = allExpenses.filter((e) => e.report_status === "draft");
+      const draftTotal = draftItems.reduce((s, e) => s + Number(e.row_total || 0), 0);
+      const submitted = allExpenses.filter((e) => e.report_status === "submitted").length;
+
+      $("statsRow").innerHTML = `
+        <div class="stat"><div class="stat-value">${fmt(draftTotal)}</div><div class="stat-label">Draft total</div></div>
+        <div class="stat"><div class="stat-value">${draftItems.length}</div><div class="stat-label">Pending</div></div>
+        <div class="stat"><div class="stat-value">${submitted}</div><div class="stat-label">Submitted</div></div>`;
+
+      if (draftReport) {
+        $("periodLabel").textContent = `${fmtDate(draftReport.pay_period_start)} – ${fmtDate(draftReport.pay_period_end)}`;
+      }
+
+      const btn = $("submitReportBtn");
+      const draftCount = draftItems.filter((e) => e.report_id === draftReport?.id).length;
+      btn.disabled = !draftReport || draftCount === 0;
+      btn.textContent = draftCount
+        ? `Submit ${draftCount} expense${draftCount === 1 ? "" : "s"} (${fmt(draftTotal)})`
+        : "Submit for approval";
+      $("submitHint").textContent = draftCount
+        ? "Sends your current draft pay-period report to finance for approval."
+        : "Add expenses to your draft report first.";
+
+      renderExpenseRows(allExpenses, "homeExpenses", 6);
+      renderExpenseRows(filterExpenses(allExpenses, $("expenseSearch").value), "expensesList");
+      renderReports();
+    }
+
+    function renderReports() {
+      const el = $("reportsList");
+      if (!allReports.length) {
+        el.innerHTML = '<p class="muted">No reports yet.</p>';
+        return;
+      }
+      el.innerHTML = allReports
+        .map(
+          (r) => `<div class="expense-row">
+          <div class="expense-main">
+            <div class="expense-title">${fmtDate(r.pay_period_start)} – ${fmtDate(r.pay_period_end)}</div>
+            <div class="expense-meta">${badge(r.status)}${r.submitted_at ? " · Submitted " + new Date(r.submitted_at).toLocaleDateString() : ""}</div>
+          </div>
+          <div class="expense-amt">${fmt(r.grand_total)}</div>
+        </div>`
+        )
+        .join("");
+    }
+
+    async function reloadData() {
+      if (!session?.user) return;
+      hide($("errorBox"));
+      draftReport = await getOrCreateDraftReport(session.user.id);
+      allExpenses = await fetchMyExpenses(session.user.id);
+      allReports = await fetchMyReports(session.user.id);
+      await loadDashboard();
+    }
+
+    async function showApp(user) {
+      session = { user };
+      const { data: p } = await sb.from("profiles").select("*").eq("id", user.id).single();
+      profile = p;
+      hide($("authView"));
+      show($("appView"));
+      $("userGreeting").textContent = `${p?.first_name || ""} ${p?.last_name || ""}`.trim() || user.email;
+      await reloadData();
+    }
+
+    async function checkSession() {
+      const { data } = await sb.auth.getSession();
+      if (data.session?.user) await showApp(data.session.user);
+    }
+
+    async function signIn() {
+      hide($("authError"));
+      const email = $("authEmail").value.trim();
+      const password = $("authPassword").value;
+      if (!email || !password) {
+        $("authError").textContent = "Enter email and password.";
+        show($("authError"));
+        return;
+      }
+      $("signInBtn").disabled = true;
+      try {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        await showApp(data.user);
+        showToast("Signed in");
+      } catch (e) {
+        $("authError").textContent = e.message || "Sign in failed";
+        show($("authError"));
+      } finally {
+        $("signInBtn").disabled = false;
+      }
+    }
+
+    async function signOut() {
+      await sb.auth.signOut();
+      session = null;
+      profile = null;
+      show($("authView"));
+      hide($("appView"));
+    }
+
+    async function addExpense() {
+      hide($("addError"));
+      if (!session?.user || !draftReport) return;
+
+      const amount = Number($("addAmount").value);
+      const category = $("addCategory").value;
+      const description = $("addDesc").value.trim();
+      const expenseDate = $("addDate").value || new Date().toISOString().slice(0, 10);
+      const relatedTo = $("addRelated").value.trim();
+
+      if (!description || !Number.isFinite(amount) || amount <= 0) {
+        $("addError").textContent = "Enter a vendor and amount greater than zero.";
+        show($("addError"));
+        return;
+      }
+
+      $("addExpenseBtn").disabled = true;
+      try {
+        const { count } = await sb
+          .from("expense_line_items")
+          .select("*", { count: "exact", head: true })
+          .eq("report_id", draftReport.id);
+
+        const payload = {
+          report_id: draftReport.id,
+          sort_order: count ?? 0,
+          expense_date: expenseDate,
+          description,
+          related_to: relatedTo || null,
+          company: profile?.company || null,
+          travel_lodging: 0, tolls_parking: 0, miles: 0, mileage_calc: 0,
+          office_supplies: 0, meals_entertainment: 0, vehicle_maintenance: 0, marketing: 0, misc: 0,
+          row_total: Math.round(amount * 100) / 100,
+        };
+        payload[category] = Math.round(amount * 100) / 100;
+
+        const { error } = await sb.from("expense_line_items").insert(payload);
+        if (error) throw error;
+
+        $("addDesc").value = "";
+        $("addAmount").value = "";
+        $("addRelated").value = "";
+        showToast("Expense saved");
+        await reloadData();
+        document.querySelector('.tab[data-tab="home"]').click();
+      } catch (e) {
+        $("addError").textContent = e.message || "Could not save";
+        show($("addError"));
+      } finally {
+        $("addExpenseBtn").disabled = false;
+      }
+    }
+
+    async function submitReport() {
+      if (!draftReport) return;
+      const draftItems = allExpenses.filter((e) => e.report_id === draftReport.id);
+      if (!draftItems.length) return;
+
+      if (!confirm(`Submit ${draftItems.length} expense(s) for approval?`)) return;
+
+      $("submitReportBtn").disabled = true;
+      try {
+        const grandTotal = draftItems.reduce((s, e) => s + Number(e.row_total || 0), 0);
+        const { error } = await sb
+          .from("expense_reports")
+          .update({
+            status: "submitted",
+            submitted_at: new Date().toISOString(),
+            grand_total: Math.round(grandTotal * 100) / 100,
+          })
+          .eq("id", draftReport.id)
+          .eq("status", "draft");
+        if (error) throw error;
+        showToast("Report submitted");
+        draftReport = await getOrCreateDraftReport(session.user.id);
+        await reloadData();
+      } catch (e) {
+        $("errorBox").textContent = e.message || "Submit failed";
+        show($("errorBox"));
+      } finally {
+        $("submitReportBtn").disabled = false;
+      }
+    }
+
+    // Init
+    $("addCategory").innerHTML = CATEGORIES.map((c) => `<option value="${c.key}">${c.label}</option>`).join("");
+    $("addDate").value = new Date().toISOString().slice(0, 10);
+
+    $("signInBtn").onclick = signIn;
+    $("signOutBtn").onclick = signOut;
+    $("addExpenseBtn").onclick = addExpense;
+    $("submitReportBtn").onclick = submitReport;
+    $("expenseSearch").addEventListener("input", () => {
+      renderExpenseRows(filterExpenses(allExpenses, $("expenseSearch").value), "expensesList");
+    });
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        ["home", "expenses", "add", "reports"].forEach((n) => {
+          const el = $(`tab-${n}`);
+          n === tab.dataset.tab ? show(el) : hide(el);
+        });
+      });
+    });
 
     window.addEventListener("message", (event) => {
       const data = parseMsg(event.data);
       if (!data) return;
-      if (data.type === "ready" || data.type === "pdx-connected") {
-        onConnected();
-        return;
-      }
-      if (data?.requestId && callbacks.has(data.requestId)) {
-        const { resolve, reject } = callbacks.get(data.requestId);
-        callbacks.delete(data.requestId);
-        data.ok ? resolve(data.data) : reject(new Error(data.error || "Failed"));
+      if (data.type === "pdx-config") {
+        initSupabase(data.supabaseUrl, data.supabaseAnonKey);
+        checkSession();
       }
     });
 
-    function getCategory(item) {
-      for (const k of CATEGORIES) if (Number(item[k] || 0) > 0) return k.replace(/_/g, " ");
-      if (Number(item.mileage_calc || 0) > 0) return "mileage";
-      return "—";
-    }
+    initSupabase(PDX_FALLBACK.url, PDX_FALLBACK.anonKey);
+    postToParent({ type: "ready" });
+    checkSession();
 
-    async function loadStats() {
-      const s = await callBackend("stats");
-      $("statsRow").innerHTML = `
-        <div class="stat"><div class="stat-value">${s.employee_count}</div><div class="stat-label">Employees</div></div>
-        <div class="stat"><div class="stat-value">${s.report_count}</div><div class="stat-label">Reports</div></div>
-        <div class="stat"><div class="stat-value">${s.pending_count}</div><div class="stat-label">Pending</div></div>
-        <div class="stat"><div class="stat-value">${fmt(s.total_expenses)}</div><div class="stat-label">Submitted+Approved</div></div>`;
-    }
-
-    async function loadExpenses() {
-      $("expensesTable").innerHTML = '<div class="loading">Loading…</div>';
-      const items = await callBackend("listRecentExpenses", { limit: 100 });
-      if (!items?.length) {
-        $("expensesTable").innerHTML = '<p class="muted">No expenses in database yet.</p>';
-        return;
+    sb.auth.onAuthStateChange((_event, authSession) => {
+      if (authSession?.user) showApp(authSession.user);
+      else if (!authSession) {
+        hide($("appView"));
+        show($("authView"));
       }
-      $("expensesTable").innerHTML = `<table>
-        <thead><tr><th>Employee</th><th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th>Status</th></tr></thead>
-        <tbody>${items.map((i) => {
-          const e = i.employee || {};
-          return `<tr>
-            <td>${e.first_name || ""} ${e.last_name || ""}</td>
-            <td>${fmtDate(i.expense_date)}</td>
-            <td>${i.description || "—"}</td>
-            <td>${getCategory(i)}</td>
-            <td>${fmt(i.row_total)}</td>
-            <td>${badge(i.report_status || "draft")}</td>
-          </tr>`;
-        }).join("")}</tbody></table>`;
-    }
-
-    async function loadReports() {
-      $("reportsTable").innerHTML = '<div class="loading">Loading…</div>';
-      const reports = await callBackend("listReports");
-      if (!reports?.length) {
-        $("reportsTable").innerHTML = '<p class="muted">No reports yet.</p>';
-        return;
-      }
-      $("reportsTable").innerHTML = `<table>
-        <thead><tr><th>Employee</th><th>Pay period</th><th>Total</th><th>Status</th><th>Submitted</th></tr></thead>
-        <tbody>${reports.map((r) => {
-          const e = r.employee || {};
-          return `<tr>
-            <td>${e.first_name || ""} ${e.last_name || ""}</td>
-            <td>${fmtDate(r.pay_period_start)} – ${fmtDate(r.pay_period_end)}</td>
-            <td>${fmt(r.grand_total)}</td>
-            <td>${badge(r.status)}</td>
-            <td>${r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : "—"}</td>
-          </tr>`;
-        }).join("")}</tbody></table>`;
-    }
-
-    async function loadEmployees() {
-      $("employeesTable").innerHTML = '<div class="loading">Loading…</div>';
-      const employees = await callBackend("listEmployees");
-      if (!employees?.length) {
-        $("employeesTable").innerHTML = '<p class="muted">No employees yet.</p>';
-        return;
-      }
-      $("employeesTable").innerHTML = `<table>
-        <thead><tr><th>Name</th><th>Email</th><th>Position</th><th>Company</th><th>Card</th></tr></thead>
-        <tbody>${employees.map((e) => `<tr>
-          <td>${e.first_name} ${e.last_name}</td>
-          <td>${e.email}</td>
-          <td>${roleLabel(e.role)}</td>
-          <td>${companyLabel(normalizeCompanyKey(e))}</td>
-          <td>${cardLabel(e.card_type)}</td>
-        </tr>`).join("")}</tbody></table>`;
-    }
-
-    async function loadAll() {
-      hide($("errorBox"));
-      try {
-        await callBackend("ping");
-        await Promise.all([loadStats(), loadExpenses()]);
-      } catch (e) {
-        $("errorBox").textContent = e.message;
-        show($("errorBox"));
-      }
-    }
-
-    document.querySelectorAll(".tab").forEach((tab) => {
-      tab.addEventListener("click", async () => {
-        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-        tab.classList.add("active");
-        ["expenses", "reports", "employees"].forEach((n) => {
-          show($(`tab-${n}`));
-          if (n !== tab.dataset.tab) hide($(`tab-${n}`));
-        });
-        try {
-          if (tab.dataset.tab === "reports") await loadReports();
-          if (tab.dataset.tab === "employees") await loadEmployees();
-        } catch (e) {
-          $("errorBox").textContent = e.message;
-          show($("errorBox"));
-        }
-      });
     });
-
-    $("refreshBtn").addEventListener("click", loadAll);
-    function handshake() { postToParent({ type: "ready" }); }
-    handshake();
-    setInterval(() => { if (!connected) handshake(); }, 1500);
   </script>
 </body>
 </html>
