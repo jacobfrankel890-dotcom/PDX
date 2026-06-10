@@ -540,7 +540,7 @@
         return "Backend error — republish admin-dashboard.html and deploy analyze-statement edge function.";
       }
       if (/unknown action/i.test(msg)) {
-        return `${msg} — republish admin-dashboard.js and pdx-admin.jsw, then Publish.`;
+        return `${msg} — paste updated admin-dashboard.html into Wix and Publish (admin actions now bypass Wix page code).`;
       }
       if (/unknown action.*flagandnotifyemployee/i.test(msg)) {
         return "Flag action missing — paste updated admin-dashboard.js and pdx-admin.jsw into Wix, then Publish.";
@@ -573,11 +573,17 @@
 
     /** Wix page code often lags — these go browser → Supabase first. */
     const DIRECT_ADMIN_MODES = {
+      ping: "ping",
       stats: "dashboard_stats",
       listPending: "list_pending_reports",
       listEmployees: "list_employees",
       exportCreditCardBill: "export_credit_card_bill",
       getExportDownloadUrls: "get_export_download_urls",
+      prepareStatementUpload: "prepare_statement_upload",
+      uploadStatementPdf: "upload_statement_pdf",
+      getReportReview: "get_report_review",
+      approve: "approve_report",
+      reject: "reject_report",
     };
 
     async function callSupabaseEdge(url, body, label, timeoutMs = 45000) {
@@ -1976,7 +1982,7 @@
           let storagePath = null;
           try {
             $("reconResults").innerHTML = '<div class="loading">Uploading PDF…</div>';
-            const prep = await callBackend("prepareStatementUpload", { fileName: file.name }, { timeoutMs: 20000 });
+            const prep = await callAdminDirect("prepare_statement_upload", { fileName: file.name });
             const putRes = await fetch(prep.signedUrl, {
               method: "PUT",
               headers: {
@@ -1993,13 +1999,12 @@
                 "PDF upload failed — run supabase/cc-statements-migration.sql in Supabase, then try again"
               );
             }
-            $("reconResults").innerHTML = '<div class="loading">Uploading PDF via backend…</div>';
+            $("reconResults").innerHTML = '<div class="loading">Uploading PDF via Supabase…</div>';
             const base64 = await fileToBase64(file);
-            const uploaded = await callBackend(
-              "uploadStatementPdf",
-              { fileBase64: base64, fileName: file.name },
-              { timeoutMs: 60000 }
-            );
+            const uploaded = await callAdminDirect("upload_statement_pdf", {
+              fileBase64: base64,
+              fileName: file.name,
+            });
             storagePath = uploaded.storagePath;
           }
           reconFileMeta.storagePath = storagePath;

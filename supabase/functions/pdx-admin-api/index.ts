@@ -451,6 +451,187 @@ async function getExportDownloadUrls(body: Record<string, unknown>) {
   };
 }
 
+function storageBase() {
+  return Deno.env.get("SUPABASE_URL")!.replace(/\/$/, "");
+}
+
+function storageKey() {
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+}
+
+function encodeStoragePath(storagePath: string) {
+  return storagePath.split("/").map((segment) => encodeURIComponent(segment)).join("/");
+}
+
+async function signStorageUrl(bucket: string, path: string): Promise<string | null> {
+  if (!path) return null;
+  const trimmed = path.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+
+  const baseUrl = storageBase();
+  const serviceKey = storageKey();
+  const res = await fetch(`${baseUrl}/storage/v1/object/sign/${bucket}/${encodeStoragePath(trimmed)}`, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ expiresIn: 3600 }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return null;
+  const signed = (data as { signedURL?: string; signedUrl?: string }).signedURL ||
+    (data as { signedUrl?: string }).signedUrl;
+  if (!signed) return null;
+  if (signed.startsWith("http")) return signed;
+  return `${baseUrl}/storage/v1${signed.startsWith("/") ? signed : `/${signed}`}`;
+}
+
+async function prepareStatementUpload(fileName: string) {
+  const safe = String(fileName || "statement.pdf").replace(/[^\w.-]+/g, "_").slice(0, 80);
+  const storagePath = `uploads/${Date.now()}_${safe}`;
+  const baseUrl = storageBase();
+  const serviceKey = storageKey();
+  const encodedPath = encodeStoragePath(storagePath);
+
+  const res = await fetch(`${baseUrl}/storage/v1/object/upload/sign/statements/${encodedPath}`, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+      "x-upsert": "true",
+    },
+    body: JSON.stringify({}),
+  });
+  const text = await res.text();
+  let data: Record<string, unknown> = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(text.slice(0, 160) || "Could not create upload URL");
+  }
+  if (!res.ok) {
+    const hint = /bucket/i.test(text)
+      ? " — run supabase/cc-statements-migration.sql in Supabase SQL editor"
+      : "";
+    throw new Error(String(data.message || data.error || text.slice(0, 160) || "Could not create upload URL") + hint);
+  }
+
+  const storageV1 = `${baseUrl}/storage/v1`;
+  const relUrl = String(data.url || "");
+  let signedUrl = String(data.signedUrl || "");
+  let token = String(data.token || "");
+  if (!signedUrl && relUrl) {
+    signedUrl = relUrl.startsWith("http") ? relUrl : `${storageV1}${relUrl.startsWith("/") ? relUrl : `/${relUrl}`}`;
+    try {
+      if (!token) token = new URL(signedUrl).searchParams.get("token") || "";
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!signedUrl) throw new Error("Invalid upload sign response from Supabase");
+
+  return { storagePath, signedUrl, token };
+}
+
+async function uploadStatementPdf(fileBase64: string, fileName: string) {
+  if (!fileBase64) throw new Error("fileBase64 required");
+  const safe = String(fileName || "statement.pdf").replace(/[^\w.-]+/g, "_").slice(0, 80);
+  const storagePath = `uploads/${Date.now()}_${safe}`;
+  const bytes = Uint8Array.from(atob(fileBase64), (c) => c.charCodeAt(0));
+
+  const baseUrl = storageBase();
+  const serviceKey = storageKey();
+  const uploadRes = await fetch(`${baseUrl}/storage/v1/object/statements/${encodeStoragePath(storagePath)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      "Content-Type": "application/pdf",
+      "x-upsert": "true",
+    },
+    body: bytes,
+  });
+  if (!uploadRes.ok) {
+    const text = await uploadRes.text();
+    throw new Error(text.slice(0, 200) || "PDF upload failed");
+  }
+  return { storagePath };
+}
+
+async function getReportLineItems(reportId: string) {
+  const items = (await supabaseQuery(
+    `expense_line_items?report_id=eq.${encodeURIComponent(reportId)}&select=*&order=sort_order.asc`
+  )) as Array<Record<string, unknown>>;
+
+  return Promise.all(
+    (items || []).map(async (item) => ({
+      ...item,
+      receipt_image_url: await signStorageUrl("receipts", String(item.receipt_url || "")),
+    }))
+  );
+}
+
+async function getReportReview(reportId: string) {
+  if (!reportId) throw new Error("Missing reportId");
+  const lineItems = await getReportLineItems(reportId);
+  const uploads = (await supabaseQuery(
+    `receipt_uploads?report_id=eq.${encodeURIComponent(reportId)}&select=id,storage_path,file_name,created_at,status&order=created_at.asc`
+  )) as Array<Record<string, unknown>>;
+
+  const seenPaths = new Set(lineItems.map((i) => i.receipt_url).filter(Boolean));
+  const receiptGallery = [];
+  for (const upload of uploads || []) {
+    const storagePath = String(upload.storage_path || "");
+    if (!storagePath || seenPaths.has(storagePath)) continue;
+    receiptGallery.push({
+      ...upload,
+      receipt_image_url: await signStorageUrl("receipts", storagePath),
+    });
+  }
+  return { line_items: lineItems, receipt_gallery: receiptGallery };
+}
+
+async function approveReport(reportId: string, approverName?: string | null) {
+  const rows = (await supabaseQuery(
+    `expense_reports?id=eq.${encodeURIComponent(reportId)}&status=eq.submitted`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        status: "approved",
+        approved_at: new Date().toISOString(),
+        approved_by: approverName || "Admin",
+      }),
+    }
+  )) as unknown[];
+  if (!rows?.[0]) throw new Error("Report not found or not in submitted status");
+  return rows[0];
+}
+
+async function rejectReport(reportId: string, reason?: string | null) {
+  const rows = (await supabaseQuery(
+    `expense_reports?id=eq.${encodeURIComponent(reportId)}&status=eq.submitted`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        status: "rejected",
+        notes: reason || null,
+      }),
+    }
+  )) as unknown[];
+  if (!rows?.[0]) throw new Error("Report not found or not in submitted status");
+  return rows[0];
+}
+
+async function pingDatabase() {
+  await supabaseQuery("app_settings?key=eq.mileage_rate&select=key,value&limit=1");
+  return { ok: true, ts: new Date().toISOString() };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -471,6 +652,18 @@ serve(async (req) => {
         return jsonOk(await exportCreditCardBill(body));
       case "get_export_download_urls":
         return jsonOk(await getExportDownloadUrls(body));
+      case "prepare_statement_upload":
+        return jsonOk(await prepareStatementUpload(String(body.fileName || "statement.pdf")));
+      case "upload_statement_pdf":
+        return jsonOk(await uploadStatementPdf(String(body.fileBase64 || ""), String(body.fileName || "statement.pdf")));
+      case "get_report_review":
+        return jsonOk(await getReportReview(String(body.reportId || "")));
+      case "approve_report":
+        return jsonOk(await approveReport(String(body.reportId || ""), body.approverName ? String(body.approverName) : null));
+      case "reject_report":
+        return jsonOk(await rejectReport(String(body.reportId || ""), body.reason ? String(body.reason) : null));
+      case "ping":
+        return jsonOk(await pingDatabase());
       default:
         return jsonErr(`Unknown mode: ${mode}`, 400);
     }
