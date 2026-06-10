@@ -525,7 +525,7 @@
     function friendlyBackendError(err) {
       const msg = String(err?.message || err || "");
       if (/unable to handle the request/i.test(msg)) {
-        return "Wix backend error — refresh the page and republish admin-dashboard.html if this happens outside Reconcile.";
+        return "Backend error — republish admin-dashboard.html and deploy analyze-statement edge function.";
       }
       if (/unknown action/i.test(msg)) {
         return `${msg} — republish admin-dashboard.js and pdx-admin.jsw, then Publish.`;
@@ -863,7 +863,7 @@
         btn.onclick = async () => {
           btn.disabled = true;
           try {
-            await callBackend("confirmFlaggedReminder", { reminderId: btn.dataset.id });
+            await callFlaggedDirect("confirm_flagged_reminder", { reminderId: btn.dataset.id });
             await loadFlaggedPending();
             await loadFlaggedConfirmed();
             await loadStats();
@@ -878,7 +878,7 @@
           if (!confirm("Dismiss this flagged charge?")) return;
           btn.disabled = true;
           try {
-            await callBackend("dismissFlaggedReminder", { reminderId: btn.dataset.id });
+            await callFlaggedDirect("dismiss_flagged_reminder", { reminderId: btn.dataset.id });
             await loadFlaggedPending();
             await loadStats();
           } catch (e) {
@@ -923,16 +923,28 @@
 
     async function loadFlaggedPending() {
       $("flaggedTable").innerHTML = '<div class="loading">Loading flagged charges…</div>';
-      flaggedPendingList = await callBackend("listFlaggedPending");
-      populateFlaggedEmployeeFilters(flaggedPendingList, "flaggedEmployee", null);
-      renderFlaggedPendingTable();
+      try {
+        const json = await callFlaggedDirect("list_flagged_pending");
+        flaggedPendingList = json.items || [];
+        populateFlaggedEmployeeFilters(flaggedPendingList, "flaggedEmployee", null);
+        renderFlaggedPendingTable();
+      } catch (e) {
+        $("flaggedTable").innerHTML = `<p class="error">${friendlyBackendError(e)}</p>`;
+        throw e;
+      }
     }
 
     async function loadFlaggedConfirmed() {
       $("bookkeepingTable").innerHTML = '<div class="loading">Loading confirmed charges…</div>';
-      flaggedConfirmedList = await callBackend("listFlaggedConfirmed");
-      populateFlaggedEmployeeFilters(flaggedConfirmedList, null, "bkEmployee");
-      renderBookkeepingTable();
+      try {
+        const json = await callFlaggedDirect("list_flagged_confirmed");
+        flaggedConfirmedList = json.items || [];
+        populateFlaggedEmployeeFilters(flaggedConfirmedList, null, "bkEmployee");
+        renderBookkeepingTable();
+      } catch (e) {
+        $("bookkeepingTable").innerHTML = `<p class="error">${friendlyBackendError(e)}</p>`;
+        throw e;
+      }
     }
 
     async function loadPending() {
@@ -1560,6 +1572,42 @@
         throw new Error(json.error || `Could not load app expenses (HTTP ${res.status})`);
       }
       return json.items || [];
+    }
+
+    /** Flagged pending / bookkeeping — browser → Supabase (bypasses Wix 14s timeout). */
+    async function callFlaggedDirect(mode, params = {}) {
+      const cfg = defaultSupabaseFn();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45000);
+      try {
+        const res = await fetch(cfg.analyzeUrl, {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${cfg.apikey}`,
+            apikey: cfg.apikey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ mode, ...params }),
+        });
+        const text = await res.text();
+        let json = {};
+        try {
+          json = text ? JSON.parse(text) : {};
+        } catch (_) {
+          const snippet = text.slice(0, 120).replace(/\s+/g, " ");
+          throw new Error(`${mode} failed (HTTP ${res.status}). ${snippet || "Non-JSON response"}`);
+        }
+        if (!res.ok || !json.ok) {
+          throw new Error(json.error || `${mode} failed (HTTP ${res.status})`);
+        }
+        return json;
+      } catch (e) {
+        if (e?.name === "AbortError") throw new Error("Request timed out — try again.");
+        throw e;
+      } finally {
+        clearTimeout(timer);
+      }
     }
 
     /** Flag missing charge → reminder + push (browser → Supabase, never Wix). */

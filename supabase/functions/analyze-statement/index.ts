@@ -851,6 +851,222 @@ function normMerchant(value: string): string {
     .trim();
 }
 
+const PROFILE_FIELDS =
+  "id,first_name,last_name,email,phone,role,region,company,card_type,created_at";
+
+const FLAGGED_FULL_SELECT =
+  "id,user_id,merchant,amount,expense_date,note,status,notified_at,submitted_at,confirmed_at,created_at,resolution,expense_line_item_id," +
+  `profiles!expense_reminders_user_id_fkey(${PROFILE_FIELDS}),` +
+  "expense_line_items!expense_line_item_id(receipt_url,description,row_total,expense_date)";
+
+const FLAGGED_BASIC_SELECT =
+  "id,user_id,merchant,amount,expense_date,note,status,notified_at,submitted_at,created_at," +
+  `profiles!expense_reminders_user_id_fkey(${PROFILE_FIELDS})`;
+
+async function supabaseServiceQuery(path: string, init?: RequestInit) {
+  const baseUrl = Deno.env.get("SUPABASE_URL")!.replace(/\/$/, "");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const res = await fetch(`${baseUrl}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+  });
+  const text = await res.text();
+  let data: unknown = [];
+  try {
+    data = text ? JSON.parse(text) : [];
+  } catch {
+    throw new Error(text.slice(0, 200) || "Supabase query failed");
+  }
+  if (!res.ok) {
+    const msg =
+      (data as { message?: string })?.message ||
+      (data as { error?: string })?.error ||
+      text.slice(0, 200) ||
+      "Supabase query failed";
+    throw new Error(msg);
+  }
+  return data;
+}
+
+async function signReceiptUrl(urlOrPath: string | null | undefined): Promise<string | null> {
+  if (!urlOrPath) return null;
+  const trimmed = String(urlOrPath).trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+
+  const baseUrl = Deno.env.get("SUPABASE_URL")!.replace(/\/$/, "");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const encodedPath = trimmed
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  const res = await fetch(`${baseUrl}/storage/v1/object/sign/receipts/${encodedPath}`, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ expiresIn: 3600 }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return null;
+  const signed = (data as { signedURL?: string; signedUrl?: string }).signedURL ||
+    (data as { signedUrl?: string }).signedUrl;
+  if (!signed) return null;
+  if (signed.startsWith("http")) return signed;
+  return `${baseUrl}/storage/v1${signed.startsWith("/") ? signed : `/${signed}`}`;
+}
+
+function mapFlaggedReminderRow(row: Record<string, unknown>) {
+  const profile = (row.profiles || {}) as Record<string, unknown>;
+  const line = (row.expense_line_items || null) as Record<string, unknown> | null;
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    merchant: row.merchant,
+    amount: roundMoney(Number(row.amount)),
+    expense_date: row.expense_date ? String(row.expense_date).slice(0, 10) : null,
+    note: row.note,
+    status: row.status,
+    resolution: row.resolution || null,
+    notified_at: row.notified_at,
+    submitted_at: row.submitted_at,
+    confirmed_at: row.confirmed_at ?? null,
+    created_at: row.created_at,
+    expense_line_item_id: row.expense_line_item_id || null,
+    employee: {
+      first_name: profile.first_name,
+      last_name: profile.last_name,
+      email: profile.email,
+      company: profile.company,
+      region: profile.region,
+      role: profile.role,
+      card_type: profile.card_type,
+    },
+    expense: line
+      ? {
+          description: line.description,
+          row_total: line.row_total,
+          expense_date: line.expense_date,
+          receipt_url: line.receipt_url,
+        }
+      : null,
+    receipt_image_url: null as string | null,
+  };
+}
+
+async function enrichFlaggedRows(rows: Record<string, unknown>[]) {
+  const mapped = (rows || []).map(mapFlaggedReminderRow);
+  await Promise.all(
+    mapped.map(async (row) => {
+      if (row.expense?.receipt_url) {
+        row.receipt_image_url = await signReceiptUrl(String(row.expense.receipt_url));
+      }
+    })
+  );
+  return mapped;
+}
+
+async function fetchFlaggedReminders(filter: "pending" | "confirmed") {
+  const statusQuery =
+    filter === "confirmed"
+      ? "status=eq.confirmed"
+      : "status=in.(pending,notified,no_receipt,submitted)";
+  const order =
+    filter === "confirmed"
+      ? "order=confirmed_at.desc.nullslast,created_at.desc"
+      : "order=created_at.desc";
+
+  let rows: Record<string, unknown>[] = [];
+  try {
+    rows = (await supabaseServiceQuery(
+      `expense_reminders?${statusQuery}&select=${FLAGGED_FULL_SELECT}&${order}&limit=500`
+    )) as Record<string, unknown>[];
+  } catch (err) {
+    const msg = String((err as Error).message || err);
+    if (/confirmed_at|resolution|expense_line_item|relationship|schema cache/i.test(msg)) {
+      rows = (await supabaseServiceQuery(
+        `expense_reminders?${statusQuery}&select=${FLAGGED_BASIC_SELECT}&order=created_at.desc&limit=500`
+      )) as Record<string, unknown>[];
+    } else {
+      throw err;
+    }
+  }
+  return enrichFlaggedRows(rows);
+}
+
+async function listFlaggedPending() {
+  const items = await fetchFlaggedReminders("pending");
+  return new Response(JSON.stringify({ ok: true, items }), {
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
+
+async function listFlaggedConfirmed() {
+  const items = await fetchFlaggedReminders("confirmed");
+  return new Response(JSON.stringify({ ok: true, items }), {
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
+
+async function confirmFlaggedReminder(body: Record<string, unknown>) {
+  const reminderId = body.reminderId ? String(body.reminderId) : null;
+  if (!reminderId) throw new Error("Missing reminderId");
+
+  let rows: Record<string, unknown>[];
+  try {
+    rows = (await supabaseServiceQuery(
+      `expense_reminders?id=eq.${encodeURIComponent(reminderId)}&status=in.(no_receipt,submitted,pending,notified)`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({
+          status: "confirmed",
+          confirmed_at: new Date().toISOString(),
+          resolution: "admin",
+        }),
+      }
+    )) as Record<string, unknown>[];
+  } catch (err) {
+    const msg = String((err as Error).message || err);
+    if (/confirmed|check constraint|schema cache/i.test(msg)) {
+      throw new Error(
+        "Run supabase/expense-reminders-confirmed-migration.sql in Supabase SQL editor, then retry."
+      );
+    }
+    throw err;
+  }
+  if (!rows?.[0]) throw new Error("Reminder not found or already confirmed");
+  const [enriched] = await enrichFlaggedRows(rows);
+  return new Response(JSON.stringify({ ok: true, item: enriched }), {
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
+
+async function dismissFlaggedReminder(body: Record<string, unknown>) {
+  const reminderId = body.reminderId ? String(body.reminderId) : null;
+  if (!reminderId) throw new Error("Missing reminderId");
+
+  const rows = (await supabaseServiceQuery(
+    `expense_reminders?id=eq.${encodeURIComponent(reminderId)}&status=neq.dismissed`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ status: "dismissed" }),
+    }
+  )) as Record<string, unknown>[];
+  if (!rows?.[0]) throw new Error("Reminder not found or already dismissed");
+  return new Response(JSON.stringify({ ok: true, item: mapFlaggedReminderRow(rows[0]) }), {
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
+
 async function flagMissingExpense(body: Record<string, unknown>) {
   const userId = body.userId ? String(body.userId) : null;
   const merchant = String(body.merchant || "Unknown").trim().slice(0, 200);
@@ -1014,6 +1230,22 @@ serve(async (req) => {
 
     if (body.mode === "flag_missing_expense") {
       return await flagMissingExpense(body);
+    }
+
+    if (body.mode === "list_flagged_pending") {
+      return await listFlaggedPending();
+    }
+
+    if (body.mode === "list_flagged_confirmed") {
+      return await listFlaggedConfirmed();
+    }
+
+    if (body.mode === "confirm_flagged_reminder") {
+      return await confirmFlaggedReminder(body);
+    }
+
+    if (body.mode === "dismiss_flagged_reminder") {
+      return await dismissFlaggedReminder(body);
     }
 
     const { fileBase64, mimeType, fileName, storagePath, pageImages, statementText, targetTotal } = body;

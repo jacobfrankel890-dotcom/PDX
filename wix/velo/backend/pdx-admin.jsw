@@ -928,7 +928,11 @@ export async function flagAndNotifyEmployee(userId, merchant, amount, expenseDat
 const FLAGGED_REMINDER_SELECT =
   "id,user_id,merchant,amount,expense_date,note,status,notified_at,submitted_at,confirmed_at,created_at,resolution,expense_line_item_id," +
   `profiles!expense_reminders_user_id_fkey(${PROFILE_SELECT}),` +
-  "expense_line_items(receipt_url,description,row_total,expense_date)";
+  "expense_line_items!expense_line_item_id(receipt_url,description,row_total,expense_date)";
+
+const FLAGGED_REMINDER_SELECT_BASIC =
+  "id,user_id,merchant,amount,expense_date,note,status,notified_at,submitted_at,created_at," +
+  `profiles!expense_reminders_user_id_fkey(${PROFILE_SELECT})`;
 
 function mapFlaggedReminderRow(row) {
   const profile = row.profiles || {};
@@ -969,30 +973,46 @@ function mapFlaggedReminderRow(row) {
 
 async function enrichFlaggedReminders(rows) {
   const mapped = (rows || []).map(mapFlaggedReminderRow);
-  for (const row of mapped) {
-    if (row.expense?.receipt_url) {
-      row.receipt_image_url = await resolveImageUrl(row.expense.receipt_url);
-    }
-  }
+  await Promise.all(
+    mapped.map(async (row) => {
+      if (row.expense?.receipt_url) {
+        row.receipt_image_url = await resolveImageUrl(row.expense.receipt_url);
+      }
+    })
+  );
   return mapped;
+}
+
+async function fetchFlaggedRemindersRows(statusQuery, orderQuery) {
+  try {
+    return await supabaseRest(
+      `expense_reminders?${statusQuery}&select=${FLAGGED_REMINDER_SELECT}&${orderQuery}&limit=500`
+    );
+  } catch (err) {
+    const msg = String(err?.message || err || "");
+    if (/confirmed_at|resolution|expense_line_item|relationship|schema cache/i.test(msg)) {
+      return supabaseRest(
+        `expense_reminders?${statusQuery}&select=${FLAGGED_REMINDER_SELECT_BASIC}&order=created_at.desc&limit=500`
+      );
+    }
+    throw err;
+  }
 }
 
 /** Admin queue — flagged charges awaiting employee or finance review. */
 export async function listFlaggedPending() {
-  const rows = await supabaseRest(
-    `expense_reminders?status=in.(pending,notified,no_receipt,submitted)` +
-      `&select=${FLAGGED_REMINDER_SELECT}` +
-      "&order=created_at.desc&limit=500"
+  const rows = await fetchFlaggedRemindersRows(
+    "status=in.(pending,notified,no_receipt,submitted)",
+    "order=created_at.desc"
   );
   return enrichFlaggedReminders(rows);
 }
 
 /** Bookkeeping — validated flagged charges (receipt uploaded or admin confirmed). */
 export async function listFlaggedConfirmed() {
-  const rows = await supabaseRest(
-    `expense_reminders?status=eq.confirmed` +
-      `&select=${FLAGGED_REMINDER_SELECT}` +
-      "&order=confirmed_at.desc.nullslast,created_at.desc&limit=500"
+  const rows = await fetchFlaggedRemindersRows(
+    "status=eq.confirmed",
+    "order=confirmed_at.desc.nullslast,created_at.desc"
   );
   return enrichFlaggedReminders(rows);
 }
