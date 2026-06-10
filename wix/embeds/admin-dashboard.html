@@ -475,10 +475,10 @@
     function friendlyBackendError(err) {
       const msg = String(err?.message || err || "");
       if (/unable to handle the request/i.test(msg)) {
-        return (
-          "Wix backend error — republish pdx-admin.jsw, admin-dashboard.js, and this HTML embed, then Publish. " +
-          "If this persists, use Refresh and try again."
-        );
+        return "Wix backend error — refresh the page. Reconcile no longer uses Wix; repaste the latest admin-dashboard.html embed.";
+      }
+      if (/unknown action/i.test(msg)) {
+        return `${msg} — republish admin-dashboard.js and pdx-admin.jsw, then Publish.`;
       }
       if (/unknown action.*flagandnotifyemployee/i.test(msg)) {
         return "Flag action missing — paste updated admin-dashboard.js and pdx-admin.jsw into Wix, then Publish.";
@@ -492,7 +492,46 @@
       return msg || "Request failed";
     }
 
-    /** PDF.js — extract text layer (fast, works on digital Chase PDFs). */
+    /** Supabase edge fn config — cached after PDF parse; hardcoded fallback avoids Wix on reconcile. */
+    const PDX_SUPABASE = {
+      fnBase: "https://fubgrrthbqdgxvggccwk.supabase.co/functions/v1",
+      anonKey:
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1YmdycnRoYnFkZ3h2Z2djY3drIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MzQxNDIsImV4cCI6MjA5NjUxMDE0Mn0._S54tw8MhvkHgkna2OoWbT-inklblikZV2rH__zvOjE",
+    };
+    let cachedSupabaseFn = null;
+
+    function defaultSupabaseFn() {
+      return {
+        analyzeUrl: `${PDX_SUPABASE.fnBase}/analyze-statement`,
+        itemsUrl: `${PDX_SUPABASE.fnBase}/reconcile-items`,
+        apikey: PDX_SUPABASE.anonKey,
+      };
+    }
+
+    function rememberSupabaseFn(cfg) {
+      if (!cfg?.apikey) return defaultSupabaseFn();
+      cachedSupabaseFn = {
+        analyzeUrl: cfg.analyzeUrl || `${PDX_SUPABASE.fnBase}/analyze-statement`,
+        itemsUrl:
+          (cfg.itemsUrl ||
+            String(cfg.analyzeUrl || "").replace(/\/analyze-statement\/?$/, "/reconcile-items")) ||
+          `${PDX_SUPABASE.fnBase}/reconcile-items`,
+        apikey: cfg.apikey,
+      };
+      return cachedSupabaseFn;
+    }
+
+    async function resolveSupabaseFn() {
+      if (cachedSupabaseFn) return cachedSupabaseFn;
+      try {
+        const cfg = await callBackend("getStatementAnalyzeInvoke", {}, { timeoutMs: 8000 });
+        return rememberSupabaseFn(cfg);
+      } catch (_) {
+        cachedSupabaseFn = defaultSupabaseFn();
+        return cachedSupabaseFn;
+      }
+    }
+
     async function pdfExtractText(file) {
       const pdfjs = window.pdfjsLib;
       if (!pdfjs) throw new Error("PDF library not loaded — refresh the page");
@@ -580,7 +619,7 @@
 
     /** PDF parse — browser calls Supabase directly (Wix backend times out after ~14s). */
     async function analyzeStatementDirect(payload) {
-      const cfg = await callBackend("getStatementAnalyzeInvoke", {}, { timeoutMs: 15000 });
+      const cfg = await resolveSupabaseFn();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 300000);
       try {
@@ -1192,6 +1231,33 @@
       return overlap ? overlap / Math.max(xw.size, yw.size, 1) : 0;
     }
 
+    /** Fetch app line items — browser → Supabase only (never Wix). */
+    async function fetchReconcileItemsDirect(p) {
+      const cfg = cachedSupabaseFn || defaultSupabaseFn();
+      const res = await fetch(cfg.itemsUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${cfg.apikey}`,
+          apikey: cfg.apikey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          dateFrom: p.dateFrom,
+          dateTo: p.dateTo,
+          employeeId: p.employeeId || null,
+        }),
+      });
+      const text = await res.text();
+      let json = {};
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch (_) {
+        throw new Error(text.slice(0, 200) || "Could not load app expenses");
+      }
+      if (!res.ok || !json.ok) throw new Error(json.error || "Could not load app expenses");
+      return json.items || [];
+    }
+
     function reconcileLocally(items, transactions, statementTotal) {
       const appLines = (items || []).map((item) => ({
         line_item_id: item.id,
@@ -1591,27 +1657,8 @@
       $("reconResults").innerHTML = '<div class="loading">Matching statement to app expenses…</div>';
       $("reconRunBtn").disabled = true;
       try {
-        const items = await callBackend("fetchStatementLineItems", {
-          dateFrom: p.dateFrom,
-          dateTo: p.dateTo,
-          employeeId: p.employeeId,
-        });
+        const items = await fetchReconcileItemsDirect(p);
         const data = reconcileLocally(items, reconTransactions, p.statementTotal);
-        try {
-          await callBackend("saveCreditCardStatement", {
-            cardType: $("reconCardType").value || null,
-            statementEnd: p.dateTo,
-            dateFrom: p.dateFrom,
-            dateTo: p.dateTo,
-            statementTotal: p.statementTotal,
-            fileName: reconFileMeta?.name || null,
-            storagePath: reconFileMeta?.storagePath || null,
-            parseSource: reconParseMeta?.parse_source || "pdf_ai",
-            transactions: reconTransactions,
-          });
-        } catch (_) {
-          /* archive optional — results still shown */
-        }
         renderReconResults(data);
       } catch (e) {
         showReconMessage(friendlyBackendError(e), true);

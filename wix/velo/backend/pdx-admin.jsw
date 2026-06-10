@@ -1,4 +1,4 @@
-import { supabaseRest, resolveImageUrl, uploadStorageObject, createSignedStorageUrl, createSignedUploadUrl, invokeAnalyzeStatement, getStatementAnalyzeInvoke, invokeSendPush } from "backend/supabase-client";
+import { supabaseRest, resolveImageUrl, uploadStorageObject, createSignedStorageUrl, createSignedUploadUrl, invokeAnalyzeStatement, getStatementAnalyzeInvoke, getReconcileItemsInvoke, invokeSendPush } from "backend/supabase-client";
 
 // WIX: Backend → Web Modules → ONLY file named "pdx-admin.jsw"
 // There must NOT be a pdx-admin.js in this Backend folder — that breaks the build.
@@ -767,6 +767,11 @@ export async function getStatementAnalyzeInvokeConfig() {
   return getStatementAnalyzeInvoke();
 }
 
+/** Config for browser → Supabase edge function (reconcile line items). */
+export async function getReconcileItemsInvokeConfig() {
+  return getReconcileItemsInvoke();
+}
+
 /** Call Supabase edge function to parse PDF statements with AI. */
 export async function analyzeStatementFile(fileBase64, mimeType, fileName, storagePath) {
   return invokeAnalyzeStatement({ fileBase64, mimeType, fileName, storagePath });
@@ -941,6 +946,8 @@ export async function handlePdxAdminRequest(action, params = {}) {
       return fetchStatementLineItems(params.dateFrom, params.dateTo, params.employeeId);
     case "getStatementAnalyzeInvoke":
       return getStatementAnalyzeInvokeConfig();
+    case "getReconcileItemsInvoke":
+      return getReconcileItemsInvokeConfig();
     case "prepareStatementUpload":
       return prepareStatementUpload(params.fileName);
     case "uploadStatementPdf":

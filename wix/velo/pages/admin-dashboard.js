@@ -29,6 +29,7 @@ import {
   prepareStatementUpload,
   uploadStatementPdf,
   getStatementAnalyzeInvokeConfig,
+  getReconcileItemsInvokeConfig,
   saveCreditCardStatement,
   createExpenseReminder,
   flagAndNotifyEmployee,
@@ -68,6 +69,8 @@ async function runAdminAction(action, msg) {
       return fetchStatementLineItems(msg.dateFrom, msg.dateTo, msg.employeeId);
     case "getStatementAnalyzeInvoke":
       return getStatementAnalyzeInvokeConfig();
+    case "getReconcileItemsInvoke":
+      return getReconcileItemsInvokeConfig();
     case "prepareStatementUpload":
       return prepareStatementUpload(msg.fileName);
     case "uploadStatementPdf":

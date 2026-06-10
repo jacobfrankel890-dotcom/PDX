@@ -245,6 +245,16 @@ export async function getStatementAnalyzeInvoke() {
   };
 }
 
+/** Browser → Supabase for reconcile line items (bypasses Wix 14s timeout). */
+export async function getReconcileItemsInvoke() {
+  const baseUrl = (await getSecret("SUPABASE_URL")).replace(/\/$/, "");
+  const anonKey = await getSecret("SUPABASE_ANON_KEY");
+  return {
+    itemsUrl: `${baseUrl}/functions/v1/reconcile-items`,
+    apikey: anonKey,
+  };
+}
+
 /** Invoke analyze-statement edge function (backend only). */
 export async function invokeAnalyzeStatement({ fileBase64, mimeType, fileName, storagePath } = {}) {
   const baseUrl = (await getSecret("SUPABASE_URL")).replace(/\/$/, "");
