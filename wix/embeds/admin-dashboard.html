@@ -39,6 +39,9 @@
     .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
     .btn-success { background: var(--success); color: #fff; }
     .btn-danger { background: var(--danger); color: #fff; }
+    .btn-flag-missing { min-width: 7.5rem; }
+    .flag-status-ok { color: var(--success); font-size: 0.9rem; }
+    .flag-status-warn { color: var(--warn, #e6a817); font-size: 0.9rem; }
     .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
     .hidden { display: none !important; }
     .loading { text-align: center; padding: 32px; color: var(--muted); }
@@ -195,8 +198,9 @@
           </div>
           <p class="muted" id="reconFileLabel">No file selected</p>
           <div class="actions">
-            <button class="btn btn-primary" id="reconRunBtn" disabled>Run reconciliation</button>
+            <button type="button" class="btn btn-primary" id="reconRunBtn" disabled>Run reconciliation</button>
           </div>
+          <p id="reconFlagStatus" class="hidden" style="margin-top:12px;margin-bottom:8px"></p>
           <div id="reconResults"></div>
         </div>
       </div>
@@ -475,7 +479,7 @@
     function friendlyBackendError(err) {
       const msg = String(err?.message || err || "");
       if (/unable to handle the request/i.test(msg)) {
-        return "Wix backend error — refresh the page. Reconcile no longer uses Wix; repaste the latest admin-dashboard.html embed.";
+        return "Wix backend error — refresh the page and republish admin-dashboard.html if this happens outside Reconcile.";
       }
       if (/unknown action/i.test(msg)) {
         return `${msg} — republish admin-dashboard.js and pdx-admin.jsw, then Publish.`;
@@ -578,23 +582,36 @@
       if (textLen < 300) return true;
       const count = parsed?.transactions?.length || 0;
       const sum = parsed?.parsed_sum ?? sumTransactionAmounts(parsed?.transactions || []);
-      const total = parsed?.statement_total ?? null;
+      const total =
+        parsed?.purchases_total ?? parsed?.statement_total ?? statementTargetTotal() ?? null;
       if (count < 3) return true;
-      if (total && Math.abs(sum - total) > Math.max(40, total * 0.02)) return true;
+      if (parsed?.parse_accuracy && !parsed.parse_accuracy.matched && parsed.parse_accuracy.gap > 1) return true;
+      if (total && Math.abs(sum - total) > Math.max(1, total * 0.002)) return true;
       if (parsed?.parse_warning) return true;
       return false;
     }
 
     async function parsePdfWithVision(file, pageCount, payload) {
+      const pagesToRead = Math.min(pageCount, 20);
       $("reconResults").innerHTML =
-        `<div class="loading">Scanned PDF — reading ${Math.min(pageCount, 12)} page(s) with AI vision (1–3 min)…</div>`;
-      const startPage = pageCount > 10 ? 2 : 1;
-      const { images: pageImages } = await pdfToPageImages(file, 12, startPage);
+        `<div class="loading">Scanned PDF — reading ${pagesToRead} page(s) with AI vision (1–3 min)…</div>`;
+      const { images: pageImages } = await pdfToPageImages(file, pagesToRead, 1);
       return analyzeStatementDirect({ ...payload, pageImages });
     }
 
+    function statementTargetTotal() {
+      const v = $("reconStatementTotal").value;
+      return v && Number.isFinite(Number(v)) ? Number(v) : null;
+    }
+
     async function parsePdfStatement(file, storagePath, mimeType, fileName, statementText, pageCount) {
-      const payload = { storagePath, mimeType, fileName, statementText };
+      const payload = {
+        storagePath,
+        mimeType,
+        fileName,
+        statementText,
+        targetTotal: statementTargetTotal(),
+      };
       const scanned = isLikelyScannedPdf(statementText);
 
       if (scanned) {
@@ -620,6 +637,10 @@
     /** PDF parse — browser calls Supabase directly (Wix backend times out after ~14s). */
     async function analyzeStatementDirect(payload) {
       const cfg = await resolveSupabaseFn();
+      const body = {
+        ...payload,
+        targetTotal: payload.targetTotal ?? statementTargetTotal(),
+      };
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 300000);
       try {
@@ -631,7 +652,7 @@
             apikey: cfg.apikey,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(body),
         });
         const text = await res.text();
         let json = {};
@@ -1102,6 +1123,7 @@
     let reconTransactions = null;
     let reconParseMeta = null;
     let reconFileMeta = null;
+    let lastReconData = null;
 
     function reconParams() {
       let dateFrom = $("reconStart").value;
@@ -1142,6 +1164,7 @@
       let hint =
         `Parsed ${reconTransactions.length} charges (${fmt(validation.sum)}). ` +
         `Click <strong>Run reconciliation</strong>.`;
+      hint += formatParseAccuracyHint(reconParseMeta);
       if (reconParseMeta?.parse_warning) {
         hint += `<br><span class="error" style="margin-top:8px;display:block">${reconParseMeta.parse_warning}</span>`;
       }
@@ -1191,7 +1214,62 @@
         return `${y}-${String(m[1]).padStart(2, "0")}-${String(m[2]).padStart(2, "0")}`;
       }
       if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      return normalizeStmtDate(s, null, null);
+    }
+
+    /** Vision parse often returns MM/DD — infer year from statement period. */
+    function inferStmtYear(mm, periodStart, periodEnd) {
+      const parseIso = (s) => {
+        if (!s || !/^\d{4}-\d{2}-\d{2}/.test(s)) return null;
+        return { y: Number(s.slice(0, 4)), m: Number(s.slice(5, 7)) };
+      };
+      const end = parseIso(periodEnd);
+      const start = parseIso(periodStart);
+      const anchor = end || start;
+      if (!anchor) return new Date().getFullYear();
+      if (start && end && start.y !== end.y && mm < end.m) return end.y - 1;
+      return anchor.y;
+    }
+
+    function normalizeStmtDate(raw, periodStart, periodEnd) {
+      if (raw == null || raw === "") return null;
+      const s = String(raw).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      const full = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if (full) {
+        let y = Number(full[3]);
+        if (y < 100) y += 2000;
+        return `${y}-${String(full[1]).padStart(2, "0")}-${String(full[2]).padStart(2, "0")}`;
+      }
+      const partial = s.match(/^(\d{1,2})\/(\d{1,2})$/);
+      if (partial) {
+        const mm = Number(partial[1]);
+        const dd = Number(partial[2]);
+        const y = inferStmtYear(mm, periodStart, periodEnd);
+        return `${y}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+      }
       return null;
+    }
+
+    function normalizeReconTransactionDates(transactions, periodStart, periodEnd) {
+      return (transactions || []).map((t) => ({
+        ...t,
+        date: normalizeStmtDate(t.date, periodStart, periodEnd),
+      }));
+    }
+
+    function reconStatementPeriod() {
+      return {
+        periodStart: reconParseMeta?.period_start || $("reconStart").value || null,
+        periodEnd: reconParseMeta?.period_end || $("reconEnd").value || null,
+      };
+    }
+
+    function fmtReconDate(value) {
+      const iso = normalizeStmtDate(value, $("reconStart").value, $("reconEnd").value);
+      if (!iso) return value || "—";
+      const [y, m, d] = iso.split("-");
+      return `${m}/${d}/${y}`;
     }
 
     function sumTransactionAmounts(transactions) {
@@ -1231,10 +1309,10 @@
       return overlap ? overlap / Math.max(xw.size, yw.size, 1) : 0;
     }
 
-    /** Fetch app line items — browser → Supabase only (never Wix). */
+    /** Fetch app line items — same Supabase endpoint as PDF parse (never Wix). */
     async function fetchReconcileItemsDirect(p) {
-      const cfg = cachedSupabaseFn || defaultSupabaseFn();
-      const res = await fetch(cfg.itemsUrl, {
+      const cfg = defaultSupabaseFn();
+      const res = await fetch(cfg.analyzeUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${cfg.apikey}`,
@@ -1242,6 +1320,7 @@
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          mode: "reconcile_items",
           dateFrom: p.dateFrom,
           dateTo: p.dateTo,
           employeeId: p.employeeId || null,
@@ -1252,10 +1331,133 @@
       try {
         json = text ? JSON.parse(text) : {};
       } catch (_) {
-        throw new Error(text.slice(0, 200) || "Could not load app expenses");
+        const snippet = text.slice(0, 120).replace(/\s+/g, " ");
+        throw new Error(
+          `Could not load app expenses (HTTP ${res.status}). ${snippet || "Non-JSON response"}`
+        );
       }
-      if (!res.ok || !json.ok) throw new Error(json.error || "Could not load app expenses");
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || `Could not load app expenses (HTTP ${res.status})`);
+      }
       return json.items || [];
+    }
+
+    /** Flag missing charge → reminder + push (browser → Supabase, never Wix). */
+    async function flagMissingExpenseDirect(params) {
+      const cfg = defaultSupabaseFn();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45000);
+      try {
+        const res = await fetch(cfg.analyzeUrl, {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${cfg.apikey}`,
+            apikey: cfg.apikey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            mode: "flag_missing_expense",
+            forceNotify: true,
+            userId: params.userId,
+            merchant: params.merchant,
+            amount: params.amount,
+            expenseDate: params.expenseDate || null,
+            periodStart: params.periodStart || null,
+            periodEnd: params.periodEnd || null,
+            note: params.note || null,
+          }),
+        });
+        const text = await res.text();
+        let json = {};
+        try {
+          json = text ? JSON.parse(text) : {};
+        } catch (_) {
+          const snippet = text.slice(0, 120).replace(/\s+/g, " ");
+          throw new Error(`Flag failed (HTTP ${res.status}). ${snippet || "Non-JSON response"}`);
+        }
+        if (!res.ok || !json.ok) {
+          throw new Error(json.error || `Flag failed (HTTP ${res.status})`);
+        }
+        return json;
+      } catch (e) {
+        if (e?.name === "AbortError") throw new Error("Flag timed out — try again.");
+        throw e;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function showReconFlagStatus(msg, tone = "err") {
+      const el = $("reconFlagStatus");
+      if (!el) return;
+      if (!msg) {
+        hide(el);
+        el.textContent = "";
+        el.className = "hidden";
+        return;
+      }
+      el.textContent = msg;
+      el.className =
+        tone === "ok" ? "flag-status-ok" : tone === "warn" ? "flag-status-warn" : "error";
+      show(el);
+    }
+
+    async function handleFlagMissingClick(btn) {
+      if (!btn || btn.disabled || btn.dataset.flagging === "1") return;
+      const idx = Number(btn.dataset.idx);
+      const row = lastReconData?.missing_on_app?.[idx];
+      if (!row) {
+        showReconFlagStatus("Could not find that row — run reconciliation again.", "err");
+        return;
+      }
+      const userId = $("reconEmployee").value;
+      if (!userId) {
+        showReconFlagStatus("Select the cardholder above before flagging.", "err");
+        return;
+      }
+      btn.disabled = true;
+      btn.dataset.flagging = "1";
+      btn.textContent = "Flagging…";
+      showReconFlagStatus(`Sending push for ${row.merchant} (${fmt(row.amount)})…`, "warn");
+      try {
+        const period = reconStatementPeriod();
+        const expenseDate = normalizeStmtDate(row.date, period.periodStart, period.periodEnd);
+        const result = await flagMissingExpenseDirect({
+          userId,
+          merchant: row.merchant,
+          amount: row.amount,
+          expenseDate,
+          periodStart: period.periodStart,
+          periodEnd: period.periodEnd,
+          note:
+            `Charge on your card: $${Number(row.amount).toFixed(2)} at ${row.merchant}. ` +
+            "Upload a receipt or explain this charge in PDX Expense.",
+        });
+        if (result.pushWarning) {
+          btn.textContent = "Saved (no push)";
+          btn.title = result.pushWarning;
+          btn.closest("tr")?.classList.add("flag-push-warn");
+          showReconFlagStatus(result.pushWarning, "warn");
+        } else if (result.sent > 0) {
+          btn.textContent = "Notified ✓";
+          btn.title = "Push sent to employee device";
+          showReconFlagStatus(`Push sent to employee for ${row.merchant}.`, "ok");
+        } else if (result.skipped) {
+          btn.textContent = "Notified ✓";
+          btn.title = "Already notified for this charge";
+          showReconFlagStatus(`Already flagged — ${row.merchant}.`, "ok");
+        } else {
+          btn.textContent = "Saved ✓";
+          btn.title = "Saved in app Notifications tab";
+          showReconFlagStatus(`Saved in app feed (no push token) — ${row.merchant}.`, "warn");
+        }
+      } catch (e) {
+        btn.disabled = false;
+        btn.dataset.flagging = "0";
+        btn.textContent = "Flag employee";
+        showReconFlagStatus(String(e?.message || e || "Flag failed"), "err");
+      }
     }
 
     function reconcileLocally(items, transactions, statementTotal) {
@@ -1269,13 +1471,22 @@
         matched: false,
       }));
 
-      const stmtLines = (transactions || []).map((t, index) => ({
-        id: `stmt_${index}`,
-        date: t.date ? String(t.date).slice(0, 10) : null,
-        merchant: t.merchant || t.description || "",
-        amount: rcRoundMoney(Math.abs(Number(t.amount))),
-        matched: false,
-      }));
+      const stmtPeriodStart = reconParseMeta?.period_start || $("reconStart").value || null;
+      const stmtPeriodEnd = reconParseMeta?.period_end || $("reconEnd").value || null;
+      const stmtLines = (transactions || []).map((t, index) => {
+        const date = normalizeStmtDate(
+          t.date ? String(t.date).slice(0, 10) : null,
+          stmtPeriodStart,
+          stmtPeriodEnd
+        );
+        return {
+          id: `stmt_${index}`,
+          date,
+          merchant: t.merchant || t.description || "",
+          amount: rcRoundMoney(Math.abs(Number(t.amount))),
+          matched: false,
+        };
+      });
 
       const matches = [];
       for (const stmt of stmtLines) {
@@ -1343,18 +1554,21 @@
     }
 
     function validateParsedStatement(transactions, parseMeta, fileName) {
-      const sum = sumTransactionAmounts(transactions);
+      const sum = parseMeta?.parsed_sum ?? sumTransactionAmounts(transactions);
       const ext = (fileName || "").split(".").pop().toLowerCase();
+      const purchasesTotal = parseMeta?.purchases_total ?? null;
+      const manualTotal = $("reconStatementTotal").value ? Number($("reconStatementTotal").value) : null;
       const statementTotal =
+        purchasesTotal ??
         parseMeta?.statement_total ??
-        ($("reconStatementTotal").value ? Number($("reconStatementTotal").value) : null);
+        manualTotal;
       if (statementTotal == null || !Number.isFinite(statementTotal)) {
         return { ok: true, sum, statementTotal: null, gap: 0 };
       }
       const gap = Math.round(Math.abs(statementTotal - sum) * 100) / 100;
-      const tolerance = Math.max(0.02, statementTotal * 0.005);
-      if (gap <= tolerance) {
-        return { ok: true, sum, statementTotal, gap };
+      const tolerance = Math.max(0.02, statementTotal * 0.001);
+      if (parseMeta?.parse_accuracy?.matched || gap <= tolerance) {
+        return { ok: true, sum, statementTotal, gap, matched: true };
       }
       const pdf = ext === "pdf";
       return {
@@ -1362,13 +1576,26 @@
         sum,
         statementTotal,
         gap,
+        matched: false,
         message:
-          `Parsed ${transactions.length} charges = ${fmt(sum)} but statement total is ${fmt(statementTotal)} ` +
+          `Parsed ${transactions.length} charges = ${fmt(sum)} but purchases total is ${fmt(statementTotal)} ` +
           `(gap ${fmt(gap)}).` +
           (pdf
-            ? " Some charges may be missing — review parsed rows or re-upload a clearer PDF."
+            ? " Re-upload for another parse pass or adjust Statement total if using New Balance."
             : " Check the spreadsheet export or statement total field."),
       };
+    }
+
+    function formatParseAccuracyHint(parseMeta) {
+      const acc = parseMeta?.parse_accuracy;
+      if (!acc) return "";
+      if (acc.matched) {
+        return `<br><span class="flag-status-ok">Parse accuracy ✓ — ${parseMeta.transactions?.length || 0} charges match target (${parseMeta.parse_source || "pdf"}).</span>`;
+      }
+      if (acc.gap != null && acc.target_total != null) {
+        return `<br><span class="flag-status-warn">Parse gap ${fmt(acc.gap)} vs target ${fmt(acc.target_total)} (${parseMeta.parse_source || "pdf"}). Review rows below.</span>`;
+      }
+      return "";
     }
 
     function parseChaseSpreadsheet(workbook) {
@@ -1480,7 +1707,13 @@
             pageCount
           );
 
-          reconTransactions = parsed.transactions || [];
+          const periodStart = parsed.period_start || null;
+          const periodEnd = parsed.period_end || null;
+          reconTransactions = normalizeReconTransactionDates(
+            parsed.transactions || [],
+            periodStart,
+            periodEnd
+          );
           reconParseMeta = parsed;
           const parseLabel =
             parsed.parse_source === "pdf_text"
@@ -1491,8 +1724,6 @@
                   ? "vision"
                   : "PDF";
           reconParseMeta.parse_label = parseLabel;
-          const periodStart = parsed.period_start || null;
-          const periodEnd = parsed.period_end || null;
           if (periodStart && periodEnd) {
             $("reconStart").value = periodStart <= periodEnd ? periodStart : periodEnd;
             $("reconEnd").value = periodStart <= periodEnd ? periodEnd : periodStart;
@@ -1500,7 +1731,14 @@
             if (periodStart) $("reconStart").value = periodStart;
             if (periodEnd) $("reconEnd").value = periodEnd;
           }
-          if (parsed.statement_total != null) $("reconStatementTotal").value = parsed.statement_total;
+          if (parsed.statement_total != null) {
+            $("reconStatementTotal").value = parsed.purchases_total ?? parsed.statement_total;
+          }
+          if (parsed.purchases_total != null && parsed.new_balance != null &&
+              Math.abs(parsed.purchases_total - parsed.new_balance) > 1) {
+            reconParseMeta.total_note =
+              `Using Total Purchases ${fmt(parsed.purchases_total)} (New Balance ${fmt(parsed.new_balance)} includes payments).`;
+          }
         } else {
           if (typeof XLSX === "undefined") throw new Error("Excel library not loaded");
           const buf = await file.arrayBuffer();
@@ -1525,6 +1763,7 @@
     }
 
     function renderReconResults(data) {
+      lastReconData = data;
       const s = data.summary;
       const parseGap =
         s.statement_parsed_total != null && s.statement_total != null
@@ -1539,8 +1778,10 @@
         <div class="recon-stat"><div class="v">${fmt(s.app_total)}</div><div class="l">App total</div></div>
         <div class="recon-stat"><div class="v ${Math.abs(s.difference) < 0.02 ? "match-ok" : "match-bad"}">${fmt(s.difference)}</div><div class="l">Bill vs app</div></div>
       </div>`;
-      if (parseGap > Math.max(25, (s.statement_total || 0) * 0.03)) {
-        html += `<p class="error" style="margin-bottom:12px;font-size:0.85rem">Parsed line items sum to ${fmt(s.statement_parsed_total)} but statement total is ${fmt(s.statement_total)} — about ${fmt(parseGap)} may be missing. Review the PDF parse or adjust Statement total.</p>`;
+      if (parseGap > Math.max(1, (s.statement_total || 0) * 0.001)) {
+        html += `<p class="error" style="margin-bottom:12px;font-size:0.85rem">Parsed line items sum to ${fmt(s.statement_parsed_total)} but purchases target is ${fmt(s.statement_total)} — gap ${fmt(parseGap)}.${reconParseMeta?.total_note ? ` ${reconParseMeta.total_note}` : ""} Review the PDF parse or adjust Statement total.</p>`;
+      } else if (reconParseMeta?.parse_accuracy?.matched) {
+        html += `<p class="flag-status-ok" style="margin-bottom:12px;font-size:0.85rem">Parse sum matches statement target (${reconParseMeta.parse_source || "pdf"}).</p>`;
       }
 
       if (data.missing_on_app.length) {
@@ -1548,10 +1789,10 @@
           <table><thead><tr><th>Date</th><th>Merchant</th><th>Amount</th><th></th></tr></thead><tbody>`;
         data.missing_on_app.forEach((row, idx) => {
           html += `<tr>
-            <td>${row.date || "—"}</td>
+            <td>${fmtReconDate(row.date)}</td>
             <td>${row.merchant}</td>
             <td>${fmt(row.amount)}</td>
-            <td><button class="btn btn-danger btn-flag-missing" data-idx="${idx}">Flag employee</button></td>
+            <td><button type="button" class="btn btn-danger btn-flag-missing" data-idx="${idx}">Flag employee</button></td>
           </tr>`;
         });
         html += "</tbody></table>";
@@ -1571,7 +1812,7 @@
           <table><thead><tr><th>Date</th><th>Statement</th><th>App vendor</th><th>Amount</th><th>Conf.</th></tr></thead><tbody>`;
         data.matches.forEach((m) => {
           html += `<tr>
-            <td>${m.statement.date || "—"}</td>
+            <td>${m.statement.date ? fmtReconDate(m.statement.date) : "—"}</td>
             <td>${m.statement.merchant}</td>
             <td>${m.expense.vendor}</td>
             <td>${fmt(m.statement.amount)}</td>
@@ -1582,52 +1823,7 @@
       }
 
       $("reconResults").innerHTML = html;
-
-      $("reconResults").querySelectorAll(".btn-flag-missing").forEach((btn) => {
-        btn.onclick = async () => {
-          if (btn.disabled || btn.dataset.flagging === "1") return;
-          const row = data.missing_on_app[Number(btn.dataset.idx)];
-          const userId = $("reconEmployee").value;
-          if (!userId) {
-            showReconMessage("Select the cardholder above before flagging a missing expense.", true);
-            return;
-          }
-          btn.disabled = true;
-          btn.dataset.flagging = "1";
-          btn.textContent = "Flagging…";
-          try {
-            const result = await callBackend(
-              "flagAndNotifyEmployee",
-              {
-                userId,
-                merchant: row.merchant,
-                amount: row.amount,
-                expenseDate: row.date,
-                note:
-                  `Charge on your card: $${Number(row.amount).toFixed(2)} at ${row.merchant}. ` +
-                  "Upload a receipt or explain this charge in PDX Expense.",
-              },
-              { timeoutMs: 20000 }
-            );
-            if (result.pushWarning) {
-              btn.textContent = "Saved (no push)";
-              btn.title = result.pushWarning;
-              btn.closest("tr")?.classList.add("flag-push-warn");
-            } else if (result.skipped || result.sent > 0) {
-              btn.textContent = "Notified ✓";
-              btn.title = result.skipped ? "Already notified for this charge" : "Push sent to employee device";
-            } else {
-              btn.textContent = "Saved ✓";
-              btn.title = "Saved in app feed";
-            }
-          } catch (e) {
-            btn.disabled = false;
-            btn.dataset.flagging = "0";
-            btn.textContent = "Flag employee";
-            showReconMessage(friendlyBackendError(e), true);
-          }
-        };
-      });
+      showReconFlagStatus("");
     }
 
     async function runReconciliation() {
@@ -1661,7 +1857,8 @@
         const data = reconcileLocally(items, reconTransactions, p.statementTotal);
         renderReconResults(data);
       } catch (e) {
-        showReconMessage(friendlyBackendError(e), true);
+        const msg = String(e?.message || e || "Reconciliation failed");
+        showReconMessage(msg, true);
       } finally {
         $("reconRunBtn").disabled = false;
       }
@@ -1679,7 +1876,16 @@
         handleReconFile(e.dataTransfer.files[0]);
       };
       $("reconRunBtn").onclick = runReconciliation;
+      $("reconResults").addEventListener("click", (ev) => {
+        const btn = ev.target?.closest?.(".btn-flag-missing");
+        if (btn) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          handleFlagMissingClick(btn);
+        }
+      });
       $("reconStatementTotal").addEventListener("input", () => refreshReconRunState());
+      $("reconStatementTotal").addEventListener("change", () => refreshReconRunState());
       $("reconStart").addEventListener("change", () => refreshReconRunState());
       $("reconEnd").addEventListener("change", () => refreshReconRunState());
     }

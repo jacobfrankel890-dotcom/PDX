@@ -29,6 +29,7 @@ type RequestBody = {
   expenseDate?: string;
   note?: string;
   reminderId?: string;
+  forceNotify?: boolean;
 };
 
 function json(data: unknown, status = 200) {
@@ -192,7 +193,7 @@ async function deliverMissingExpensePush(
       .eq("id", reminderId)
       .maybeSingle();
 
-    if (existingReminder?.notified_at) {
+    if (existingReminder?.notified_at && !body.forceNotify) {
       return json({
         success: true,
         sent: 0,

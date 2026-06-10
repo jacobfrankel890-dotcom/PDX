@@ -18,7 +18,26 @@ type ParsedStatement = {
   period_start: string | null;
   period_end: string | null;
   statement_total: number | null;
+  /** Sum of purchases/charges (preferred validation target — not New Balance). */
+  purchases_total: number | null;
+  new_balance: number | null;
   transactions: ParsedTxn[];
+};
+
+type ChaseTotals = {
+  purchases_total: number | null;
+  new_balance: number | null;
+  payments_total: number | null;
+  fees_total: number | null;
+};
+
+type AccuracyResult = {
+  transactions: ParsedTxn[];
+  parsed_sum: number;
+  gap: number;
+  matched: boolean;
+  removed: ParsedTxn[];
+  target_total: number | null;
 };
 
 const MONTHS: Record<string, number> = {
@@ -29,8 +48,210 @@ const MONTHS: Record<string, number> = {
 };
 
 const SKIP_MERCHANT =
-  /payment thank|autopay|automatic payment|online payment|payment received|credit\s*$|returned payment|balance transfer|annual fee credit/i;
-const SKIP_LINE = /^total|^subtotal|^balance|^fees charged|^interest charged|^new balance|^minimum payment|^account total/i;
+  /payment thank|autopay|automatic payment|online payment|payment received|credit\s*$|returned payment|balance transfer|annual fee credit|credit card credit|rewards redemption/i;
+const SKIP_LINE =
+  /^total|^subtotal|^balance|^fees charged|^interest charged|^new balance|^minimum payment|^account total|^purchases$|^payments$|^credits$|^debits$|^summary|^page \d|^continued|^amount$/i;
+
+function roundMoney(n: number): number {
+  return Math.round(Number(n) * 100) / 100;
+}
+
+function parseChaseTotals(text: string): ChaseTotals {
+  const pick = (patterns: RegExp[]): number | null => {
+    for (const re of patterns) {
+      const m = text.match(re);
+      if (m) {
+        const amt = parseMoney(m[1]);
+        if (amt > 0) return amt;
+      }
+    }
+    return null;
+  };
+  return {
+    purchases_total: pick([
+      /Total Purchases(?:\s+(?:and|&)\s+Other Debits)?\s+\$?\s*([\d,]+\.\d{2})/i,
+      /Purchases(?:\s+(?:and|&)\s+Other Debits)\s+\$?\s*([\d,]+\.\d{2})/i,
+      /Total Account Activity\s+\$?\s*([\d,]+\.\d{2})/i,
+      /TOTAL PURCHASES\s+\$?\s*([\d,]+\.\d{2})/i,
+    ]),
+    new_balance: pick([
+      /New Balance\s+\$?\s*([\d,]+\.\d{2})/i,
+      /Statement Balance\s+\$?\s*([\d,]+\.\d{2})/i,
+      /Current Balance\s+\$?\s*([\d,]+\.\d{2})/i,
+    ]),
+    payments_total: pick([
+      /Total Payments(?:\s+(?:and|&)\s+Credits)?\s+-?\$?\s*([\d,]+\.\d{2})/i,
+      /Payments and Other Credits\s+-?\$?\s*([\d,]+\.\d{2})/i,
+    ]),
+    fees_total: pick([
+      /Total Fees(?:\s+(?:and|&)\s+Interest)?\s+\$?\s*([\d,]+\.\d{2})/i,
+    ]),
+  };
+}
+
+function attachChaseTotals(data: ParsedStatement, text: string): ParsedStatement {
+  const totals = parseChaseTotals(text);
+  const purchases_total = data.purchases_total ?? totals.purchases_total;
+  const new_balance = data.new_balance ?? totals.new_balance;
+  const statement_total =
+    purchases_total ??
+    data.statement_total ??
+    new_balance;
+  return {
+    ...data,
+    purchases_total,
+    new_balance,
+    statement_total,
+  };
+}
+
+function filterValidCharges(transactions: ParsedTxn[]): ParsedTxn[] {
+  return transactions.filter((t) => {
+    if (!t.merchant || t.amount <= 0) return false;
+    if (SKIP_MERCHANT.test(t.merchant)) return false;
+    if (SKIP_LINE.test(t.merchant.trim())) return false;
+    if (/^\d+$/.test(t.merchant.trim())) return false;
+    if (t.amount > 50000) return false;
+    return true;
+  });
+}
+
+function merchantSimilarity(a: string, b: string): number {
+  const norm = (value: string) =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const x = norm(a);
+  const y = norm(b);
+  if (!x || !y) return 0;
+  if (x === y) return 1;
+  if (x.includes(y) || y.includes(x)) return 0.9;
+  const xw = new Set(x.split(" ").filter((w) => w.length > 2));
+  const yw = new Set(y.split(" ").filter((w) => w.length > 2));
+  let overlap = 0;
+  xw.forEach((w) => { if (yw.has(w)) overlap += 1; });
+  return overlap / Math.max(xw.size, yw.size, 1);
+}
+
+function removeNearDuplicates(transactions: ParsedTxn[]): { kept: ParsedTxn[]; removed: ParsedTxn[] } {
+  const kept: ParsedTxn[] = [];
+  const removed: ParsedTxn[] = [];
+  for (const t of transactions) {
+    const dupIdx = kept.findIndex(
+      (k) =>
+        k.date === t.date &&
+        Math.abs(k.amount - t.amount) < 0.01 &&
+        merchantSimilarity(k.merchant, t.merchant) >= 0.85
+    );
+    if (dupIdx >= 0) {
+      if (t.merchant.length > kept[dupIdx].merchant.length) {
+        removed.push(kept[dupIdx]);
+        kept[dupIdx] = t;
+      } else {
+        removed.push(t);
+      }
+    } else {
+      kept.push(t);
+    }
+  }
+  return { kept, removed };
+}
+
+/** Trim phantom rows when parsed sum overshoots known purchases total. */
+function accuracyReconcile(
+  transactions: ParsedTxn[],
+  targetTotal: number | null,
+  tolerance = 0.02
+): AccuracyResult {
+  let txns = filterValidCharges(transactions);
+  const dupPass = removeNearDuplicates(txns);
+  txns = dupPass.kept;
+  const removed = [...dupPass.removed];
+
+  if (targetTotal == null || targetTotal <= 0) {
+    const parsed_sum = parsedSum(txns);
+    return {
+      transactions: txns,
+      parsed_sum,
+      gap: 0,
+      matched: false,
+      removed,
+      target_total: null,
+    };
+  }
+
+  let parsed_sum = parsedSum(txns);
+  let gap = roundMoney(parsed_sum - targetTotal);
+
+  if (gap > tolerance) {
+    const exactIdx = txns.findIndex((t) => Math.abs(t.amount - gap) < 0.011);
+    if (exactIdx >= 0) {
+      removed.push(...txns.splice(exactIdx, 1));
+      parsed_sum = parsedSum(txns);
+      gap = roundMoney(parsed_sum - targetTotal);
+    }
+  }
+
+  if (gap > tolerance && gap < 100) {
+    for (let i = 0; i < txns.length && gap > tolerance; i++) {
+      for (let j = i + 1; j < txns.length && gap > tolerance; j++) {
+        if (Math.abs(txns[i].amount + txns[j].amount - gap) < 0.011) {
+          removed.push(txns[j], txns[i]);
+          txns = txns.filter((_, idx) => idx !== i && idx !== j);
+          parsed_sum = parsedSum(txns);
+          gap = roundMoney(parsed_sum - targetTotal);
+          break;
+        }
+      }
+    }
+  }
+
+  return {
+    transactions: txns,
+    parsed_sum,
+    gap: roundMoney(Math.abs(parsed_sum - targetTotal)),
+    matched: Math.abs(parsed_sum - targetTotal) <= tolerance,
+    removed,
+    target_total: targetTotal,
+  };
+}
+
+function mergeCandidateStatements(
+  candidates: Array<{ data: ParsedStatement; source: string }>
+): ParsedStatement {
+  let period_start: string | null = null;
+  let period_end: string | null = null;
+  let purchases_total: number | null = null;
+  let new_balance: number | null = null;
+  let statement_total: number | null = null;
+  const all: ParsedTxn[] = [];
+
+  for (const c of candidates) {
+    const d = c.data;
+    if (d.period_start) period_start = d.period_start;
+    if (d.period_end) period_end = d.period_end;
+    if (d.purchases_total != null) purchases_total = d.purchases_total;
+    if (d.new_balance != null) new_balance = d.new_balance;
+    if (d.statement_total != null) statement_total = d.statement_total;
+    all.push(...d.transactions);
+  }
+
+  const period = { start: period_start, end: period_end };
+  const deduped = removeNearDuplicates(
+    normalizeParsedTransactions(dedupeTransactions(all), period)
+  ).kept;
+
+  return {
+    period_start,
+    period_end,
+    purchases_total,
+    new_balance,
+    statement_total: purchases_total ?? statement_total ?? new_balance,
+    transactions: deduped,
+  };
+}
 
 function parseMoney(raw: string): number {
   const n = Number(String(raw).replace(/[$,\s]/g, ""));
@@ -59,6 +280,37 @@ function parseUsDate(str: string): { y: number; m: number; d: number } | null {
   m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (m) return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
   return null;
+}
+
+/** Chase vision often returns MM/DD — infer year from statement period. */
+function normalizeTransactionDate(
+  raw: unknown,
+  period?: { start: string | null; end: string | null }
+): string | null {
+  if (raw == null || raw === "") return null;
+  const s = String(raw).trim();
+  const parsed = parseUsDate(s);
+  if (parsed) return toIsoDate(parsed.y, parsed.m, parsed.d);
+
+  const partial = s.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (partial) {
+    const mm = Number(partial[1]);
+    const dd = Number(partial[2]);
+    const y = inferTxnYear(mm, period ?? { start: null, end: null });
+    return toIsoDate(y, mm, dd);
+  }
+
+  return null;
+}
+
+function normalizeParsedTransactions(
+  transactions: ParsedTxn[],
+  period: { start: string | null; end: string | null }
+): ParsedTxn[] {
+  return transactions.map((t) => ({
+    ...t,
+    date: normalizeTransactionDate(t.date, period) ?? t.date,
+  }));
 }
 
 function parsePeriod(text: string): { start: string | null; end: string | null } {
@@ -127,7 +379,8 @@ function dedupeTransactions(transactions: ParsedTxn[]): ParsedTxn[] {
 /** Deterministic Chase Ink / business card text parser */
 function parseChaseStatementText(text: string): ParsedStatement {
   const period = parsePeriod(text);
-  const statement_total = parseStatementTotal(text);
+  const chaseTotals = parseChaseTotals(text);
+  const legacyTotal = parseStatementTotal(text);
   const activityIdx = text.search(/Account Activity/i);
   const body = activityIdx >= 0 ? text.slice(activityIdx) : text;
   const lines = body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -237,15 +490,24 @@ function parseChaseStatementText(text: string): ParsedStatement {
   return {
     period_start: period.start,
     period_end: period.end,
-    statement_total,
+    purchases_total: chaseTotals.purchases_total,
+    new_balance: chaseTotals.new_balance ?? legacyTotal,
+    statement_total: chaseTotals.purchases_total ?? legacyTotal ?? chaseTotals.new_balance,
     transactions: dedupeTransactions(transactions),
   };
 }
 
-function normalizeTransactions(parsed: Record<string, unknown>): ParsedTxn[] {
+function normalizeTransactions(
+  parsed: Record<string, unknown>,
+  period?: { start: string | null; end: string | null }
+): ParsedTxn[] {
+  const p = period ?? {
+    start: parsed.period_start ? String(parsed.period_start).slice(0, 10) : null,
+    end: parsed.period_end ? String(parsed.period_end).slice(0, 10) : null,
+  };
   return ((parsed.transactions as Record<string, unknown>[]) || [])
     .map((t) => ({
-      date: t.date ? String(t.date).slice(0, 10) : null,
+      date: normalizeTransactionDate(t.date, p),
       merchant: String(t.merchant || t.description || "").trim(),
       amount: Math.abs(Number(t.amount) || 0),
       category: t.category ? String(t.category) : null,
@@ -256,12 +518,20 @@ function normalizeTransactions(parsed: Record<string, unknown>): ParsedTxn[] {
 function mergePageParses(pages: Record<string, unknown>[]) {
   let period_start: string | null = null;
   let period_end: string | null = null;
+  let purchases_total: number | null = null;
+  let new_balance: number | null = null;
   let statement_total: number | null = null;
   const transactions: ParsedTxn[] = [];
 
   for (const page of pages) {
     if (page.period_start) period_start = String(page.period_start).slice(0, 10);
     if (page.period_end) period_end = String(page.period_end).slice(0, 10);
+    if (page.purchases_total != null && !Number.isNaN(Number(page.purchases_total))) {
+      purchases_total = Number(page.purchases_total);
+    }
+    if (page.new_balance != null && !Number.isNaN(Number(page.new_balance))) {
+      new_balance = Number(page.new_balance);
+    }
     if (page.statement_total != null && !Number.isNaN(Number(page.statement_total))) {
       statement_total = Number(page.statement_total);
     }
@@ -271,8 +541,13 @@ function mergePageParses(pages: Record<string, unknown>[]) {
   return {
     period_start,
     period_end,
-    statement_total,
-    transactions: dedupeTransactions(transactions),
+    purchases_total,
+    new_balance,
+    statement_total: purchases_total ?? statement_total ?? new_balance,
+    transactions: normalizeParsedTransactions(dedupeTransactions(transactions), {
+      start: period_start,
+      end: period_end,
+    }),
   };
 }
 
@@ -282,30 +557,47 @@ function parsedSum(transactions: { amount: number }[]): number {
 
 function parseQuality(
   transactions: ParsedTxn[],
-  statement_total: number | null
+  data: ParsedStatement,
+  targetHint: number | null
 ): number {
   if (!transactions.length) return 0;
-  let score = Math.min(transactions.length / 8, 1) * 0.45;
-  if (statement_total && statement_total > 0) {
+  const target = data.purchases_total ?? data.statement_total ?? targetHint;
+  let score = Math.min(transactions.length / 8, 1) * 0.35;
+  if (target && target > 0) {
     const sum = parsedSum(transactions);
-    const gapRatio = Math.abs(statement_total - sum) / statement_total;
-    score += Math.max(0, 1 - gapRatio * 4) * 0.55;
+    const gap = Math.abs(target - sum);
+    const gapRatio = gap / target;
+    if (gap <= 0.02) score += 0.55;
+    else if (gap <= 1) score += 0.48;
+    else if (gap <= 10) score += Math.max(0, 0.4 - gapRatio * 2);
+    else score += Math.max(0, 0.35 - gapRatio * 3);
   } else {
-    score += 0.25;
+    score += 0.2;
   }
-  return score;
+  if (data.period_start && data.period_end) score += 0.1;
+  return Math.min(score, 1);
 }
 
-function buildParseWarning(transactions: { amount: number }[], statement_total: number | null) {
-  if (statement_total == null || statement_total <= 0) return null;
+function buildParseWarning(
+  transactions: { amount: number }[],
+  targetTotal: number | null,
+  purchasesTotal: number | null,
+  newBalance: number | null
+) {
+  if (targetTotal == null || targetTotal <= 0) return null;
   const sum = parsedSum(transactions);
-  const gap = Math.abs(statement_total - sum);
-  const tolerance = Math.max(5, statement_total * 0.015);
+  const gap = Math.abs(targetTotal - sum);
+  const tolerance = Math.max(0.02, targetTotal * 0.001);
   if (gap <= tolerance) return null;
+  let hint = "";
+  if (purchasesTotal && newBalance && Math.abs(purchasesTotal - newBalance) > 1) {
+    hint =
+      " Note: New Balance includes payments/credits — validate against Total Purchases, not New Balance.";
+  }
   return (
     `Parsed ${transactions.length} charges totaling $${sum.toLocaleString("en-US", { minimumFractionDigits: 2 })} ` +
-    `but statement total is $${statement_total.toLocaleString("en-US", { minimumFractionDigits: 2 })} ` +
-    `(gap ~$${gap.toFixed(2)}). Review missing rows or adjust Statement total.`
+    `but target is $${targetTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} ` +
+    `(gap ~$${gap.toFixed(2)}).${hint}`
   );
 }
 
@@ -313,10 +605,14 @@ const TEXT_PROMPT = `Parse this Chase business credit card statement text.
 Extract EVERY purchase/charge row from Account Activity sections (all cardholders).
 Skip payments, autopay credits, balance transfers, and subtotal lines.
 
+IMPORTANT: "New Balance" is NOT the sum of charges. Extract "Total Purchases" or "Purchases and Other Debits" separately.
+
 Return JSON only:
 {
   "period_start": "YYYY-MM-DD or null",
   "period_end": "YYYY-MM-DD or null",
+  "purchases_total": number or null,
+  "new_balance": number or null,
   "statement_total": number or null,
   "transactions": [
     { "date": "YYYY-MM-DD", "merchant": "string", "amount": number }
@@ -339,11 +635,15 @@ Layout hints:
 - Each merchant line is ONE transaction — never merge rows
 - Amounts at end of row; purchases are POSITIVE numbers
 - Skip: payments, autopay, credits/refunds, "Total fees", balance lines, section headers
+- Extract purchases_total from summary if visible (Total Purchases / Purchases and Other Debits)
+- Do NOT use New Balance as purchases_total
 
 Return JSON only:
 {
   "period_start": "YYYY-MM-DD or null",
   "period_end": "YYYY-MM-DD or null",
+  "purchases_total": number or null,
+  "new_balance": number or null,
   "statement_total": number or null,
   "transactions": [
     { "date": "YYYY-MM-DD", "merchant": "string", "amount": number }
@@ -440,16 +740,263 @@ async function extractPdfText(bytes: Uint8Array): Promise<string> {
 
 function pickBestParse(
   candidates: Array<{ data: ParsedStatement; source: string }>,
-  statementTotalHint: number | null
+  targetHint: number | null
 ): { data: ParsedStatement; source: string } | null {
   let best: { data: ParsedStatement; source: string; score: number } | null = null;
   for (const c of candidates) {
-    const total = c.data.statement_total ?? statementTotalHint;
-    const score = parseQuality(c.data.transactions, total);
+    const score = parseQuality(c.data.transactions, c.data, targetHint);
     if (!best || score > best.score) best = { ...c, score };
   }
-  if (!best || best.score < 0.35) return null;
+  if (!best || best.score < 0.3) return null;
   return { data: best.data, source: best.source };
+}
+
+function aiParsedToStatement(
+  aiParsed: Record<string, unknown>,
+  fallback: ParsedStatement
+): ParsedStatement {
+  const period = {
+    start: aiParsed.period_start ? String(aiParsed.period_start).slice(0, 10) : fallback.period_start,
+    end: aiParsed.period_end ? String(aiParsed.period_end).slice(0, 10) : fallback.period_end,
+  };
+  const purchases_total =
+    aiParsed.purchases_total != null ? Number(aiParsed.purchases_total) : fallback.purchases_total;
+  const new_balance =
+    aiParsed.new_balance != null ? Number(aiParsed.new_balance) : fallback.new_balance;
+  return {
+    period_start: period.start,
+    period_end: period.end,
+    purchases_total,
+    new_balance,
+    statement_total:
+      purchases_total ??
+      (aiParsed.statement_total != null ? Number(aiParsed.statement_total) : null) ??
+      fallback.statement_total ??
+      new_balance,
+    transactions: normalizeTransactions(aiParsed, period),
+  };
+}
+
+async function fetchReconcileItems(body: Record<string, unknown>) {
+  const dateFrom = body.dateFrom ? String(body.dateFrom).slice(0, 10) : null;
+  const dateTo = body.dateTo ? String(body.dateTo).slice(0, 10) : null;
+  const employeeId = body.employeeId ? String(body.employeeId) : null;
+
+  const baseUrl = Deno.env.get("SUPABASE_URL")!.replace(/\/$/, "");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  let path =
+    "expense_line_items?select=id,expense_date,description,related_to,row_total," +
+    "expense_reports!inner(status,user_id,profiles!expense_reports_user_id_fkey(first_name,last_name))" +
+    "&expense_reports.status=in.(submitted,approved)";
+
+  if (dateFrom) path += `&expense_date=gte.${encodeURIComponent(dateFrom)}`;
+  if (dateTo) path += `&expense_date=lte.${encodeURIComponent(dateTo)}`;
+  if (employeeId) path += `&expense_reports.user_id=eq.${encodeURIComponent(employeeId)}`;
+  path += "&order=expense_date.asc";
+
+  const res = await fetch(`${baseUrl}/rest/v1/${path}`, {
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const text = await res.text();
+  let rows: Record<string, unknown>[] = [];
+  try {
+    rows = text ? JSON.parse(text) : [];
+  } catch {
+    throw new Error(text.slice(0, 200) || "Supabase query failed");
+  }
+  if (!res.ok) {
+    const msg =
+      (rows as { message?: string })?.message ||
+      (typeof rows === "object" && rows && "error" in rows ? String((rows as { error: string }).error) : "") ||
+      "Supabase query failed";
+    throw new Error(msg);
+  }
+
+  const items = (Array.isArray(rows) ? rows : []).map((row) => {
+    const report = row.expense_reports as {
+      user_id?: string;
+      profiles?: { first_name?: string; last_name?: string } | null;
+    } | null;
+    const profile = report?.profiles ?? {};
+    return {
+      id: String(row.id),
+      user_id: report?.user_id ?? null,
+      expense_date: row.expense_date ? String(row.expense_date).slice(0, 10) : null,
+      description: row.description ? String(row.description) : null,
+      related_to: row.related_to ? String(row.related_to) : null,
+      row_total: Number(row.row_total || 0),
+      profile: {
+        first_name: profile.first_name ?? null,
+        last_name: profile.last_name ?? null,
+      },
+    };
+  });
+
+  return new Response(JSON.stringify({ ok: true, items }), {
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
+
+function normMerchant(value: string): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function flagMissingExpense(body: Record<string, unknown>) {
+  const userId = body.userId ? String(body.userId) : null;
+  const merchant = String(body.merchant || "Unknown").trim().slice(0, 200);
+  const amount = roundMoney(Number(body.amount));
+  const expenseDate = body.expenseDate
+    ? normalizeTransactionDate(String(body.expenseDate), {
+        start: body.periodStart ? String(body.periodStart).slice(0, 10) : null,
+        end: body.periodEnd ? String(body.periodEnd).slice(0, 10) : null,
+      })
+    : null;
+  const note = body.note ? String(body.note) : null;
+  const forceNotify = Boolean(body.forceNotify);
+
+  if (!userId) throw new Error("Select the cardholder before flagging.");
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Invalid charge amount — refresh reconciliation and try again.");
+  }
+
+  const baseUrl = Deno.env.get("SUPABASE_URL")!.replace(/\/$/, "");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  const pushNote =
+    note ||
+    `Charge on your card: $${amount.toFixed(2)} at ${merchant}. ` +
+    "Open PDX Expense to upload a receipt or explain this charge.";
+
+  let reminderId: string | null = null;
+  let alreadyNotified = false;
+
+  const existingPath =
+    `expense_reminders?user_id=eq.${encodeURIComponent(userId)}` +
+    `&amount=eq.${amount}&status=in.(pending,notified)` +
+    (expenseDate ? `&expense_date=eq.${encodeURIComponent(expenseDate)}` : "") +
+    "&select=id,merchant,notified_at&limit=5";
+
+  const existingRes = await fetch(`${baseUrl}/rest/v1/${existingPath}`, {
+    headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey },
+  });
+  const existingText = await existingRes.text();
+  let existingRows: Array<{ id?: string; merchant?: string; notified_at?: string | null }> = [];
+  try {
+    existingRows = existingText ? JSON.parse(existingText) : [];
+  } catch {
+    /* ignore lookup errors */
+  }
+  const match = (Array.isArray(existingRows) ? existingRows : []).find(
+    (row) => normMerchant(String(row.merchant)) === normMerchant(merchant)
+  );
+  if (match?.id) {
+    reminderId = String(match.id);
+    alreadyNotified = Boolean(match.notified_at);
+  }
+
+  if (!reminderId) {
+    const insertRes = await fetch(`${baseUrl}/rest/v1/expense_reminders`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        merchant,
+        amount,
+        expense_date: expenseDate,
+        note: pushNote,
+        status: "pending",
+      }),
+    });
+    const insertText = await insertRes.text();
+    if (!insertRes.ok) {
+      let msg = insertText.slice(0, 200);
+      try {
+        const j = JSON.parse(insertText) as { message?: string; error?: string };
+        msg = j.message || j.error || msg;
+      } catch {
+        /* use slice */
+      }
+      if (/expense_reminders|schema cache|does not exist/i.test(msg)) {
+        throw new Error(
+          "expense_reminders table missing — run supabase/expense-reminders-migration.sql in Supabase."
+        );
+      }
+      if (/foreign key|profiles/i.test(msg)) {
+        throw new Error("Invalid cardholder — pick the employee from the Cardholder dropdown.");
+      }
+      throw new Error(msg || "Could not save expense reminder.");
+    }
+    const inserted = JSON.parse(insertText) as { id?: string } | Array<{ id?: string }>;
+    reminderId = Array.isArray(inserted) ? inserted[0]?.id ?? null : inserted?.id ?? null;
+    if (!reminderId) throw new Error("Reminder saved but no id returned.");
+  }
+
+  if (alreadyNotified && !forceNotify) {
+    return new Response(
+      JSON.stringify({ ok: true, reminderId, sent: 0, pushWarning: null, success: true, skipped: true }),
+      { headers: { ...cors, "Content-Type": "application/json" } }
+    );
+  }
+
+  let sent = 0;
+  let pushWarning: string | null = null;
+
+  try {
+    const pushRes = await fetch(`${baseUrl}/functions/v1/send-push`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "missing_expense_service",
+        forceNotify,
+        reminderId,
+        userId,
+        merchant,
+        amount,
+        expenseDate,
+        note: pushNote,
+      }),
+    });
+    const pushText = await pushRes.text();
+    let pushJson: { error?: string; sent?: number; pushWarning?: string | null } = {};
+    try {
+      pushJson = pushText ? JSON.parse(pushText) : {};
+    } catch {
+      throw new Error(pushText.slice(0, 200) || "Push failed");
+    }
+    if (!pushRes.ok || pushJson.error) {
+      throw new Error(String(pushJson.error || "Push failed"));
+    }
+    sent = Number(pushJson.sent) || 0;
+    pushWarning = pushJson.pushWarning ?? null;
+  } catch (err) {
+    pushWarning =
+      (err as Error).message +
+      " Reminder was saved — employee can still see it in the app Notifications tab.";
+  }
+
+  return new Response(
+    JSON.stringify({ ok: true, reminderId, sent, pushWarning, success: true }),
+    { headers: { ...cors, "Content-Type": "application/json" } }
+  );
 }
 
 serve(async (req) => {
@@ -460,7 +1007,16 @@ serve(async (req) => {
     if (!authHeader) throw new Error("Unauthorized");
 
     const body = await req.json();
-    const { fileBase64, mimeType, fileName, storagePath, pageImages, statementText } = body;
+
+    if (body.mode === "reconcile_items") {
+      return await fetchReconcileItems(body);
+    }
+
+    if (body.mode === "flag_missing_expense") {
+      return await flagMissingExpense(body);
+    }
+
+    const { fileBase64, mimeType, fileName, storagePath, pageImages, statementText, targetTotal } = body;
 
     if (!fileBase64 && !storagePath && !(pageImages?.length) && !statementText) {
       throw new Error("storagePath, statementText, or pageImages required");
@@ -487,16 +1043,19 @@ serve(async (req) => {
       pdfText = await extractPdfText(bytes);
     }
 
+    const targetHint =
+      targetTotal != null && Number.isFinite(Number(targetTotal)) ? roundMoney(Number(targetTotal)) : null;
+
     if (pdfText.trim().length > 200) {
-      const deterministic = parseChaseStatementText(pdfText);
+      const deterministic = attachChaseTotals(parseChaseStatementText(pdfText), pdfText);
       if (deterministic.transactions.length) {
         candidates.push({ data: deterministic, source: "pdf_text" });
       }
 
-      if (deterministic.transactions.length < 15 || parseQuality(
-        deterministic.transactions,
-        deterministic.statement_total
-      ) < 0.75) {
+      if (
+        deterministic.transactions.length < 15 ||
+        parseQuality(deterministic.transactions, deterministic, targetHint) < 0.75
+      ) {
         try {
           const aiParsed = await callOpenAI(
             defaultModel,
@@ -504,14 +1063,7 @@ serve(async (req) => {
             12000
           );
           candidates.push({
-            data: {
-              period_start: aiParsed.period_start ? String(aiParsed.period_start).slice(0, 10) : deterministic.period_start,
-              period_end: aiParsed.period_end ? String(aiParsed.period_end).slice(0, 10) : deterministic.period_end,
-              statement_total: aiParsed.statement_total != null
-                ? Number(aiParsed.statement_total)
-                : deterministic.statement_total,
-              transactions: normalizeTransactions(aiParsed),
-            },
+            data: attachChaseTotals(aiParsedToStatement(aiParsed, deterministic), pdfText),
             source: "pdf_ai",
           });
         } catch {
@@ -521,12 +1073,25 @@ serve(async (req) => {
     }
 
     if (pageImages?.length) {
-      const visionMerged = await parseVisionPages((pageImages as string[]).slice(0, 14), visionModel);
+      const visionMerged = attachChaseTotals(
+        await parseVisionPages((pageImages as string[]).slice(0, 20), visionModel),
+        pdfText
+      );
       candidates.push({ data: visionMerged, source: "pdf_vision" });
     }
 
+    if (candidates.length > 1) {
+      candidates.push({
+        data: attachChaseTotals(mergeCandidateStatements(candidates), pdfText),
+        source: "pdf_merged",
+      });
+    }
+
     const statementTotalHint =
-      candidates.find((c) => c.data.statement_total != null)?.data.statement_total ?? null;
+      targetHint ??
+      candidates.find((c) => c.data.purchases_total != null)?.data.purchases_total ??
+      candidates.find((c) => c.data.statement_total != null)?.data.statement_total ??
+      null;
 
     const best = pickBestParse(candidates, statementTotalHint);
 
@@ -544,20 +1109,42 @@ serve(async (req) => {
       throw new Error("Could not extract charges from this PDF — try re-uploading or check the file is a Chase statement");
     }
 
-    let { period_start, period_end, statement_total, transactions } = best.data;
-    if (!statement_total && statementTotalHint) statement_total = statementTotalHint;
+    let { period_start, period_end, statement_total, purchases_total, new_balance, transactions } = best.data;
+    if (!purchases_total && statementTotalHint) purchases_total = statementTotalHint;
+    if (!statement_total) statement_total = purchases_total ?? new_balance ?? statementTotalHint;
 
-    const parse_warning = buildParseWarning(transactions, statement_total);
-    const parsed_sum = parsedSum(transactions);
+    const reconcileTarget = targetHint ?? purchases_total ?? statement_total;
+    const period = { start: period_start, end: period_end };
+    transactions = normalizeParsedTransactions(transactions, period);
+    const accuracy = accuracyReconcile(transactions, reconcileTarget);
+    transactions = accuracy.transactions;
+
+    const parsed_sum = accuracy.parsed_sum;
+    const parse_warning = buildParseWarning(
+      transactions,
+      reconcileTarget,
+      purchases_total,
+      new_balance
+    );
 
     return new Response(
       JSON.stringify({
         ok: true,
         period_start,
         period_end,
-        statement_total,
+        statement_total: reconcileTarget ?? statement_total,
+        purchases_total,
+        new_balance,
         parsed_sum,
         parse_warning,
+        parse_accuracy: {
+          matched: accuracy.matched,
+          gap: accuracy.gap,
+          target_total: reconcileTarget,
+          removed_count: accuracy.removed.length,
+          parse_source: best.source,
+          candidates: candidates.map((c) => c.source),
+        },
         transactions,
         parse_source: best.source,
         text_chars: pdfText.length,
