@@ -30,6 +30,7 @@ import {
   getStatementAnalyzeInvokeConfig,
   saveCreditCardStatement,
   createExpenseReminder,
+  flagAndNotifyEmployee,
 } from "backend/pdx-admin";
 
 const EMBED_ID = "#pdxAdminEmbed";
@@ -72,6 +73,8 @@ async function runAdminAction(action, msg) {
       return analyzeStatementFile(msg.fileBase64, msg.mimeType, msg.fileName, msg.storagePath);
     case "saveCreditCardStatement":
       return saveCreditCardStatement(msg);
+    case "flagAndNotifyEmployee":
+      return flagAndNotifyEmployee(msg.userId, msg.merchant, msg.amount, msg.expenseDate, msg.note);
     case "createExpenseReminder":
       return createExpenseReminder(msg.userId, msg.merchant, msg.amount, msg.expenseDate, msg.note);
     default:

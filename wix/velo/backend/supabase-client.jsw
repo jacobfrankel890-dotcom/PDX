@@ -270,3 +270,29 @@ export async function invokeAnalyzeStatement({ fileBase64, mimeType, fileName, s
   }
   return json;
 }
+
+/** Invoke send-push edge function (service role — Wix admin backend). */
+export async function invokeSendPush(body) {
+  const baseUrl = (await getSecret("SUPABASE_URL")).replace(/\/$/, "");
+  const serviceKey = await getSecret("SUPABASE_SERVICE_ROLE_KEY");
+  const response = await fetch(`${baseUrl}/functions/v1/send-push`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  let json = {};
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch (_) {
+    throw new Error(text.slice(0, 200) || "Push request failed");
+  }
+  if (!response.ok || json.error) {
+    throw new Error(json.error || "Push request failed");
+  }
+  return json;
+}

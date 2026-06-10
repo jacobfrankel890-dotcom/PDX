@@ -80,7 +80,7 @@ export default function NotificationsScreen() {
           prefill: "1",
           merchant: item.merchant ?? "",
           amount: item.amount != null ? String(item.amount) : "",
-          expenseDate: item.expenseDate ?? "",
+          date: item.expenseDate ?? "",
           reminderId: item.reminderId,
         },
       });

@@ -1,4 +1,4 @@
-import { supabaseRest, resolveImageUrl, uploadStorageObject, createSignedStorageUrl, createSignedUploadUrl, invokeAnalyzeStatement, getStatementAnalyzeInvoke } from "backend/supabase-client";
+import { supabaseRest, resolveImageUrl, uploadStorageObject, createSignedStorageUrl, createSignedUploadUrl, invokeAnalyzeStatement, getStatementAnalyzeInvoke, invokeSendPush } from "backend/supabase-client";
 
 // WIX: Backend → Web Modules → ONLY file named "pdx-admin.jsw"
 // There must NOT be a pdx-admin.js in this Backend folder — that breaks the build.
@@ -797,6 +797,53 @@ export async function createExpenseReminder(userId, merchant, amount, expenseDat
 }
 
 /**
+ * Flag a missing card charge → DB reminder + Expo push to employee's device.
+ */
+export async function flagAndNotifyEmployee(userId, merchant, amount, expenseDate, note) {
+  const cleanMerchant = String(merchant || "Unknown").slice(0, 200);
+  const cleanAmount = rcRoundMoney(amount);
+  const pushNote =
+    note ||
+    `Charge on your card: $${cleanAmount.toFixed(2)} at ${cleanMerchant}. ` +
+    "Open PDX Expense to upload a receipt or explain this charge.";
+
+  let reminderId = null;
+  try {
+    const existing = await supabaseRest(
+      `expense_reminders?user_id=eq.${userId}&amount=eq.${cleanAmount}&status=in.(pending,notified)` +
+        (expenseDate ? `&expense_date=eq.${expenseDate}` : "") +
+        "&select=id,merchant&limit=5"
+    );
+    const match = (existing || []).find(
+      (row) => rcNormMerchant(row.merchant) === rcNormMerchant(cleanMerchant)
+    );
+    if (match?.id) reminderId = match.id;
+  } catch (_) {}
+
+  if (!reminderId) {
+    const created = await createExpenseReminder(userId, cleanMerchant, cleanAmount, expenseDate, pushNote);
+    reminderId = created?.id || created;
+  }
+
+  const push = await invokeSendPush({
+    action: "missing_expense_service",
+    reminderId,
+    userId,
+    merchant: cleanMerchant,
+    amount: cleanAmount,
+    expenseDate: expenseDate || null,
+    note: pushNote,
+  });
+
+  return {
+    reminderId,
+    sent: push.sent || 0,
+    pushWarning: push.pushWarning || null,
+    success: true,
+  };
+}
+
+/**
  * Single entry point for Velo page code — avoids fragile multi-import bundles.
  */
 export async function handlePdxAdminRequest(action, params = {}) {
@@ -835,6 +882,14 @@ export async function handlePdxAdminRequest(action, params = {}) {
       return analyzeStatementFile(params.fileBase64, params.mimeType, params.fileName, params.storagePath);
     case "saveCreditCardStatement":
       return saveCreditCardStatement(params);
+    case "flagAndNotifyEmployee":
+      return flagAndNotifyEmployee(
+        params.userId,
+        params.merchant,
+        params.amount,
+        params.expenseDate,
+        params.note
+      );
     case "createExpenseReminder":
       return createExpenseReminder(
         params.userId,

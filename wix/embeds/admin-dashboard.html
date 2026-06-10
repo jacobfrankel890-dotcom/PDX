@@ -189,7 +189,7 @@
           </div>
           <div class="upload-zone" id="reconUploadZone">
             <p><strong>Drop Chase statement here</strong> or click to browse</p>
-            <p class="muted" style="margin-top:6px;font-size:0.8rem">.xlsx (instant) · .pdf (AI vision — scanned statements OK)</p>
+            <p class="muted" style="margin-top:6px;font-size:0.8rem">.xlsx required for finance (100% accurate) · .pdf vision is approximate</p>
             <input type="file" id="reconFileInput" accept=".xlsx,.xls,.csv,.pdf" class="hidden" />
           </div>
           <p class="muted" id="reconFileLabel">No file selected</p>
@@ -1033,6 +1033,53 @@
       return null;
     }
 
+    function sumTransactionAmounts(transactions) {
+      return Math.round((transactions || []).reduce((s, t) => s + Number(t.amount || 0), 0) * 100) / 100;
+    }
+
+    function findStatementTotalInSheet(rows) {
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const row = rows[i];
+        const label = row.map((c) => String(c).toLowerCase()).join(" ");
+        if (/new balance|balance due|statement balance|total account activity/.test(label)) {
+          for (let j = row.length - 1; j >= 0; j--) {
+            const amt = parseMoneyCell(row[j]);
+            if (amt > 0) return amt;
+          }
+        }
+      }
+      return null;
+    }
+
+    function validateParsedStatement(transactions, parseMeta, fileName) {
+      const sum = sumTransactionAmounts(transactions);
+      const ext = (fileName || "").split(".").pop().toLowerCase();
+      const statementTotal =
+        parseMeta?.statement_total ??
+        ($("reconStatementTotal").value ? Number($("reconStatementTotal").value) : null);
+      if (statementTotal == null || !Number.isFinite(statementTotal)) {
+        return { ok: true, sum, statementTotal: null, gap: 0 };
+      }
+      const gap = Math.round(Math.abs(statementTotal - sum) * 100) / 100;
+      const tolerance = Math.max(0.02, statementTotal * 0.005);
+      if (gap <= tolerance) {
+        return { ok: true, sum, statementTotal, gap };
+      }
+      const pdf = ext === "pdf";
+      return {
+        ok: false,
+        sum,
+        statementTotal,
+        gap,
+        message:
+          `Parsed ${transactions.length} charges = ${fmt(sum)} but statement total is ${fmt(statementTotal)} ` +
+          `(gap ${fmt(gap)}).` +
+          (pdf
+            ? " PDF vision may miss rows — download the .xlsx from Chase for 100% accuracy."
+            : " Check the spreadsheet export or statement total field."),
+      };
+    }
+
     function parseChaseSpreadsheet(workbook) {
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
@@ -1052,18 +1099,31 @@
         throw new Error("Spreadsheet missing Date, Description, or Amount columns");
       }
 
+      const typeCol = col(["type", "transaction type"]);
       const transactions = [];
+      let sheetTotal = findStatementTotalInSheet(rows);
       for (let i = headerIdx + 1; i < rows.length; i++) {
         const row = rows[i];
         const merchant = String(row[merchantCol] || "").trim();
         const amount = parseMoneyCell(row[amountCol]);
         const date = excelDateToYmd(row[dateCol]);
         if (!merchant || !amount) continue;
+        if (typeCol >= 0) {
+          const txType = String(row[typeCol] || "").toLowerCase();
+          if (/payment|credit|return|refund/.test(txType)) continue;
+        }
         if (/payment thank|autopay|automatic payment|credit$/i.test(merchant)) continue;
+        if (/^total|^balance|^subtotal/i.test(merchant)) continue;
         transactions.push({ date, merchant, amount });
       }
       if (!transactions.length) throw new Error("No charge rows found in spreadsheet");
-      return { transactions, parse_source: "xlsx" };
+      const parsedSum = sumTransactionAmounts(transactions);
+      return {
+        transactions,
+        parse_source: "xlsx",
+        statement_total: sheetTotal ?? parsedSum,
+        parsed_sum: parsedSum,
+      };
     }
 
     function fileToBase64(file) {
@@ -1144,9 +1204,14 @@
         }
         $("reconFileLabel").textContent = `${file.name} — ${reconTransactions.length} charges parsed`;
         $("reconRunBtn").disabled = false;
-        let hint = `Parsed ${reconTransactions.length} charges. Click <strong>Run reconciliation</strong>.`;
+        const validation = validateParsedStatement(reconTransactions, reconParseMeta, file.name);
+        let hint = `Parsed ${reconTransactions.length} charges (${fmt(validation.sum)}). Click <strong>Run reconciliation</strong>.`;
         if (reconParseMeta?.parse_warning) {
           hint += `<br><span class="error" style="margin-top:8px;display:block">${reconParseMeta.parse_warning}</span>`;
+        }
+        if (!validation.ok) {
+          hint += `<br><span class="error" style="margin-top:8px;display:block">${validation.message}</span>`;
+          $("reconRunBtn").disabled = true;
         }
         $("reconResults").innerHTML = `<p class="muted">${hint}</p>`;
       } catch (e) {
@@ -1225,14 +1290,21 @@
           btn.disabled = true;
           btn.textContent = "Flagging…";
           try {
-            await callBackend("createExpenseReminder", {
+            const result = await callBackend("flagAndNotifyEmployee", {
               userId,
               merchant: row.merchant,
               amount: row.amount,
               expenseDate: row.date,
-              note: "Flagged from Chase statement reconciliation",
+              note:
+                `Charge on your card: $${Number(row.amount).toFixed(2)} at ${row.merchant}. ` +
+                "Upload a receipt or explain this charge in PDX Expense.",
             });
-            btn.textContent = "Flagged ✓";
+            if (result.pushWarning) {
+              btn.textContent = "Saved (no push)";
+              btn.title = result.pushWarning;
+            } else {
+              btn.textContent = result.sent > 0 ? "Notified ✓" : "Saved ✓";
+            }
           } catch (e) {
             btn.disabled = false;
             btn.textContent = "Flag employee";
@@ -1250,6 +1322,15 @@
       const p = reconParams();
       if (!p.dateFrom || !p.dateTo) {
         alert("Set the expense date range.");
+        return;
+      }
+      const validation = validateParsedStatement(
+        reconTransactions,
+        reconParseMeta,
+        reconFileMeta?.name || ""
+      );
+      if (!validation.ok) {
+        alert(validation.message);
         return;
       }
       $("reconResults").innerHTML = '<div class="loading">Matching statement to app expenses…</div>';

@@ -22,7 +22,7 @@ type ExpoTicket = { status?: string; id?: string; message?: string };
 type ExpoReceipt = { status?: string; message?: string; details?: { error?: string } };
 
 type RequestBody = {
-  action: "test" | "missing_expense";
+  action: "test" | "missing_expense" | "missing_expense_service";
   userId?: string;
   merchant?: string;
   amount?: number;
@@ -135,6 +135,104 @@ function summarizeReceipts(receipts: Record<string, ExpoReceipt>) {
   return { status: "ok" as const, message: "Apple accepted the notification." };
 }
 
+async function deliverMissingExpensePush(
+  admin: ReturnType<typeof createClient>,
+  body: RequestBody,
+  createdBy?: string | null
+) {
+  const targetUserId = body.userId;
+  const merchant = body.merchant?.trim();
+  const amount = Number(body.amount);
+
+  if (!targetUserId || !merchant || !Number.isFinite(amount) || amount <= 0) {
+    return json({ error: "userId, merchant, and amount are required" }, 400);
+  }
+
+  let reminderId = body.reminderId;
+
+  if (!reminderId) {
+    const { data: reminder, error: insertError } = await admin
+      .from("expense_reminders")
+      .insert({
+        user_id: targetUserId,
+        created_by: createdBy ?? null,
+        merchant,
+        amount,
+        expense_date: body.expenseDate ?? null,
+        note: body.note ?? null,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (insertError) throw new Error(insertError.message);
+    reminderId = reminder.id;
+  }
+
+  const { data: tokens } = await admin
+    .from("user_push_tokens")
+    .select("expo_push_token")
+    .eq("user_id", targetUserId)
+    .eq("enabled", true);
+
+  const pushTokens = (tokens ?? []).map((t) => t.expo_push_token).filter(Boolean);
+
+  const defaultNote =
+    `Charge on your card: ${formatMoney(amount)} at ${merchant.slice(0, 80)}. ` +
+    "Open PDX Expense to upload a receipt or explain this charge.";
+  const pushBody = body.note?.trim() ? body.note.trim() : defaultNote;
+
+  let sent = 0;
+  let pushWarning: string | null = null;
+
+  if (pushTokens.length === 0) {
+    pushWarning = "Reminder saved but employee has no push token — they will see it in the app Notifications tab.";
+  } else {
+    const result = await sendExpoPush(
+      pushTokens.map((token) => ({
+        to: token,
+        title: "Missing expense on card",
+        body: pushBody,
+        sound: "default",
+        priority: "high",
+        data: {
+          type: "missing_expense",
+          route: "/(app)/submit",
+          reminderId,
+          merchant,
+          amount: String(amount),
+          expenseDate: body.expenseDate ?? "",
+          note: body.note ?? "",
+        },
+      }))
+    );
+    sent = pushTokens.length;
+
+    const tickets = Array.isArray(result?.data) ? (result.data as ExpoTicket[]) : [];
+    const ticketIds = tickets.map((ticket) => ticket.id).filter((id): id is string => Boolean(id));
+    const receipts = await fetchPushReceipts(ticketIds);
+    const delivery = summarizeReceipts(receipts);
+    if (delivery.status === "error") {
+      pushWarning = delivery.message ?? "Push delivery failed";
+    }
+  }
+
+  await admin
+    .from("expense_reminders")
+    .update({
+      status: sent > 0 && !pushWarning ? "notified" : "pending",
+      notified_at: sent > 0 && !pushWarning ? new Date().toISOString() : null,
+    })
+    .eq("id", reminderId);
+
+  return json({
+    success: true,
+    sent,
+    reminderId,
+    pushWarning,
+  });
+}
+
 async function isAdmin(admin: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
   const { data: profile } = await admin
     .from("profiles")
@@ -161,24 +259,33 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ error: "Unauthorized" }, 401);
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const jwt = authHeader.replace("Bearer ", "");
-    const {
-      data: { user },
-    } = await supabase.auth.getUser(jwt);
-    if (!user) return json({ error: "Unauthorized" }, 401);
-
     const body = (await req.json()) as RequestBody;
     const action = body.action;
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    if (action === "missing_expense_service") {
+      if (!serviceKey || token !== serviceKey) {
+        return json({ error: "Service role required" }, 403);
+      }
+      return deliverMissingExpensePush(admin, body, null);
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser(token);
+    if (!user) return json({ error: "Unauthorized" }, 401);
 
     if (action === "test") {
       const { data: tokens } = await admin
@@ -221,77 +328,7 @@ serve(async (req) => {
     if (action === "missing_expense") {
       const callerIsAdmin = await isAdmin(admin, user.id);
       if (!callerIsAdmin) return json({ error: "Admin access required" }, 403);
-
-      const targetUserId = body.userId;
-      const merchant = body.merchant?.trim();
-      const amount = Number(body.amount);
-
-      if (!targetUserId || !merchant || !Number.isFinite(amount) || amount <= 0) {
-        return json({ error: "userId, merchant, and amount are required" }, 400);
-      }
-
-      let reminderId = body.reminderId;
-
-      if (!reminderId) {
-        const { data: reminder, error: insertError } = await admin
-          .from("expense_reminders")
-          .insert({
-            user_id: targetUserId,
-            created_by: user.id,
-            merchant,
-            amount,
-            expense_date: body.expenseDate ?? null,
-            note: body.note ?? null,
-            status: "pending",
-          })
-          .select("id")
-          .single();
-
-        if (insertError) throw new Error(insertError.message);
-        reminderId = reminder.id;
-      }
-
-      const { data: tokens } = await admin
-        .from("user_push_tokens")
-        .select("expo_push_token")
-        .eq("user_id", targetUserId)
-        .eq("enabled", true);
-
-      const pushTokens = (tokens ?? []).map((t) => t.expo_push_token).filter(Boolean);
-      if (pushTokens.length === 0) {
-        return json({ error: "Target user has no enabled push tokens", reminderId }, 400);
-      }
-
-      const title = "Missing expense";
-      const pushBody = body.note?.trim()
-        ? body.note.trim()
-        : `Please submit ${formatMoney(amount)} at ${merchant}.`;
-
-      const result = await sendExpoPush(
-        pushTokens.map((token) => ({
-          to: token,
-          title,
-          body: pushBody,
-          sound: "default",
-          priority: "high",
-          data: {
-            type: "missing_expense",
-            route: "/(app)/submit",
-            reminderId,
-            merchant,
-            amount: String(amount),
-            expenseDate: body.expenseDate ?? "",
-            note: body.note ?? "",
-          },
-        }))
-      );
-
-      await admin
-        .from("expense_reminders")
-        .update({ status: "notified", notified_at: new Date().toISOString() })
-        .eq("id", reminderId);
-
-      return json({ success: true, sent: pushTokens.length, reminderId, result });
+      return deliverMissingExpensePush(admin, body, user.id);
     }
 
     return json({ error: "Unknown action" }, 400);

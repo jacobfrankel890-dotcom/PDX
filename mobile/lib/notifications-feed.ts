@@ -120,7 +120,7 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
   ]);
 
   const reminders = remindersResult
-    .filter((r) => r.status !== "dismissed")
+    .filter((r) => !["dismissed", "no_receipt", "submitted"].includes(r.status))
     .map(reminderNotification);
   const reports = (reportsResult.data ?? []) as ExpenseReportRow[];
   const reportNotes = reports

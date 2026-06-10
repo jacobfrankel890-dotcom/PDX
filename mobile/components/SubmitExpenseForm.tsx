@@ -40,7 +40,7 @@ import {
   type Profile,
 } from "../lib/types";
 import { getErrorMessage, toIsoDate } from "../lib/utils";
-import { markExpenseReminderSubmitted } from "../lib/push-api";
+import { markExpenseReminderSubmitted, markExpenseReminderNoReceipt } from "../lib/push-api";
 import { useScrollToField } from "../lib/use-scroll-to-field";
 import { getStackKeyboardOffset } from "../lib/stack-screen-options";
 import { useTheme } from "../lib/settings-context";
@@ -121,12 +121,6 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Pro
     prefillAppliedRef.current = true;
 
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setIsManualEntry(true);
-    setStep("review");
-    setPreviewUri(null);
-    setAnalysis(null);
-    setReceiptPath(null);
-    setShowDetails(false);
     setMerchantName(prefill.merchant?.trim() ?? "");
     setTotalAmount(prefill.amount?.trim() ?? "");
     setRelatedTo(prefill.relatedTo?.trim() ?? "");
@@ -136,6 +130,22 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Pro
     if (prefill.expenseDate) {
       const iso = toIsoDate(prefill.expenseDate);
       if (iso) setExpenseDate(iso);
+    }
+
+    if (prefill.reminderId) {
+      setIsManualEntry(false);
+      setStep("scan");
+      setPreviewUri(null);
+      setAnalysis(null);
+      setReceiptPath(null);
+      setShowDetails(false);
+    } else {
+      setIsManualEntry(true);
+      setStep("review");
+      setPreviewUri(null);
+      setAnalysis(null);
+      setReceiptPath(null);
+      setShowDetails(false);
     }
   }, [prefill, profile.company, profile.region]);
 
@@ -213,13 +223,42 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Pro
     setPreviewUri(null);
     setAnalysis(null);
     setReceiptPath(null);
-    setMerchantName("");
-    setTotalAmount("");
+    if (!reminderId) {
+      setMerchantName("");
+      setTotalAmount("");
+      setRelatedTo("");
+      setExpenseDate(format(new Date(), "yyyy-MM-dd"));
+    }
     setCategory("misc");
-    setRelatedTo("");
-    setExpenseDate(format(new Date(), "yyyy-MM-dd"));
     setCompany(normalizeCompanyValue(profile.company, profile.region));
     setShowDetails(false);
+  }
+
+  function confirmNoReceipt() {
+    if (!reminderId) return;
+    Alert.alert(
+      "Can't find the receipt?",
+      "Confirm you cannot locate a receipt for this card charge. Your manager will see this on the reconciliation.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm — no receipt",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await markExpenseReminderNoReceipt(
+                reminderId,
+                `No receipt for ${merchantName || "card charge"} (${formatCurrency(parsedTotal || Number(prefill?.amount) || 0)})`
+              );
+              Alert.alert("Recorded", "We've noted that you can't locate a receipt for this charge.");
+              onSubmitted();
+            } catch (err) {
+              Alert.alert("Could not save", getErrorMessage(err));
+            }
+          },
+        },
+      ]
+    );
   }
 
   function toggleDetails() {
@@ -309,6 +348,19 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Pro
       >
         {step === "scan" && (
           <View style={[styles.scanStep, { paddingBottom: insets.bottom + spacing.lg }]}>
+            {reminderId && (merchantName || totalAmount) ? (
+              <View style={styles.reminderBanner}>
+                <Text style={styles.reminderBannerTitle}>Flagged card charge</Text>
+                <Text style={styles.reminderBannerSub}>
+                  {merchantName || "Unknown merchant"}
+                  {totalAmount ? ` · $${totalAmount.replace(/[^0-9.]/g, "")}` : ""}
+                  {expenseDate ? ` · ${expenseDate}` : ""}
+                </Text>
+                <Text style={styles.reminderBannerHint}>
+                  Upload a receipt, enter details manually, or confirm you can't find the receipt.
+                </Text>
+              </View>
+            ) : null}
             <Pressable style={styles.heroScan} onPress={() => scanReceipt(true)}>
               <Text style={styles.heroEmoji}>📷</Text>
               <Text style={styles.heroTitle}>Take a photo of your receipt</Text>
@@ -328,11 +380,23 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Pro
             <Pressable style={styles.manualCard} onPress={startManualEntry}>
               <Text style={styles.manualIcon}>📝</Text>
               <View style={styles.manualTextWrap}>
-                <Text style={styles.manualTitle}>Lost your receipt?</Text>
-                <Text style={styles.manualSub}>Enter merchant, amount, and details manually</Text>
+                <Text style={styles.manualTitle}>
+                  {reminderId ? "Enter details manually" : "Lost your receipt?"}
+                </Text>
+                <Text style={styles.manualSub}>
+                  {reminderId
+                    ? "Categorize this charge without a receipt photo"
+                    : "Enter merchant, amount, and details manually"}
+                </Text>
               </View>
               <Text style={styles.manualChevron}>›</Text>
             </Pressable>
+
+            {reminderId ? (
+              <Pressable style={styles.noReceiptCard} onPress={confirmNoReceipt}>
+                <Text style={styles.noReceiptText}>I can't find the receipt</Text>
+              </Pressable>
+            ) : null}
           </View>
         )}
 
@@ -531,6 +595,27 @@ function makeStyles(colors: ThemeColors) {
   manualTitle: { fontSize: 16, fontWeight: "700", color: colors.primary },
   manualSub: { fontSize: 13, color: colors.slate500, lineHeight: 18 },
   manualChevron: { fontSize: 24, fontWeight: "300", color: colors.slate400 },
+  reminderBanner: {
+    backgroundColor: "#eff6ff",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    padding: spacing.md,
+    gap: 4,
+    marginBottom: spacing.sm,
+  },
+  reminderBannerTitle: { fontSize: 14, fontWeight: "700", color: "#1d4ed8" },
+  reminderBannerSub: { fontSize: 15, fontWeight: "600", color: colors.primary },
+  reminderBannerHint: { fontSize: 13, color: colors.slate500, lineHeight: 18, marginTop: 4 },
+  noReceiptCard: {
+    marginTop: spacing.sm,
+    paddingVertical: 14,
+    alignItems: "center",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  noReceiptText: { fontSize: 15, fontWeight: "600", color: colors.slate500 },
   manualBanner: {
     flexDirection: "row",
     alignItems: "flex-start",

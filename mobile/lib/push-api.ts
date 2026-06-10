@@ -69,3 +69,14 @@ export async function markExpenseReminderSubmitted(reminderId: string): Promise<
     .eq("id", reminderId);
   if (error) throw error;
 }
+
+export async function markExpenseReminderNoReceipt(reminderId: string, note?: string): Promise<void> {
+  const { error } = await supabase
+    .from("expense_reminders")
+    .update({
+      status: "no_receipt",
+      note: note ?? "Employee confirmed receipt unavailable",
+    })
+    .eq("id", reminderId);
+  if (error) throw error;
+}

@@ -6,7 +6,7 @@ export type ExpenseReminder = {
   amount: number;
   expense_date: string | null;
   note: string | null;
-  status: "pending" | "notified" | "submitted" | "dismissed" | string;
+  status: "pending" | "notified" | "submitted" | "dismissed" | "no_receipt" | string;
   created_at: string;
   notified_at: string | null;
 };
@@ -31,6 +31,8 @@ export function getReminderStatusLabel(status: string): string {
       return "Action needed";
     case "submitted":
       return "Submitted";
+    case "no_receipt":
+      return "No receipt on file";
     case "dismissed":
       return "Dismissed";
     default:
