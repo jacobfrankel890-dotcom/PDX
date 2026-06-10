@@ -796,49 +796,103 @@ export async function createExpenseReminder(userId, merchant, amount, expenseDat
   return rows?.[0] || rows;
 }
 
+function extractReminderId(row) {
+  if (!row) return null;
+  if (typeof row === "string") return row;
+  if (Array.isArray(row)) return row[0]?.id || null;
+  return row.id || null;
+}
+
 /**
  * Flag a missing card charge → DB reminder + Expo push to employee's device.
+ * Push failures are non-fatal — the reminder row is still saved.
  */
 export async function flagAndNotifyEmployee(userId, merchant, amount, expenseDate, note) {
+  if (!userId) throw new Error("Select the cardholder before flagging.");
   const cleanMerchant = String(merchant || "Unknown").slice(0, 200);
   const cleanAmount = rcRoundMoney(amount);
+  if (!Number.isFinite(cleanAmount) || cleanAmount <= 0) {
+    throw new Error("Invalid charge amount — refresh reconciliation and try again.");
+  }
+
   const pushNote =
     note ||
     `Charge on your card: $${cleanAmount.toFixed(2)} at ${cleanMerchant}. ` +
     "Open PDX Expense to upload a receipt or explain this charge.";
 
   let reminderId = null;
+  let alreadyNotified = false;
   try {
     const existing = await supabaseRest(
-      `expense_reminders?user_id=eq.${userId}&amount=eq.${cleanAmount}&status=in.(pending,notified)` +
-        (expenseDate ? `&expense_date=eq.${expenseDate}` : "") +
-        "&select=id,merchant&limit=5"
+      `expense_reminders?user_id=eq.${encodeURIComponent(userId)}` +
+        `&amount=eq.${cleanAmount}&status=in.(pending,notified)` +
+        (expenseDate ? `&expense_date=eq.${encodeURIComponent(expenseDate)}` : "") +
+        "&select=id,merchant,notified_at&limit=5"
     );
     const match = (existing || []).find(
       (row) => rcNormMerchant(row.merchant) === rcNormMerchant(cleanMerchant)
     );
-    if (match?.id) reminderId = match.id;
+    if (match?.id) {
+      reminderId = match.id;
+      alreadyNotified = Boolean(match.notified_at);
+    }
   } catch (_) {}
 
   if (!reminderId) {
-    const created = await createExpenseReminder(userId, cleanMerchant, cleanAmount, expenseDate, pushNote);
-    reminderId = created?.id || created;
+    try {
+      const created = await createExpenseReminder(
+        userId,
+        cleanMerchant,
+        cleanAmount,
+        expenseDate,
+        pushNote
+      );
+      reminderId = extractReminderId(created);
+    } catch (err) {
+      const msg = String(err?.message || err || "");
+      if (/expense_reminders|schema cache|does not exist/i.test(msg)) {
+        throw new Error(
+          "expense_reminders table missing — run supabase/expense-reminders-migration.sql in Supabase SQL editor."
+        );
+      }
+      if (/foreign key|profiles/i.test(msg)) {
+        throw new Error("Invalid cardholder — pick the employee from the Cardholder dropdown.");
+      }
+      throw new Error(msg || "Could not save expense reminder.");
+    }
   }
 
-  const push = await invokeSendPush({
-    action: "missing_expense_service",
-    reminderId,
-    userId,
-    merchant: cleanMerchant,
-    amount: cleanAmount,
-    expenseDate: expenseDate || null,
-    note: pushNote,
-  });
+  if (!reminderId) {
+    throw new Error("Reminder saved but no id returned — check Supabase expense_reminders table.");
+  }
+
+  let sent = 0;
+  let pushWarning = null;
+  if (alreadyNotified) {
+    return { reminderId, sent: 0, pushWarning: null, success: true, skipped: true };
+  }
+  try {
+    const push = await invokeSendPush({
+      action: "missing_expense_service",
+      reminderId,
+      userId,
+      merchant: cleanMerchant,
+      amount: cleanAmount,
+      expenseDate: expenseDate || null,
+      note: pushNote,
+    });
+    sent = push.sent || 0;
+    pushWarning = push.pushWarning || null;
+  } catch (err) {
+    pushWarning =
+      String(err?.message || err || "Push failed") +
+      " Reminder was saved — employee can still see it in the app Notifications tab.";
+  }
 
   return {
     reminderId,
-    sent: push.sent || 0,
-    pushWarning: push.pushWarning || null,
+    sent,
+    pushWarning,
     success: true,
   };
 }

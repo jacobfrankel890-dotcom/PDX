@@ -275,24 +275,38 @@ export async function invokeAnalyzeStatement({ fileBase64, mimeType, fileName, s
 export async function invokeSendPush(body) {
   const baseUrl = (await getSecret("SUPABASE_URL")).replace(/\/$/, "");
   const serviceKey = await getSecret("SUPABASE_SERVICE_ROLE_KEY");
-  const response = await fetch(`${baseUrl}/functions/v1/send-push`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${serviceKey}`,
-      apikey: serviceKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  if (!baseUrl || !serviceKey) {
+    throw new Error("Supabase secrets missing in Wix — add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+  }
+
+  let response;
+  try {
+    response = await fetch(`${baseUrl}/functions/v1/send-push`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    throw new Error(`Could not reach send-push (${String(err?.message || err)})`);
+  }
+
   const text = await response.text();
   let json = {};
   try {
     json = text ? JSON.parse(text) : {};
   } catch (_) {
-    throw new Error(text.slice(0, 200) || "Push request failed");
+    throw new Error(text.slice(0, 200) || `Push request failed (HTTP ${response.status})`);
   }
   if (!response.ok || json.error) {
-    throw new Error(json.error || "Push request failed");
+    const detail = json.error || `Push request failed (HTTP ${response.status})`;
+    if (response.status === 403 && /service role/i.test(String(detail))) {
+      throw new Error("send-push rejected service role — redeploy send-push edge function.");
+    }
+    throw new Error(detail);
   }
   return json;
 }

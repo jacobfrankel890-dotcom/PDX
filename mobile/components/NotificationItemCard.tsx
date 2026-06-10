@@ -29,6 +29,7 @@ function formatWhen(value: string): string {
 export function NotificationItemCard({ item, colors, onPress, onDismiss }: Props) {
   const styles = makeStyles(colors);
   const iconName = KIND_ICON[item.kind];
+  const showPendingPill = item.pending && !item.unread;
 
   return (
     <Pressable
@@ -44,6 +45,11 @@ export function NotificationItemCard({ item, colors, onPress, onDismiss }: Props
             {item.title}
           </Text>
           {item.unread ? <View style={styles.unreadDot} /> : null}
+          {showPendingPill ? (
+            <View style={styles.pendingPill}>
+              <Text style={styles.pendingPillText}>Pending</Text>
+            </View>
+          ) : null}
         </View>
         <Text style={styles.bodyText} numberOfLines={2}>
           {item.body}
@@ -94,6 +100,21 @@ function makeStyles(colors: ThemeColors) {
       height: 8,
       borderRadius: 4,
       backgroundColor: colors.primary,
+    },
+    pendingPill: {
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 999,
+    },
+    pendingPillText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.textSecondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
     },
     bodyText: { fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
     when: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },

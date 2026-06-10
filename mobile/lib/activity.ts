@@ -9,12 +9,13 @@ export type ExpenseReminder = {
   status: "pending" | "notified" | "submitted" | "dismissed" | "no_receipt" | string;
   created_at: string;
   notified_at: string | null;
+  read_at: string | null;
 };
 
 export async function fetchExpenseReminders(userId: string): Promise<ExpenseReminder[]> {
   const { data, error } = await supabase
     .from("expense_reminders")
-    .select("id, merchant, amount, expense_date, note, status, created_at, notified_at")
+    .select("id, merchant, amount, expense_date, note, status, created_at, notified_at, read_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(50);

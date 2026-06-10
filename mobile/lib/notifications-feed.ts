@@ -15,7 +15,10 @@ export type AppNotification = {
   title: string;
   body: string;
   createdAt: string;
+  /** Green highlight — user has not opened this yet */
   unread: boolean;
+  /** Still needs receipt / submit — stays in feed until resolved */
+  pending?: boolean;
   reminderId?: string;
   reportId?: string;
   merchant?: string;
@@ -45,7 +48,7 @@ function periodLabel(start: string, end: string): string {
 }
 
 function reminderNotification(reminder: ExpenseReminder): AppNotification {
-  const actionable = reminder.status === "notified" || reminder.status === "pending";
+  const pending = reminder.status === "notified" || reminder.status === "pending";
   return {
     id: `reminder-${reminder.id}`,
     kind: "missing_expense",
@@ -54,7 +57,8 @@ function reminderNotification(reminder: ExpenseReminder): AppNotification {
       reminder.note ? ` — ${reminder.note}` : ""
     }`,
     createdAt: reminder.notified_at ?? reminder.created_at,
-    unread: actionable,
+    unread: pending && !reminder.read_at,
+    pending,
     reminderId: reminder.id,
     merchant: reminder.merchant,
     amount: Number(reminder.amount),
@@ -136,10 +140,23 @@ export function countUnreadNotifications(items: AppNotification[]): number {
   return items.filter((n) => n.unread).length;
 }
 
+export async function markReminderRead(reminderId: string): Promise<void> {
+  const { error } = await supabase
+    .from("expense_reminders")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", reminderId)
+    .is("read_at", null);
+  if (error) throw error;
+}
+
 export async function dismissReminder(reminderId: string): Promise<void> {
   const { error } = await supabase
     .from("expense_reminders")
     .update({ status: "dismissed" })
     .eq("id", reminderId);
   if (error) throw error;
+}
+
+export function countPendingNotifications(items: AppNotification[]): number {
+  return items.filter((n) => n.pending).length;
 }

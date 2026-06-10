@@ -36,6 +36,7 @@
     .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
     .btn { padding: 6px 12px; border: none; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
     .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
     .btn-success { background: var(--success); color: #fff; }
     .btn-danger { background: var(--danger); color: #fff; }
     .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
@@ -178,7 +179,7 @@
         <div class="card">
           <h2>Credit card reconciliation</h2>
           <p class="muted" style="margin-bottom:16px">
-            Upload a Chase statement (.xlsx or .pdf). We parse charges, compare to submitted app expenses, and flag anything missing.
+            Upload your Chase statement PDF. We extract every charge, compare to app expenses, and flag anything missing.
           </p>
           <div class="filter-bar">
             <div><label for="reconEmployee">Cardholder</label><select id="reconEmployee"><option value="">All employees</option></select></div>
@@ -188,8 +189,8 @@
             <div><label for="reconStatementTotal">Statement total (optional)</label><input type="number" id="reconStatementTotal" step="0.01" placeholder="4836.18" /></div>
           </div>
           <div class="upload-zone" id="reconUploadZone">
-            <p><strong>Drop Chase statement here</strong> or click to browse</p>
-            <p class="muted" style="margin-top:6px;font-size:0.8rem">.xlsx required for finance (100% accurate) · .pdf vision is approximate</p>
+            <p><strong>Drop Chase statement PDF here</strong> or click to browse</p>
+            <p class="muted" style="margin-top:6px;font-size:0.8rem">PDF is primary · .xlsx also accepted if you have an export</p>
             <input type="file" id="reconFileInput" accept=".xlsx,.xls,.csv,.pdf" class="hidden" />
           </div>
           <p class="muted" id="reconFileLabel">No file selected</p>
@@ -474,19 +475,42 @@
     function friendlyBackendError(err) {
       const msg = String(err?.message || err || "");
       if (/unable to handle the request/i.test(msg)) {
-        return "Wix backend error — republish after updating backend files, or use the .xlsx export from Chase (no AI needed).";
+        return (
+          "Wix backend error — republish all 4 admin files: supabase-client.jsw (invokeSendPush), " +
+          "pdx-admin.jsw, admin-dashboard.js, and this HTML embed, then Publish the site."
+        );
+      }
+      if (/unknown action.*flagandnotifyemployee/i.test(msg)) {
+        return "Flag action missing — paste updated admin-dashboard.js and pdx-admin.jsw into Wix, then Publish.";
       }
       if (/OPENAI_API_KEY/i.test(msg)) {
-        return "OpenAI key missing — add OPENAI_API_KEY to Supabase Edge Function secrets, or use .xlsx instead.";
+        return "OpenAI key missing — add OPENAI_API_KEY to Supabase Edge Function secrets.";
       }
       if (/abort/i.test(msg)) {
-        return "AI parse timed out after 2 minutes — try the .xlsx export from Chase.";
+        return "PDF parse timed out — try again or use a smaller statement file.";
       }
       return msg || "Request failed";
     }
 
-    /** PDF.js — render scanned Chase PDFs to images for OpenAI vision OCR. */
-    async function pdfToPageImages(file, maxPages = 6) {
+    /** PDF.js — extract text layer (fast, works on digital Chase PDFs). */
+    async function pdfExtractText(file) {
+      const pdfjs = window.pdfjsLib;
+      if (!pdfjs) throw new Error("PDF library not loaded — refresh the page");
+      pdfjs.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: buf }).promise;
+      const parts = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        parts.push(content.items.map((item) => item.str).join(" "));
+      }
+      return { text: parts.join("\n"), pageCount: pdf.numPages };
+    }
+
+    /** PDF.js — render scanned pages to images for OpenAI vision OCR. */
+    async function pdfToPageImages(file, maxPages = 12, startPage = 1) {
       const pdfjs = window.pdfjsLib;
       if (!pdfjs) throw new Error("PDF library not loaded — refresh the page");
       pdfjs.GlobalWorkerOptions.workerSrc =
@@ -494,24 +518,71 @@
       const buf = await file.arrayBuffer();
       const pdf = await pdfjs.getDocument({ data: buf }).promise;
       const images = [];
-      const count = Math.min(pdf.numPages, maxPages);
-      for (let i = 1; i <= count; i++) {
+      const end = Math.min(pdf.numPages, startPage + maxPages - 1);
+      for (let i = startPage; i <= end; i++) {
         const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 2.25 });
+        const viewport = page.getViewport({ scale: 3 });
         const canvas = document.createElement("canvas");
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-        images.push(canvas.toDataURL("image/jpeg", 0.88).split(",")[1]);
+        images.push(canvas.toDataURL("image/jpeg", 0.92).split(",")[1]);
       }
-      return images;
+      return { images, pageCount: pdf.numPages };
     }
 
-    /** PDF AI parse — browser calls Supabase directly (Wix backend times out after ~14s). */
-    async function analyzeStatementDirect(storagePath, mimeType, fileName, pageImages) {
+    function isLikelyScannedPdf(text) {
+      return String(text || "").trim().length < 300;
+    }
+
+    function pdfParseNeedsVision(parsed, textLen) {
+      if (textLen < 300) return true;
+      const count = parsed?.transactions?.length || 0;
+      const sum = parsed?.parsed_sum ?? sumTransactionAmounts(parsed?.transactions || []);
+      const total = parsed?.statement_total ?? null;
+      if (count < 3) return true;
+      if (total && Math.abs(sum - total) > Math.max(40, total * 0.02)) return true;
+      if (parsed?.parse_warning) return true;
+      return false;
+    }
+
+    async function parsePdfWithVision(file, pageCount, payload) {
+      $("reconResults").innerHTML =
+        `<div class="loading">Scanned PDF — reading ${Math.min(pageCount, 12)} page(s) with AI vision (1–3 min)…</div>`;
+      const startPage = pageCount > 10 ? 2 : 1;
+      const { images: pageImages } = await pdfToPageImages(file, 12, startPage);
+      return analyzeStatementDirect({ ...payload, pageImages });
+    }
+
+    async function parsePdfStatement(file, storagePath, mimeType, fileName, statementText, pageCount) {
+      const payload = { storagePath, mimeType, fileName, statementText };
+      const scanned = isLikelyScannedPdf(statementText);
+
+      if (scanned) {
+        return parsePdfWithVision(file, pageCount, payload);
+      }
+
+      $("reconResults").innerHTML = '<div class="loading">Parsing charges from PDF text…</div>';
+      try {
+        let parsed = await analyzeStatementDirect(payload);
+        if (pdfParseNeedsVision(parsed, statementText.length)) {
+          parsed = await parsePdfWithVision(file, pageCount, payload);
+        }
+        return parsed;
+      } catch (e) {
+        const msg = String(e?.message || e || "");
+        if (/scan|vision|text layer|could not extract/i.test(msg)) {
+          return parsePdfWithVision(file, pageCount, payload);
+        }
+        throw e;
+      }
+    }
+
+    /** PDF parse — browser calls Supabase directly (Wix backend times out after ~14s). */
+    async function analyzeStatementDirect(payload) {
       const cfg = await callBackend("getStatementAnalyzeInvoke", {}, { timeoutMs: 15000 });
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 180000);
+      const timer = setTimeout(() => controller.abort(), 300000);
       try {
         const res = await fetch(cfg.analyzeUrl, {
           method: "POST",
@@ -521,7 +592,7 @@
             apikey: cfg.apikey,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ storagePath, mimeType, fileName, pageImages }),
+          body: JSON.stringify(payload),
         });
         const text = await res.text();
         let json = {};
@@ -546,7 +617,6 @@
     function postToParent(msg) {
       try {
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage(msg, "*");
           window.parent.postMessage(JSON.stringify(msg), "*");
         }
       } catch (_) {}
@@ -995,12 +1065,64 @@
     let reconFileMeta = null;
 
     function reconParams() {
+      let dateFrom = $("reconStart").value;
+      let dateTo = $("reconEnd").value;
+      if (dateFrom && dateTo && dateFrom > dateTo) {
+        const tmp = dateFrom;
+        dateFrom = dateTo;
+        dateTo = tmp;
+      }
       return {
-        dateFrom: $("reconStart").value,
-        dateTo: $("reconEnd").value,
+        dateFrom,
+        dateTo,
         employeeId: $("reconEmployee").value || null,
         statementTotal: $("reconStatementTotal").value ? Number($("reconStatementTotal").value) : null,
       };
+    }
+
+    function isPdfReconFile() {
+      return (reconFileMeta?.name || "").split(".").pop().toLowerCase() === "pdf";
+    }
+
+    function showReconMessage(html, isError = false) {
+      const cls = isError ? "error" : "muted";
+      $("reconResults").innerHTML = `<p class="${cls}">${html}</p>`;
+    }
+
+    function refreshReconRunState() {
+      if (!reconTransactions?.length) {
+        $("reconRunBtn").disabled = true;
+        return;
+      }
+      const validation = validateParsedStatement(
+        reconTransactions,
+        reconParseMeta,
+        reconFileMeta?.name || ""
+      );
+      const pdf = isPdfReconFile();
+      let hint =
+        `Parsed ${reconTransactions.length} charges (${fmt(validation.sum)}). ` +
+        `Click <strong>Run reconciliation</strong>.`;
+      if (reconParseMeta?.parse_warning) {
+        hint += `<br><span class="error" style="margin-top:8px;display:block">${reconParseMeta.parse_warning}</span>`;
+      }
+      if (!validation.ok) {
+        hint += `<br><span class="error" style="margin-top:8px;display:block">${validation.message}</span>`;
+        if (pdf) {
+          hint +=
+            `<br><span class="muted" style="margin-top:8px;display:block">` +
+            `Totals don't match exactly — you can still run reconciliation. Review flagged rows or adjust Statement total.</span>`;
+          $("reconRunBtn").disabled = false;
+        } else {
+          hint +=
+            `<br><span class="muted" style="margin-top:8px;display:block">` +
+            `Fix the spreadsheet or statement total, or clear Statement total to skip this check.</span>`;
+          $("reconRunBtn").disabled = true;
+        }
+      } else {
+        $("reconRunBtn").disabled = false;
+      }
+      showReconMessage(hint);
     }
 
     async function loadReconEmployees() {
@@ -1075,7 +1197,7 @@
           `Parsed ${transactions.length} charges = ${fmt(sum)} but statement total is ${fmt(statementTotal)} ` +
           `(gap ${fmt(gap)}).` +
           (pdf
-            ? " PDF vision may miss rows — download the .xlsx from Chase for 100% accuracy."
+            ? " Some charges may be missing — review parsed rows or re-upload a clearer PDF."
             : " Check the spreadsheet export or statement total field."),
       };
     }
@@ -1145,11 +1267,12 @@
       try {
         const ext = file.name.split(".").pop().toLowerCase();
         if (ext === "pdf") {
-          $("reconResults").innerHTML = '<div class="loading">Rendering PDF pages…</div>';
-          const pageImages = await pdfToPageImages(file);
+          $("reconResults").innerHTML = '<div class="loading">Reading PDF text…</div>';
+          const { text: statementText, pageCount } = await pdfExtractText(file);
+
           let storagePath = null;
           try {
-            $("reconResults").innerHTML = '<div class="loading">Uploading PDF to storage…</div>';
+            $("reconResults").innerHTML = '<div class="loading">Uploading PDF…</div>';
             const prep = await callBackend("prepareStatementUpload", { fileName: file.name }, { timeoutMs: 20000 });
             const putRes = await fetch(prep.signedUrl, {
               method: "PUT",
@@ -1164,7 +1287,7 @@
           } catch (_) {
             if (file.size > 450000) {
               throw new Error(
-                "PDF upload failed — use the .xlsx export from Chase, or run supabase/cc-statements-migration.sql in Supabase SQL editor"
+                "PDF upload failed — run supabase/cc-statements-migration.sql in Supabase, then try again"
               );
             }
             $("reconResults").innerHTML = '<div class="loading">Uploading PDF via backend…</div>';
@@ -1177,17 +1300,37 @@
             storagePath = uploaded.storagePath;
           }
           reconFileMeta.storagePath = storagePath;
-          $("reconResults").innerHTML = `<div class="loading">Reading ${pageImages.length} page(s) with AI vision (may take 1–2 min)…</div>`;
-          const parsed = await analyzeStatementDirect(
+
+          const mimeType = file.type || "application/pdf";
+          const parsed = await parsePdfStatement(
+            file,
             storagePath,
-            file.type || "application/pdf",
+            mimeType,
             file.name,
-            pageImages
+            statementText,
+            pageCount
           );
+
           reconTransactions = parsed.transactions || [];
           reconParseMeta = parsed;
-          if (parsed.period_start) $("reconStart").value = parsed.period_start;
-          if (parsed.period_end) $("reconEnd").value = parsed.period_end;
+          const parseLabel =
+            parsed.parse_source === "pdf_text"
+              ? "text"
+              : parsed.parse_source === "pdf_ai"
+                ? "AI text"
+                : parsed.parse_source === "pdf_vision"
+                  ? "vision"
+                  : "PDF";
+          reconParseMeta.parse_label = parseLabel;
+          const periodStart = parsed.period_start || null;
+          const periodEnd = parsed.period_end || null;
+          if (periodStart && periodEnd) {
+            $("reconStart").value = periodStart <= periodEnd ? periodStart : periodEnd;
+            $("reconEnd").value = periodStart <= periodEnd ? periodEnd : periodStart;
+          } else {
+            if (periodStart) $("reconStart").value = periodStart;
+            if (periodEnd) $("reconEnd").value = periodEnd;
+          }
           if (parsed.statement_total != null) $("reconStatementTotal").value = parsed.statement_total;
         } else {
           if (typeof XLSX === "undefined") throw new Error("Excel library not loaded");
@@ -1202,18 +1345,10 @@
             $("reconEnd").value = dates[dates.length - 1];
           }
         }
-        $("reconFileLabel").textContent = `${file.name} — ${reconTransactions.length} charges parsed`;
-        $("reconRunBtn").disabled = false;
-        const validation = validateParsedStatement(reconTransactions, reconParseMeta, file.name);
-        let hint = `Parsed ${reconTransactions.length} charges (${fmt(validation.sum)}). Click <strong>Run reconciliation</strong>.`;
-        if (reconParseMeta?.parse_warning) {
-          hint += `<br><span class="error" style="margin-top:8px;display:block">${reconParseMeta.parse_warning}</span>`;
-        }
-        if (!validation.ok) {
-          hint += `<br><span class="error" style="margin-top:8px;display:block">${validation.message}</span>`;
-          $("reconRunBtn").disabled = true;
-        }
-        $("reconResults").innerHTML = `<p class="muted">${hint}</p>`;
+        $("reconFileLabel").textContent =
+          `${file.name} — ${reconTransactions.length} charges parsed` +
+          (reconParseMeta?.parse_label ? ` (${reconParseMeta.parse_label})` : "");
+        refreshReconRunState();
       } catch (e) {
         reconTransactions = null;
         $("reconResults").innerHTML = `<p class="error">${friendlyBackendError(e)}</p>`;
@@ -1236,7 +1371,7 @@
         <div class="recon-stat"><div class="v ${Math.abs(s.difference) < 0.02 ? "match-ok" : "match-bad"}">${fmt(s.difference)}</div><div class="l">Bill vs app</div></div>
       </div>`;
       if (parseGap > Math.max(25, (s.statement_total || 0) * 0.03)) {
-        html += `<p class="error" style="margin-bottom:12px;font-size:0.85rem">Parsed line items sum to ${fmt(s.statement_parsed_total)} but statement total is ${fmt(s.statement_total)} — about ${fmt(parseGap)} may be missing. Use the Chase .xlsx for a full audit.</p>`;
+        html += `<p class="error" style="margin-bottom:12px;font-size:0.85rem">Parsed line items sum to ${fmt(s.statement_parsed_total)} but statement total is ${fmt(s.statement_total)} — about ${fmt(parseGap)} may be missing. Review the PDF parse or adjust Statement total.</p>`;
       }
 
       if (data.missing_on_app.length) {
@@ -1281,34 +1416,46 @@
 
       $("reconResults").querySelectorAll(".btn-flag-missing").forEach((btn) => {
         btn.onclick = async () => {
+          if (btn.disabled || btn.dataset.flagging === "1") return;
           const row = data.missing_on_app[Number(btn.dataset.idx)];
           const userId = $("reconEmployee").value;
           if (!userId) {
-            alert("Select the cardholder above before flagging a missing expense.");
+            showReconMessage("Select the cardholder above before flagging a missing expense.", true);
             return;
           }
           btn.disabled = true;
+          btn.dataset.flagging = "1";
           btn.textContent = "Flagging…";
           try {
-            const result = await callBackend("flagAndNotifyEmployee", {
-              userId,
-              merchant: row.merchant,
-              amount: row.amount,
-              expenseDate: row.date,
-              note:
-                `Charge on your card: $${Number(row.amount).toFixed(2)} at ${row.merchant}. ` +
-                "Upload a receipt or explain this charge in PDX Expense.",
-            });
+            const result = await callBackend(
+              "flagAndNotifyEmployee",
+              {
+                userId,
+                merchant: row.merchant,
+                amount: row.amount,
+                expenseDate: row.date,
+                note:
+                  `Charge on your card: $${Number(row.amount).toFixed(2)} at ${row.merchant}. ` +
+                  "Upload a receipt or explain this charge in PDX Expense.",
+              },
+              { timeoutMs: 20000 }
+            );
             if (result.pushWarning) {
               btn.textContent = "Saved (no push)";
               btn.title = result.pushWarning;
+              btn.closest("tr")?.classList.add("flag-push-warn");
+            } else if (result.skipped || result.sent > 0) {
+              btn.textContent = "Notified ✓";
+              btn.title = result.skipped ? "Already notified for this charge" : "Push sent to employee device";
             } else {
-              btn.textContent = result.sent > 0 ? "Notified ✓" : "Saved ✓";
+              btn.textContent = "Saved ✓";
+              btn.title = "Saved in app feed";
             }
           } catch (e) {
             btn.disabled = false;
+            btn.dataset.flagging = "0";
             btn.textContent = "Flag employee";
-            alert(e.message);
+            showReconMessage(friendlyBackendError(e), true);
           }
         };
       });
@@ -1316,12 +1463,12 @@
 
     async function runReconciliation() {
       if (!reconTransactions?.length) {
-        alert("Upload a Chase statement first.");
+        showReconMessage("Upload a Chase statement first.", true);
         return;
       }
       const p = reconParams();
       if (!p.dateFrom || !p.dateTo) {
-        alert("Set the expense date range.");
+        showReconMessage("Set the expense date range (from and to).", true);
         return;
       }
       const validation = validateParsedStatement(
@@ -1329,11 +1476,17 @@
         reconParseMeta,
         reconFileMeta?.name || ""
       );
-      if (!validation.ok) {
-        alert(validation.message);
+      const pdf = isPdfReconFile();
+      if (!validation.ok && !pdf) {
+        showReconMessage(
+          `${validation.message}<br><span class="muted" style="margin-top:8px;display:block">` +
+            `Fix the spreadsheet, adjust the statement total, or clear Statement total to skip this check.</span>`,
+          true
+        );
         return;
       }
       $("reconResults").innerHTML = '<div class="loading">Matching statement to app expenses…</div>';
+      $("reconRunBtn").disabled = true;
       try {
         const data = await callBackend("reconcileCreditCardStatement", {
           ...p,
@@ -1352,7 +1505,9 @@
         });
         renderReconResults(data);
       } catch (e) {
-        $("reconResults").innerHTML = `<p class="error">${e.message}</p>`;
+        showReconMessage(friendlyBackendError(e), true);
+      } finally {
+        $("reconRunBtn").disabled = false;
       }
     }
 
@@ -1368,6 +1523,9 @@
         handleReconFile(e.dataTransfer.files[0]);
       };
       $("reconRunBtn").onclick = runReconciliation;
+      $("reconStatementTotal").addEventListener("input", () => refreshReconRunState());
+      $("reconStart").addEventListener("change", () => refreshReconRunState());
+      $("reconEnd").addEventListener("change", () => refreshReconRunState());
     }
     initReconcileTab();
 

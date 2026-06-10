@@ -42,6 +42,41 @@ function formatMoney(amount: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
 }
 
+function projectRef(): string | null {
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const match = url.match(/https:\/\/([^.]+)\.supabase\.co/);
+  return match?.[1] ?? null;
+}
+
+function parseJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const json = atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/** Accept env service key or a signed service_role JWT for this project. */
+function isServiceRoleAuth(token: string): boolean {
+  const envKey = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "").trim();
+  const bearer = token.trim();
+  if (!bearer) return false;
+  if (envKey && bearer === envKey) return true;
+
+  const payload = parseJwtPayload(bearer);
+  const ref = projectRef();
+  return Boolean(
+    payload &&
+      payload.role === "service_role" &&
+      typeof payload.ref === "string" &&
+      ref &&
+      payload.ref === ref
+  );
+}
+
 async function sendExpoPush(messages: PushPayload[]) {
   if (messages.length === 0) return { ok: true, tickets: [] as unknown[] };
 
@@ -149,6 +184,24 @@ async function deliverMissingExpensePush(
   }
 
   let reminderId = body.reminderId;
+
+  if (reminderId) {
+    const { data: existingReminder } = await admin
+      .from("expense_reminders")
+      .select("id, status, notified_at")
+      .eq("id", reminderId)
+      .maybeSingle();
+
+    if (existingReminder?.notified_at) {
+      return json({
+        success: true,
+        sent: 0,
+        reminderId,
+        pushWarning: null,
+        skipped: true,
+      });
+    }
+  }
 
   if (!reminderId) {
     const { data: reminder, error: insertError } = await admin
@@ -266,11 +319,10 @@ serve(async (req) => {
 
     const body = (await req.json()) as RequestBody;
     const action = body.action;
-    const token = authHeader.replace(/^Bearer\s+/i, "");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
 
     if (action === "missing_expense_service") {
-      if (!serviceKey || token !== serviceKey) {
+      if (!isServiceRoleAuth(token)) {
         return json({ error: "Service role required" }, 403);
       }
       return deliverMissingExpensePush(admin, body, null);

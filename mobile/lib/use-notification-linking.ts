@@ -2,12 +2,18 @@ import { router } from "expo-router";
 import * as Linking from "expo-linking";
 import * as Notifications from "expo-notifications";
 import { useEffect } from "react";
-import { buildNotificationRoute } from "./push-notifications";
+import { buildNotificationRoute, parseNotificationData } from "./push-notifications";
+import { markReminderRead } from "./notifications-feed";
 
 function navigateFromResponse(response: Notifications.NotificationResponse | null) {
   if (!response) return;
-  const target = buildNotificationRoute(response.notification.request.content.data);
+  const data = parseNotificationData(response.notification.request.content.data);
+  const target = buildNotificationRoute(data);
   if (!target) return;
+
+  if (data?.type === "missing_expense" && data.reminderId) {
+    markReminderRead(data.reminderId).catch(() => {});
+  }
 
   if (target.startsWith("/")) {
     router.push(target as never);

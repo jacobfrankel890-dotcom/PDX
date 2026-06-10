@@ -41,6 +41,7 @@ import {
 } from "../lib/types";
 import { getErrorMessage, toIsoDate } from "../lib/utils";
 import { markExpenseReminderSubmitted, markExpenseReminderNoReceipt } from "../lib/push-api";
+import { markReminderRead } from "../lib/notifications-feed";
 import { useScrollToField } from "../lib/use-scroll-to-field";
 import { getStackKeyboardOffset } from "../lib/stack-screen-options";
 import { useTheme } from "../lib/settings-context";
@@ -133,6 +134,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Pro
     }
 
     if (prefill.reminderId) {
+      markReminderRead(prefill.reminderId).catch(() => {});
       setIsManualEntry(false);
       setStep("scan");
       setPreviewUri(null);

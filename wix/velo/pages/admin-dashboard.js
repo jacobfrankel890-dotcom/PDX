@@ -113,10 +113,11 @@ function parseEmbedMessage(raw) {
 
 function postToEmbed(embed, payload) {
   try {
-    embed.postMessage(payload);
     embed.postMessage(JSON.stringify(payload));
   } catch (_) {}
 }
+
+const inflightRequestIds = new Set();
 
 function openExportUrl(url) {
   try {
@@ -180,11 +181,16 @@ async function handleEmbedMessage(msg, embed) {
 
   if (!msg.requestId || !msg.action) return false;
 
+  if (inflightRequestIds.has(msg.requestId)) return true;
+  inflightRequestIds.add(msg.requestId);
+
   try {
     const data = await runAdminAction(msg.action, msg);
     postToEmbed(embed, { requestId: msg.requestId, ok: true, data });
   } catch (err) {
     postToEmbed(embed, { requestId: msg.requestId, ok: false, error: err.message || "Request failed" });
+  } finally {
+    inflightRequestIds.delete(msg.requestId);
   }
   return true;
 }
@@ -213,6 +219,5 @@ $w.onReady(function () {
     window.addEventListener("message", (ev) => onMsg(ev.data));
   } catch (_) {}
 
-  embed.postMessage({ type: "pdx-connected", exportHttpBase });
   embed.postMessage(JSON.stringify({ type: "pdx-connected", exportHttpBase }));
 });

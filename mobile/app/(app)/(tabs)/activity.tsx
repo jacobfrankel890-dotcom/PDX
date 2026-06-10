@@ -1,6 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -12,8 +11,8 @@ import { router, useFocusEffect, useNavigation } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import {
   countUnreadNotifications,
-  dismissReminder,
   fetchNotifications,
+  markReminderRead,
   type AppNotification,
 } from "../../../lib/notifications-feed";
 import { hapticLight } from "../../../lib/haptics";
@@ -74,6 +73,15 @@ export default function NotificationsScreen() {
     hapticLight();
 
     if (item.kind === "missing_expense" && item.reminderId) {
+      if (item.unread) {
+        markReminderRead(item.reminderId)
+          .then(() => {
+            setItems((prev) =>
+              prev.map((n) => (n.id === item.id ? { ...n, unread: false } : n))
+            );
+          })
+          .catch(() => {});
+      }
       router.push({
         pathname: "/(app)/submit",
         params: {
@@ -88,18 +96,10 @@ export default function NotificationsScreen() {
     }
 
     if (item.reportId) {
+      setItems((prev) =>
+        prev.map((n) => (n.id === item.id ? { ...n, unread: false } : n))
+      );
       router.push(`/(app)/reports/${item.reportId}`);
-    }
-  }
-
-  async function handleDismiss(item: AppNotification) {
-    if (item.kind !== "missing_expense" || !item.reminderId) return;
-    hapticLight();
-    try {
-      await dismissReminder(item.reminderId);
-      setItems((prev) => prev.filter((n) => n.id !== item.id));
-    } catch (error) {
-      Alert.alert("Could not dismiss", error instanceof Error ? error.message : "Try again.");
     }
   }
 
@@ -151,7 +151,6 @@ export default function NotificationsScreen() {
             item={item}
             colors={colors}
             onPress={() => openNotification(item)}
-            onDismiss={item.kind === "missing_expense" && item.unread ? () => handleDismiss(item) : undefined}
           />
         )}
       />
