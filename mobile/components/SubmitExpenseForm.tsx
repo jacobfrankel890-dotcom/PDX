@@ -40,7 +40,7 @@ import {
   type Profile,
 } from "../lib/types";
 import { getErrorMessage, toIsoDate } from "../lib/utils";
-import { markExpenseReminderSubmitted, markExpenseReminderNoReceipt } from "../lib/push-api";
+import { resolveExpenseReminder, markExpenseReminderNoReceipt } from "../lib/push-api";
 import { markReminderRead } from "../lib/notifications-feed";
 import { useScrollToField } from "../lib/use-scroll-to-field";
 import { getStackKeyboardOffset } from "../lib/stack-screen-options";
@@ -283,7 +283,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Pro
     }
     setSubmitting(true);
     try {
-      await submitExpense(userId, {
+      const saved = await submitExpense(userId, {
         amount: parsedTotal,
         category,
         description: merchantName.trim(),
@@ -295,7 +295,7 @@ export function SubmitExpenseForm({ userId, profile, onSubmitted, prefill }: Pro
 
       if (reminderId) {
         try {
-          await markExpenseReminderSubmitted(reminderId);
+          await resolveExpenseReminder(reminderId, saved.id, Boolean(receiptPath));
         } catch {
           /* non-blocking */
         }

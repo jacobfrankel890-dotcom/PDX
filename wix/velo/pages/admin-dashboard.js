@@ -33,6 +33,10 @@ import {
   saveCreditCardStatement,
   createExpenseReminder,
   flagAndNotifyEmployee,
+  listFlaggedPending,
+  listFlaggedConfirmed,
+  confirmFlaggedReminder,
+  dismissFlaggedReminder,
 } from "backend/pdx-admin";
 
 const EMBED_ID = "#pdxAdminEmbed";
@@ -81,6 +85,14 @@ async function runAdminAction(action, msg) {
       return saveCreditCardStatement(msg);
     case "flagAndNotifyEmployee":
       return flagAndNotifyEmployee(msg.userId, msg.merchant, msg.amount, msg.expenseDate, msg.note);
+    case "listFlaggedPending":
+      return listFlaggedPending();
+    case "listFlaggedConfirmed":
+      return listFlaggedConfirmed();
+    case "confirmFlaggedReminder":
+      return confirmFlaggedReminder(msg.reminderId, msg.approverName);
+    case "dismissFlaggedReminder":
+      return dismissFlaggedReminder(msg.reminderId);
     case "createExpenseReminder":
       return createExpenseReminder(msg.userId, msg.merchant, msg.amount, msg.expenseDate, msg.note);
     default:

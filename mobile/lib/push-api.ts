@@ -70,6 +70,29 @@ export async function markExpenseReminderSubmitted(reminderId: string): Promise<
   if (error) throw error;
 }
 
+/** Link expense to flagged charge — auto-confirms when a receipt was uploaded. */
+export async function resolveExpenseReminder(
+  reminderId: string,
+  lineItemId: string,
+  hasReceipt: boolean
+): Promise<void> {
+  const now = new Date().toISOString();
+  const payload: Record<string, unknown> = {
+    expense_line_item_id: lineItemId,
+    submitted_at: now,
+  };
+  if (hasReceipt) {
+    payload.status = "confirmed";
+    payload.confirmed_at = now;
+    payload.resolution = "receipt";
+  } else {
+    payload.status = "submitted";
+    payload.resolution = "manual";
+  }
+  const { error } = await supabase.from("expense_reminders").update(payload).eq("id", reminderId);
+  if (error) throw error;
+}
+
 export async function markExpenseReminderNoReceipt(reminderId: string, note?: string): Promise<void> {
   const { error } = await supabase
     .from("expense_reminders")

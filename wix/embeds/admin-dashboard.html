@@ -80,6 +80,9 @@
     .recon-stat .l { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
     .badge-missing { background: #450a0a; color: #fca5a5; }
     .badge-matched { background: #14532d; color: #86efac; }
+    .badge-flagged { background: #422006; color: #fcd34d; }
+    .badge-confirmed { background: #14532d; color: #86efac; }
+    .badge-notified { background: #1e3a5f; color: #93c5fd; }
     .badge-extra { background: #422006; color: #fcd34d; }
     .upload-zone {
       border: 2px dashed var(--border); border-radius: 10px; padding: 20px; text-align: center;
@@ -136,6 +139,8 @@
         <button class="tab active" data-tab="pending">Pending approval</button>
         <button class="tab" data-tab="export">Export</button>
         <button class="tab" data-tab="reconcile">Reconcile</button>
+        <button class="tab" data-tab="flagged">Flagged pending</button>
+        <button class="tab" data-tab="bookkeeping">Bookkeeping</button>
         <button class="tab" data-tab="employees">Employees</button>
       </div>
 
@@ -205,6 +210,40 @@
         </div>
       </div>
 
+      <div id="tab-flagged" class="hidden">
+        <div class="card">
+          <h2>Flagged charges — pending</h2>
+          <p class="muted" style="margin-bottom:16px">
+            Missing card charges flagged from reconciliation. Employees are notified via push until they upload a receipt or mark no receipt.
+          </p>
+          <div class="filter-bar">
+            <div><label for="flaggedSearch">Search</label><input type="text" id="flaggedSearch" placeholder="Name, merchant…" /></div>
+            <div><label for="flaggedEmployee">Employee</label><select id="flaggedEmployee"><option value="">All employees</option></select></div>
+            <div><label for="flaggedCompany">Company</label><select id="flaggedCompany"><option value="">All companies</option></select></div>
+            <div><label for="flaggedStatus">Status</label><select id="flaggedStatus"><option value="">All open</option><option value="notified">Notified</option><option value="no_receipt">No receipt</option><option value="submitted">Submitted — review</option></select></div>
+          </div>
+          <div class="filter-count" id="flaggedCount"></div>
+          <div id="flaggedTable"><div class="loading">Open this tab to load…</div></div>
+        </div>
+      </div>
+
+      <div id="tab-bookkeeping" class="hidden">
+        <div class="card">
+          <h2>Bookkeeping — confirmed</h2>
+          <p class="muted" style="margin-bottom:16px">
+            Validated flagged charges. Receipt uploads auto-confirm here; no-receipt items require manual confirm from Flagged pending.
+          </p>
+          <div class="filter-bar">
+            <div><label for="bkSearch">Search</label><input type="text" id="bkSearch" placeholder="Name, merchant…" /></div>
+            <div><label for="bkEmployee">Employee</label><select id="bkEmployee"><option value="">All employees</option></select></div>
+            <div><label for="bkCompany">Company</label><select id="bkCompany"><option value="">All companies</option></select></div>
+            <div><label for="bkResolution">Resolution</label><select id="bkResolution"><option value="">All</option><option value="receipt">Receipt uploaded</option><option value="no_receipt">No receipt</option><option value="admin">Admin confirmed</option><option value="manual">Manual entry</option></select></div>
+          </div>
+          <div class="filter-count" id="bkCount"></div>
+          <div id="bookkeepingTable"><div class="loading">Open this tab to load…</div></div>
+        </div>
+      </div>
+
       <div id="tab-employees" class="hidden">
         <div class="card">
           <h2>Employees</h2>
@@ -254,6 +293,8 @@
     let pendingReports = [];
     let allEmployees = [];
     let employeesList = [];
+    let flaggedPendingList = [];
+    let flaggedConfirmedList = [];
     let connected = false;
     let useHttp = false;
     let exportHttpBase = null;
@@ -322,6 +363,11 @@
       fillSelect("empRole", POSITIONS.map((p) => p.value), roleLabel, "All positions");
       fillSelect("empCompany", COMPANIES.map((c) => c.value), companyLabel, "All companies");
       fillSelect("empCardType", CARD_TYPES.map((c) => c.value), cardLabel, "All cards");
+    }
+
+    function populateFlaggedFilters() {
+      fillSelect("flaggedCompany", COMPANIES.map((c) => c.value), companyLabel, "All companies");
+      fillSelect("bkCompany", COMPANIES.map((c) => c.value), companyLabel, "All companies");
     }
 
     function getPendingFilters() {
@@ -709,10 +755,184 @@
     async function loadStats() {
       const s = await callBackend("stats");
       $("statsRow").innerHTML = `
-        <div class="stat"><div class="stat-value">${s.pending_count}</div><div class="stat-label">Pending</div></div>
-        <div class="stat"><div class="stat-value">${s.approved_count}</div><div class="stat-label">Approved</div></div>
-        <div class="stat"><div class="stat-value">${s.employee_count}</div><div class="stat-label">Employees</div></div>
+        <div class="stat"><div class="stat-value">${s.pending_count}</div><div class="stat-label">Reports pending</div></div>
+        <div class="stat"><div class="stat-value match-bad">${s.flagged_pending_count || 0}</div><div class="stat-label">Flagged open</div></div>
+        <div class="stat"><div class="stat-value match-ok">${s.flagged_confirmed_count || 0}</div><div class="stat-label">Confirmed</div></div>
         <div class="stat"><div class="stat-value">${fmt(s.total_expenses)}</div><div class="stat-label">Total $</div></div>`;
+    }
+
+    function flaggedStatusLabel(status) {
+      switch (status) {
+        case "notified": return "Notified";
+        case "pending": return "Pending";
+        case "no_receipt": return "No receipt";
+        case "submitted": return "Needs review";
+        case "confirmed": return "Confirmed";
+        default: return status || "—";
+      }
+    }
+
+    function flaggedStatusBadge(status) {
+      const label = flaggedStatusLabel(status);
+      if (status === "confirmed") return `<span class="badge badge-confirmed">${label}</span>`;
+      if (status === "notified") return `<span class="badge badge-notified">${label}</span>`;
+      if (status === "no_receipt") return `<span class="badge badge-flagged">${label}</span>`;
+      if (status === "submitted") return `<span class="badge badge-missing">${label}</span>`;
+      return `<span class="badge badge-flagged">${label}</span>`;
+    }
+
+    function resolutionLabel(r) {
+      switch (r) {
+        case "receipt": return "Receipt";
+        case "no_receipt": return "No receipt";
+        case "admin": return "Admin";
+        case "manual": return "Manual";
+        default: return r || "—";
+      }
+    }
+
+    function filterFlaggedRow(row, prefix) {
+      const search = norm($(prefix + "Search").value);
+      const empId = $(prefix + "Employee").value;
+      const company = $(prefix + "Company").value;
+      const name = norm(fullName(row.employee));
+      const merchant = norm(row.merchant);
+      if (search && !name.includes(search) && !merchant.includes(search)) return false;
+      if (empId && row.user_id !== empId) return false;
+      if (company && normalizeCompanyKey(row.employee) !== company) return false;
+      if (prefix === "flagged") {
+        const st = $("flaggedStatus").value;
+        if (st && row.status !== st) return false;
+      }
+      if (prefix === "bk") {
+        const res = $("bkResolution").value;
+        if (res && row.resolution !== res) return false;
+      }
+      return true;
+    }
+
+    function populateFlaggedEmployeeFilters(list, pendingSelectId, confirmedSelectId) {
+      const opts = (list || [])
+        .reduce((acc, row) => {
+          if (!acc.some((e) => e.id === row.user_id)) {
+            acc.push({ id: row.user_id, name: fullName(row.employee) });
+          }
+          return acc;
+        }, [])
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const html = '<option value="">All employees</option>' +
+        opts.map((e) => `<option value="${e.id}">${e.name}</option>`).join("");
+      if ($(pendingSelectId)) $(pendingSelectId).innerHTML = html;
+      if ($(confirmedSelectId)) $(confirmedSelectId).innerHTML = html;
+    }
+
+    function renderFlaggedPendingTable() {
+      const filtered = flaggedPendingList.filter((r) => filterFlaggedRow(r, "flagged"));
+      $("flaggedCount").textContent =
+        filtered.length === flaggedPendingList.length
+          ? `${filtered.length} open flagged charge(s)`
+          : `${filtered.length} of ${flaggedPendingList.length} shown`;
+      if (!filtered.length) {
+        $("flaggedTable").innerHTML = "<p class=\"muted\">No flagged charges in this view.</p>";
+        return;
+      }
+      $("flaggedTable").innerHTML = `<table>
+        <thead><tr>
+          <th>Employee</th><th>Company</th><th>Date</th><th>Merchant</th><th>Amount</th><th>Status</th><th></th>
+        </tr></thead><tbody>` +
+        filtered.map((row) => {
+          const receipt = row.receipt_image_url
+            ? `<img class="receipt-thumb" src="${row.receipt_image_url}" alt="Receipt" title="Receipt" />`
+            : "";
+          return `<tr data-id="${row.id}">
+            <td>${fullName(row.employee)}</td>
+            <td>${companyLabel(normalizeCompanyKey(row.employee))}</td>
+            <td>${row.expense_date ? fmtReconDate(row.expense_date) : "—"}</td>
+            <td>${row.merchant}${receipt ? `<br>${receipt}` : ""}</td>
+            <td>${fmt(row.amount)}</td>
+            <td>${flaggedStatusBadge(row.status)}</td>
+            <td style="white-space:nowrap">
+              ${row.status === "no_receipt" || row.status === "submitted"
+                ? `<button type="button" class="btn btn-success btn-confirm-flagged" data-id="${row.id}">Confirm</button> `
+                : ""}
+              <button type="button" class="btn btn-ghost btn-dismiss-flagged" data-id="${row.id}">Dismiss</button>
+            </td>
+          </tr>`;
+        }).join("") + "</tbody></table>";
+      $("flaggedTable").querySelectorAll(".btn-confirm-flagged").forEach((btn) => {
+        btn.onclick = async () => {
+          btn.disabled = true;
+          try {
+            await callBackend("confirmFlaggedReminder", { reminderId: btn.dataset.id });
+            await loadFlaggedPending();
+            await loadFlaggedConfirmed();
+            await loadStats();
+          } catch (e) {
+            alert(e.message || "Confirm failed");
+            btn.disabled = false;
+          }
+        };
+      });
+      $("flaggedTable").querySelectorAll(".btn-dismiss-flagged").forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm("Dismiss this flagged charge?")) return;
+          btn.disabled = true;
+          try {
+            await callBackend("dismissFlaggedReminder", { reminderId: btn.dataset.id });
+            await loadFlaggedPending();
+            await loadStats();
+          } catch (e) {
+            alert(e.message || "Dismiss failed");
+            btn.disabled = false;
+          }
+        };
+      });
+    }
+
+    function renderBookkeepingTable() {
+      const filtered = flaggedConfirmedList.filter((r) => filterFlaggedRow(r, "bk"));
+      $("bkCount").textContent =
+        filtered.length === flaggedConfirmedList.length
+          ? `${filtered.length} confirmed charge(s)`
+          : `${filtered.length} of ${flaggedConfirmedList.length} shown`;
+      if (!filtered.length) {
+        $("bookkeepingTable").innerHTML = "<p class=\"muted\">No confirmed charges yet.</p>";
+        return;
+      }
+      $("bookkeepingTable").innerHTML = `<table>
+        <thead><tr>
+          <th>Confirmed</th><th>Employee</th><th>Company</th><th>Date</th><th>Merchant</th><th>Amount</th><th>Resolution</th><th>Receipt</th>
+        </tr></thead><tbody>` +
+        filtered.map((row) => {
+          const confirmed = row.confirmed_at ? fmtDate(String(row.confirmed_at).slice(0, 10)) : "—";
+          const receipt = row.receipt_image_url
+            ? `<img class="receipt-thumb" src="${row.receipt_image_url}" alt="Receipt" />`
+            : "<span class=\"muted\">—</span>";
+          return `<tr>
+            <td>${confirmed}</td>
+            <td>${fullName(row.employee)}</td>
+            <td>${companyLabel(normalizeCompanyKey(row.employee))}</td>
+            <td>${row.expense_date ? fmtReconDate(row.expense_date) : "—"}</td>
+            <td>${row.merchant}</td>
+            <td>${fmt(row.amount)}</td>
+            <td>${resolutionLabel(row.resolution)}</td>
+            <td>${receipt}</td>
+          </tr>`;
+        }).join("") + "</tbody></table>";
+    }
+
+    async function loadFlaggedPending() {
+      $("flaggedTable").innerHTML = '<div class="loading">Loading flagged charges…</div>';
+      flaggedPendingList = await callBackend("listFlaggedPending");
+      populateFlaggedEmployeeFilters(flaggedPendingList, "flaggedEmployee", null);
+      renderFlaggedPendingTable();
+    }
+
+    async function loadFlaggedConfirmed() {
+      $("bookkeepingTable").innerHTML = '<div class="loading">Loading confirmed charges…</div>';
+      flaggedConfirmedList = await callBackend("listFlaggedConfirmed");
+      populateFlaggedEmployeeFilters(flaggedConfirmedList, null, "bkEmployee");
+      renderBookkeepingTable();
     }
 
     async function loadPending() {
@@ -1896,6 +2116,7 @@
       try {
         await callBackend("ping");
         populateEmpFilters();
+        populateFlaggedFilters();
         await Promise.all([loadStats(), loadPending()]);
       } catch (e) {
         $("errorBox").textContent = e.message;
@@ -1911,7 +2132,7 @@
       tab.addEventListener("click", async () => {
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
         tab.classList.add("active");
-        ["pending","export","reconcile","employees"].forEach(n => { const el=$(`tab-${n}`); n===tab.dataset.tab?show(el):hide(el); });
+        ["pending","export","reconcile","flagged","bookkeeping","employees"].forEach(n => { const el=$(`tab-${n}`); n===tab.dataset.tab?show(el):hide(el); });
         try {
           hide($("errorBox"));
           if (tab.dataset.tab === "employees") await loadEmployees();
@@ -1920,6 +2141,8 @@
             await previewExport();
           }
           if (tab.dataset.tab === "reconcile") await loadReconEmployees();
+          if (tab.dataset.tab === "flagged") await loadFlaggedPending();
+          if (tab.dataset.tab === "bookkeeping") await loadFlaggedConfirmed();
         } catch (e) {
           $("errorBox").textContent = e.message;
           show($("errorBox"));
@@ -1937,6 +2160,15 @@
     ["empSearch","empRole","empCompany","empCardType"].forEach((id) => {
       $(id).addEventListener("input", renderEmployeesTable);
       $(id).addEventListener("change", renderEmployeesTable);
+    });
+
+    ["flaggedSearch","flaggedEmployee","flaggedCompany","flaggedStatus"].forEach((id) => {
+      $(id).addEventListener("input", renderFlaggedPendingTable);
+      $(id).addEventListener("change", renderFlaggedPendingTable);
+    });
+    ["bkSearch","bkEmployee","bkCompany","bkResolution"].forEach((id) => {
+      $(id).addEventListener("input", renderBookkeepingTable);
+      $(id).addEventListener("change", renderBookkeepingTable);
     });
 
     $("refreshBtn").addEventListener("click", loadAll);

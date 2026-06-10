@@ -271,9 +271,10 @@ export async function pingDatabase() {
 }
 
 export async function getDashboardStats() {
-  const [profiles, reports] = await Promise.all([
+  const [profiles, reports, reminders] = await Promise.all([
     supabaseRest(`profiles?select=id`),
     supabaseRest(`expense_reports?select=status,grand_total`),
+    supabaseRest(`expense_reminders?select=status`),
   ]);
 
   const byStatus = { draft: 0, submitted: 0, approved: 0, rejected: 0 };
@@ -286,6 +287,15 @@ export async function getDashboardStats() {
     }
   }
 
+  let flagged_pending_count = 0;
+  let flagged_confirmed_count = 0;
+  for (const rem of reminders || []) {
+    if (rem.status === "confirmed") flagged_confirmed_count += 1;
+    else if (["pending", "notified", "no_receipt", "submitted"].includes(rem.status)) {
+      flagged_pending_count += 1;
+    }
+  }
+
   return {
     employee_count: (profiles || []).length,
     report_count: (reports || []).length,
@@ -293,6 +303,8 @@ export async function getDashboardStats() {
     approved_count: byStatus.approved || 0,
     draft_count: byStatus.draft || 0,
     total_expenses: totalExpenses,
+    flagged_pending_count,
+    flagged_confirmed_count,
   };
 }
 
@@ -913,6 +925,110 @@ export async function flagAndNotifyEmployee(userId, merchant, amount, expenseDat
   };
 }
 
+const FLAGGED_REMINDER_SELECT =
+  "id,user_id,merchant,amount,expense_date,note,status,notified_at,submitted_at,confirmed_at,created_at,resolution,expense_line_item_id," +
+  `profiles!expense_reminders_user_id_fkey(${PROFILE_SELECT}),` +
+  "expense_line_items(receipt_url,description,row_total,expense_date)";
+
+function mapFlaggedReminderRow(row) {
+  const profile = row.profiles || {};
+  const line = row.expense_line_items || null;
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    merchant: row.merchant,
+    amount: rcRoundMoney(row.amount),
+    expense_date: row.expense_date ? String(row.expense_date).slice(0, 10) : null,
+    note: row.note,
+    status: row.status,
+    resolution: row.resolution || null,
+    notified_at: row.notified_at,
+    submitted_at: row.submitted_at,
+    confirmed_at: row.confirmed_at,
+    created_at: row.created_at,
+    expense_line_item_id: row.expense_line_item_id || null,
+    employee: {
+      first_name: profile.first_name,
+      last_name: profile.last_name,
+      email: profile.email,
+      company: profile.company,
+      region: profile.region,
+      role: profile.role,
+      card_type: profile.card_type,
+    },
+    expense: line
+      ? {
+          description: line.description,
+          row_total: line.row_total,
+          expense_date: line.expense_date,
+          receipt_url: line.receipt_url,
+        }
+      : null,
+  };
+}
+
+async function enrichFlaggedReminders(rows) {
+  const mapped = (rows || []).map(mapFlaggedReminderRow);
+  for (const row of mapped) {
+    if (row.expense?.receipt_url) {
+      row.receipt_image_url = await resolveImageUrl(row.expense.receipt_url);
+    }
+  }
+  return mapped;
+}
+
+/** Admin queue — flagged charges awaiting employee or finance review. */
+export async function listFlaggedPending() {
+  const rows = await supabaseRest(
+    `expense_reminders?status=in.(pending,notified,no_receipt,submitted)` +
+      `&select=${FLAGGED_REMINDER_SELECT}` +
+      "&order=created_at.desc&limit=500"
+  );
+  return enrichFlaggedReminders(rows);
+}
+
+/** Bookkeeping — validated flagged charges (receipt uploaded or admin confirmed). */
+export async function listFlaggedConfirmed() {
+  const rows = await supabaseRest(
+    `expense_reminders?status=eq.confirmed` +
+      `&select=${FLAGGED_REMINDER_SELECT}` +
+      "&order=confirmed_at.desc.nullslast,created_at.desc&limit=500"
+  );
+  return enrichFlaggedReminders(rows);
+}
+
+/** Manual confirm (e.g. employee marked no receipt, or manual entry without receipt). */
+export async function confirmFlaggedReminder(reminderId, approverName) {
+  const rows = await supabaseRest(
+    `expense_reminders?id=eq.${encodeURIComponent(reminderId)}&status=in.(no_receipt,submitted,pending,notified)`,
+    {
+      method: "PATCH",
+      prefer: "return=representation",
+      body: {
+        status: "confirmed",
+        confirmed_at: new Date().toISOString(),
+        resolution: "admin",
+      },
+    }
+  );
+  if (!rows?.[0]) throw new Error("Reminder not found or already confirmed");
+  return mapFlaggedReminderRow(rows[0]);
+}
+
+/** Dismiss a flagged charge from the pending queue. */
+export async function dismissFlaggedReminder(reminderId) {
+  const rows = await supabaseRest(
+    `expense_reminders?id=eq.${encodeURIComponent(reminderId)}&status=neq.confirmed`,
+    {
+      method: "PATCH",
+      prefer: "return=representation",
+      body: { status: "dismissed" },
+    }
+  );
+  if (!rows?.[0]) throw new Error("Reminder not found");
+  return mapFlaggedReminderRow(rows[0]);
+}
+
 /**
  * Single entry point for Velo page code — avoids fragile multi-import bundles.
  */
@@ -972,6 +1088,14 @@ export async function handlePdxAdminRequest(action, params = {}) {
         params.expenseDate,
         params.note
       );
+    case "listFlaggedPending":
+      return listFlaggedPending();
+    case "listFlaggedConfirmed":
+      return listFlaggedConfirmed();
+    case "confirmFlaggedReminder":
+      return confirmFlaggedReminder(params.reminderId, params.approverName);
+    case "dismissFlaggedReminder":
+      return dismissFlaggedReminder(params.reminderId);
     default:
       throw new Error(`Unknown action: ${action}`);
   }
