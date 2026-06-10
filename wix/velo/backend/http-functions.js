@@ -1,11 +1,13 @@
-import {
-  listPendingReports,
-  approveReport,
-  rejectReport,
-  exportExpenseData,
-  pingDatabase,
-  getCreditCardBillCsvBody,
-} from "backend/pdx-admin";
+/**
+ * WIX SETUP:
+ * 1. In sidebar: Backend → click the + button → "Expose site API"
+ *    (This creates http-functions.js — there is NO separate HTTP Functions folder)
+ * 2. Paste this entire file into that http-functions.js
+ * 3. DELETE pdx-api.js from Public if you put it there
+ *
+ * Test URL: https://yoursite.com/_functions/pdxApi?action=ping
+ */
+import { handlePdxAdminRequest, getCreditCardBillCsvBody, getCreditCardBillXlsBody } from "backend/pdx-admin";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -35,16 +37,13 @@ function fileResponse(body, filename, contentType) {
 }
 
 /** DEV MODE: no auth. Re-enable before production. */
-export async function get_pdxAdmin(request) {
+export async function get_pdxApi(request) {
   if (request.method === "OPTIONS") return { status: 204, headers: cors };
   try {
     const q = request.query || {};
     const action = q.action;
 
-    if (action === "ping") return jsonResponse(await pingDatabase());
-    if (action === "pending") return jsonResponse({ ok: true, data: await listPendingReports() });
-
-    if (action === "exportBill") {
+    if (action === "exportBill" || action === "exportBillCsv") {
       if (!q.dateFrom || !q.dateTo) {
         return { status: 400, headers: { "Content-Type": "text/plain" }, body: "Missing dateFrom or dateTo" };
       }
@@ -59,31 +58,47 @@ export async function get_pdxAdmin(request) {
       return fileResponse(csv, filename, "text/csv; charset=utf-8");
     }
 
-    return jsonResponse({ ok: false, error: "Unknown action" }, 400);
+    if (action === "exportBillXls") {
+      if (!q.dateFrom || !q.dateTo) {
+        return { status: 400, headers: { "Content-Type": "text/plain" }, body: "Missing dateFrom or dateTo" };
+      }
+      const xls = await getCreditCardBillXlsBody(
+        q.dateFrom,
+        q.dateTo,
+        q.employeeId || null,
+        q.statementTotal || null
+      );
+      const hint = (q.filenameHint || "export").replace(/[^\w.-]+/g, "_").slice(0, 40);
+      const filename = `credit_card_bill_${hint}_${q.dateFrom}_${q.dateTo}.xls`;
+      return fileResponse(xls, filename, "application/vnd.ms-excel");
+    }
+
+    if (action) {
+      const data = await handlePdxAdminRequest(action, q);
+      return jsonResponse({ ok: true, data });
+    }
+
+    return jsonResponse({ ok: false, error: "Missing action" }, 400);
   } catch (err) {
     return jsonResponse({ ok: false, error: err.message }, 500);
   }
 }
 
-export async function post_pdxAdmin(request) {
+export async function post_pdxApi(request) {
   if (request.method === "OPTIONS") return { status: 204, headers: cors };
   try {
     const body = await request.body.text();
     const payload = body ? JSON.parse(body) : {};
-    let data;
-    switch (payload.action) {
-      case "approve": data = await approveReport(payload.reportId, payload.approverName); break;
-      case "reject": data = await rejectReport(payload.reportId, payload.reason); break;
-      case "export": data = await exportExpenseData(payload.payPeriodStart, payload.payPeriodEnd); break;
-      case "pending": data = await listPendingReports(); break;
-      default: return jsonResponse({ ok: false, error: "Unknown action" }, 400);
+    if (!payload.action) {
+      return jsonResponse({ ok: false, error: "Missing action" }, 400);
     }
+    const data = await handlePdxAdminRequest(payload.action, payload);
     return jsonResponse({ ok: true, data });
   } catch (err) {
     return jsonResponse({ ok: false, error: err.message }, 500);
   }
 }
 
-export async function options_pdxAdmin() {
+export async function options_pdxApi() {
   return { status: 204, headers: cors };
 }

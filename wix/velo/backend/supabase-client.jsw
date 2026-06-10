@@ -94,6 +94,41 @@ export async function createSignedStorageUrl(bucket, storagePath, expiresIn = 36
 }
 
 /**
+ * Upload a file to Supabase Storage (service role — bypasses RLS).
+ */
+export async function uploadStorageObject(bucket, storagePath, content, contentType) {
+  const baseUrl = (await getSecret("SUPABASE_URL")).replace(/\/$/, "");
+  const serviceKey = await getSecret("SUPABASE_SERVICE_ROLE_KEY");
+  const encodedPath = storagePath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  const response = await fetch(`${baseUrl}/storage/v1/object/${bucket}/${encodedPath}`, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": contentType || "application/octet-stream",
+      "x-upsert": "true",
+    },
+    body: content,
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    let message = text || "Storage upload failed";
+    try {
+      const parsed = JSON.parse(text);
+      message = parsed.message || parsed.error || message;
+    } catch (_) {}
+    throw new Error(message);
+  }
+
+  return storagePath;
+}
+
+/**
  * Full URL for avatar or receipt — http(s) passthrough, else sign storage path.
  */
 export async function resolveImageUrl(urlOrPath, bucket = "receipts") {

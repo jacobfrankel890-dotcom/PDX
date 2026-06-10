@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- WIX: Custom Element on Admin page. Element ID must be pdxAdminEmbed. Paste ALL of this file into the element. -->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -64,7 +65,8 @@
       border: none; cursor: pointer;
     }
     .btn-download-ready:hover { filter: brightness(1.08); }
-    .btn-download-ready.disabled { opacity: 0.45; pointer-events: none; cursor: wait; }
+    .btn-download-ready.disabled,
+    .btn-download-ready:disabled { opacity: 0.45; pointer-events: none; cursor: wait; }
     .match-ok { color: var(--success); }
     .match-bad { color: var(--danger); }
     .review-header { margin-bottom: 12px; }
@@ -148,10 +150,10 @@
           </div>
           <div class="actions" style="margin-top:0;align-items:center;flex-wrap:wrap">
             <button class="btn btn-primary" id="previewExportBtn">Preview totals</button>
-            <button type="button" id="exportDownloadBtn" class="btn-download-ready disabled">Preparing Excel file…</button>
+            <button type="button" class="btn-download-ready disabled" id="exportDownloadBtn" disabled>Export .xls</button>
           </div>
           <p class="muted" id="exportHint" style="margin-top:10px;font-size:0.8rem">
-            Wait for the green button, then click once. The file saves from the Wix page (not inside the iframe).
+            Wix blocks downloads inside this panel — Export .xls sends the file through the Wix page (needs Link <code>#pdxExportDownloadLink</code> on the page).
           </p>
           <div id="exportPreview" style="margin-top:16px"></div>
           <div id="regionSummary"></div>
@@ -174,7 +176,6 @@
     </div>
   </div>
 
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script>
     // Matches mobile/lib/types.ts — COMPANIES, ROLES, card types
     const COMPANIES = [
@@ -207,8 +208,9 @@
     let allEmployees = [];
     let employeesList = [];
     let connected = false;
+    let useHttp = false;
     let exportHttpBase = null;
-    let lastExportCache = null;
+    let lastExportData = null;
     let exportRefreshTimer = null;
     let pendingSort = { key: "submitted_at", dir: "desc" };
     let empSort = { key: "name", dir: "asc" };
@@ -360,18 +362,47 @@
       loadAll();
     }
 
-    function $(id) { return document.getElementById(id); }
-    function show(el) { el.classList.remove("hidden"); }
-    function hide(el) { el.classList.add("hidden"); }
-    function fmt(n) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0); }
-    function fmtDate(d) { if (!d) return "—"; return new Date(d + "T12:00:00").toLocaleDateString(); }
-
-    function postToParent(msg) {
-      try { window.parent.postMessage(msg, "*"); } catch (_) {}
-      try { window.top.postMessage(msg, "*"); } catch (_) {}
+    function guessHttpBase() {
+      if (exportHttpBase) return exportHttpBase.split("?")[0];
+      try {
+        const loc = window.top.location;
+        const segs = loc.pathname.split("/").filter(Boolean);
+        const sitePath = segs.length > 1 ? `/${segs.slice(0, -1).join("/")}` : "";
+        return `${loc.origin}${sitePath}/_functions/pdxApi`;
+      } catch (_) {
+        return `${window.location.origin}/_functions/pdxApi`;
+      }
     }
 
-    function callBackend(action, params = {}) {
+    async function httpBackend(action, params = {}) {
+      const url = guessHttpBase();
+      exportHttpBase = url;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...params }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      return json.data;
+    }
+
+    async function tryHttpConnect() {
+      try {
+        const url = guessHttpBase();
+        const res = await fetch(`${url}?action=ping`);
+        const json = await res.json();
+        if (json.ok && json.data) {
+          useHttp = true;
+          exportHttpBase = url;
+          onConnected({ exportHttpBase: url });
+          return true;
+        }
+      } catch (_) {}
+      return false;
+    }
+
+    function callBackendBridge(action, params = {}) {
       return new Promise((resolve, reject) => {
         const requestId = `req_${++reqId}`;
         callbacks.set(requestId, { resolve, reject });
@@ -379,10 +410,37 @@
         setTimeout(() => {
           if (callbacks.has(requestId)) {
             callbacks.delete(requestId);
-            reject(new Error("Timed out — check Velo page code is published and element ID is pdxAdminEmbed"));
+            reject(new Error("bridge-timeout"));
           }
-        }, 30000);
+        }, 8000);
       });
+    }
+
+    async function callBackend(action, params = {}) {
+      if (useHttp) return httpBackend(action, params);
+      try {
+        return await callBackendBridge(action, params);
+      } catch (e) {
+        if (e.message === "bridge-timeout" && (await tryHttpConnect())) {
+          return httpBackend(action, params);
+        }
+        throw e;
+      }
+    }
+
+    function $(id) { return document.getElementById(id); }
+    function show(el) { el.classList.remove("hidden"); }
+    function hide(el) { el.classList.add("hidden"); }
+    function fmt(n) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0); }
+    function fmtDate(d) { if (!d) return "—"; return new Date(d + "T12:00:00").toLocaleDateString(); }
+
+    function postToParent(msg) {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(msg, "*");
+          window.parent.postMessage(JSON.stringify(msg), "*");
+        }
+      } catch (_) {}
     }
 
     window.addEventListener("message", (event) => {
@@ -394,7 +452,11 @@
       }
       if (data.type === "pdx-save-result") {
         if (data.ok) {
-          $("exportHint").textContent = `Saved ${data.filename || "file"} — check your Downloads folder.`;
+          $("exportHint").textContent =
+            `Download started: ${data.filename || "file"} (opened from Wix page — not inside iframe).`;
+        } else {
+          $("exportHint").innerHTML =
+            `<span class="error">${data.error || "Download failed"}</span>`;
         }
         return;
       }
@@ -688,125 +750,104 @@
       return html;
     }
 
-    function xlsxMoney(n) {
-      if (n == null || n === "" || Number(n) === 0) return "";
-      return Math.round(Number(n) * 100) / 100;
+    function exportFilename(ext) {
+      const p = exportParams();
+      const emp = $("exportEmployee").selectedOptions[0]?.text?.replace(/\s+/g, "_") || "All_employees";
+      return `credit_card_bill_${emp}_${p.dateFrom}_${p.dateTo}.${ext || "xls"}`;
     }
 
-    function buildXlsxWorkbook(data) {
+    function xlsEsc(value) {
+      return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    }
+
+    function xlsMoney(n) {
+      if (n == null || n === "" || Number(n) === 0) return "";
+      const num = Math.round(Number(n) * 100) / 100;
+      return num < 0 ? `(${Math.abs(num).toFixed(2)})` : num.toFixed(2);
+    }
+
+    /** Excel 2003 XML — same pattern as Dportal GigSafe exportXls(). */
+    function buildCreditCardBillXls(data) {
       const h = data.header;
       const catKeys = data.category_keys || EXPORT_CATEGORIES.map((c) => c.key);
       const catLabels = EXPORT_CATEGORIES.map((c) => c.label);
-      const rows = [];
+      const sheet = [];
 
-      rows.push([h.title || "Credit Card Bill"]);
-      rows.push(["Employee", h.employee_name, "", "", "From:", h.date_from, "", "To:", h.date_to]);
-      rows.push([
-        "", "", "", "", "Total per Spreadsheet:", xlsxMoney(h.spreadsheet_total),
-        "", "Total on bill:", h.statement_total != null ? xlsxMoney(h.statement_total) : "",
-        "", "Difference:", h.difference != null ? xlsxMoney(h.difference) : "",
+      sheet.push([h.title || "Credit Card Bill"]);
+      sheet.push(["Employee", h.employee_name, "", "", "", "From:", h.date_from, "", "To:", h.date_to]);
+      sheet.push([
+        "", "", "", "", "", "Total per Spreadsheet:", xlsMoney(h.spreadsheet_total),
+        "", "Total on bill:", h.statement_total != null ? xlsMoney(h.statement_total) : "",
+        "", "Difference:", h.difference != null ? xlsMoney(h.difference) : "",
       ]);
-      rows.push([]);
-      rows.push(["Date", "Vendor", "Employee", "Company", "Description", ...catLabels, "Total"]);
+      sheet.push([]);
+      sheet.push(["Date", "Vendor", "Employee", "Company", "Description", ...catLabels, "Total"]);
 
       for (const row of data.rows || []) {
-        rows.push([
+        sheet.push([
           row.date,
           row.vendor,
           row.employee_initials,
           row.company,
           row.description || "",
-          ...catKeys.map((k) => xlsxMoney(row.amounts?.[k])),
-          xlsxMoney(row.total),
+          ...catKeys.map((k) => xlsMoney(row.amounts?.[k])),
+          xlsMoney(row.total),
         ]);
       }
 
-      rows.push([
+      sheet.push([
         "Total", "", "", "", "",
-        ...catKeys.map((k) => xlsxMoney(data.category_totals?.[k])),
-        xlsxMoney(data.grand_total),
+        ...catKeys.map((k) => xlsMoney(data.category_totals?.[k])),
+        xlsMoney(data.grand_total),
       ]);
 
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      ws["!cols"] = [
-        { wch: 12 }, { wch: 28 }, { wch: 8 }, { wch: 26 }, { wch: 20 },
-        ...catLabels.map(() => ({ wch: 12 })),
-        { wch: 12 },
-      ];
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Credit Card Bill");
-      return wb;
-    }
+      const cells = sheet.map((row, ri) => {
+        const style = ri === 0 ? "sTitle" : ri <= 3 ? "sMeta" : ri === 4 ? "sHeader" : "sData";
+        return "<Row>" + row.map((cell) =>
+          `<Cell ss:StyleID="${style}"><Data ss:Type="String">${xlsEsc(cell)}</Data></Cell>`
+        ).join("") + "</Row>";
+      }).join("");
 
-    function exportFilename() {
-      const p = exportParams();
-      const emp = $("exportEmployee").selectedOptions[0]?.text?.replace(/\s+/g, "_") || "all";
-      return `credit_card_bill_${emp}_${p.dateFrom}_${p.dateTo}.xlsx`;
-    }
-
-    function buildHttpFallbackUrl() {
-      const p = exportParams();
-      if (!exportHttpBase || !p.dateFrom || !p.dateTo) return null;
-      const emp = $("exportEmployee").selectedOptions[0]?.text?.replace(/\s+/g, "_") || "all";
-      const q = new URLSearchParams({
-        action: "exportBill",
-        dateFrom: p.dateFrom,
-        dateTo: p.dateTo,
-        filenameHint: emp,
-      });
-      if (p.employeeId) q.set("employeeId", p.employeeId);
-      if (p.statementTotal) q.set("statementTotal", p.statementTotal);
-      return `${exportHttpBase}?${q.toString()}`;
+      return (
+        '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>' +
+        '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">' +
+        '<Styles>' +
+        '<Style ss:ID="sTitle"><Font ss:Bold="1" ss:Size="14"/></Style>' +
+        '<Style ss:ID="sHeader"><Font ss:Bold="1"/></Style>' +
+        '<Style ss:ID="sMeta"/><Style ss:ID="sData"/>' +
+        '</Styles>' +
+        '<Worksheet ss:Name="Credit Card Bill"><Table>' + cells + "</Table></Worksheet></Workbook>"
+      );
     }
 
     function setExportBtnReady(ready, label) {
       const btn = $("exportDownloadBtn");
-      if (ready) {
-        btn.classList.remove("disabled");
-        btn.textContent = label || "Download Excel file";
-      } else {
-        btn.classList.add("disabled");
-        btn.textContent = label || "Preparing Excel file…";
-      }
+      btn.disabled = !ready;
+      btn.classList.toggle("disabled", !ready);
+      btn.textContent = label || (ready ? "Export .xls" : "Preparing…");
     }
 
-    function buildXlsxBytes(data) {
-      if (typeof XLSX === "undefined") throw new Error("Excel library not loaded — refresh the page.");
-      const wb = buildXlsxWorkbook(data);
-      return XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    }
-
-    function updateExportDownloadLink(data) {
-      const filename = exportFilename();
-      const buf = buildXlsxBytes(data);
-      const bytes = new Uint8Array(buf);
-      let binary = "";
-      const chunk = 0x8000;
-      for (let i = 0; i < bytes.length; i += chunk) {
-        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-      }
-      lastExportCache = { data, filename, base64: btoa(binary) };
-      setExportBtnReady(true, `Download ${filename}`);
-    }
-
-    function triggerExportDownload() {
-      if (!lastExportCache?.base64) {
-        alert("Export is still loading — wait for the green button.");
+    function exportXls() {
+      if (!lastExportData) {
+        alert("Run Preview totals first.");
         return;
       }
+      const p = exportParams();
+      $("exportHint").textContent = "Preparing download via Wix page…";
       postToParent({
-        type: "pdx-save-file",
-        base64: lastExportCache.base64,
-        filename: lastExportCache.filename,
-        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        httpFallback: buildHttpFallbackUrl(),
+        type: "pdx-export-xls",
+        dateFrom: p.dateFrom,
+        dateTo: p.dateTo,
+        employeeId: p.employeeId || null,
+        statementTotal: p.statementTotal || null,
+        filenameHint: exportFilename("xls"),
       });
-      $("exportHint").textContent = "Saving file… if nothing downloads in 3 seconds, publish the site and update http-functions/pdx-admin.js.";
     }
 
     function scheduleExportRefresh() {
       clearTimeout(exportRefreshTimer);
-      setExportBtnReady(false, "Preparing Excel file…");
+      lastExportData = null;
+      setExportBtnReady(false, "Preparing…");
       exportRefreshTimer = setTimeout(refreshExportCache, 400);
     }
 
@@ -820,10 +861,15 @@
       try {
         $("exportPreview").innerHTML = '<div class="loading">Loading preview…</div>';
         const data = await callBackend("exportCreditCardBill", p);
+        lastExportData = data;
         $("exportPreview").innerHTML = renderSpreadsheetPreview(data);
-        updateExportDownloadLink(data);
-        $("exportHint").textContent = "Click the green button once to save the .xlsx file.";
+        const n = data.header?.line_count || (data.rows || []).length;
+        setExportBtnReady(!!(data.rows && data.rows.length), `Export .xls (${n})`);
+        $("exportHint").textContent = n
+          ? "Preview loaded — click Export .xls to save the spreadsheet."
+          : "No rows in this date range — nothing to export.";
       } catch (e) {
+        lastExportData = null;
         setExportBtnReady(false, "Export failed — retry");
         $("exportPreview").innerHTML = `<p class="error">${e.message}</p>`;
       }
@@ -882,8 +928,7 @@
 
     $("refreshBtn").addEventListener("click", loadAll);
     $("previewExportBtn").addEventListener("click", previewExport);
-    $("exportDownloadLink").addEventListener("click", triggerExportDownload);
-    $("exportServerForm").addEventListener("submit", () => syncServerExportForm());
+    $("exportDownloadBtn").addEventListener("click", exportXls);
     ["exportEmployee", "exportStart", "exportEnd", "statementTotal"].forEach((id) => {
       $(id).addEventListener("change", scheduleExportRefresh);
       $(id).addEventListener("input", scheduleExportRefresh);
@@ -892,11 +937,20 @@
     function handshake() { postToParent({ type: "ready" }); }
     handshake();
     setInterval(() => { if (!connected) handshake(); }, 1500);
-    setTimeout(() => {
+    setTimeout(async () => {
       if (!connected) {
-        $("configWait").innerHTML = "Still connecting… Check: (1) HTML element ID is <b>pdxAdminEmbed</b>, (2) Admin page code is pasted, (3) site is Published, (4) pdx-admin.jsw is saved.";
+        const ok = await tryHttpConnect();
+        if (!ok) {
+          $("configWait").innerHTML =
+            "Still connecting… Checklist:<br>" +
+            "1. Custom element ID = <b>pdxAdminEmbed</b><br>" +
+            "2. Admin <b>page code</b> pasted (admin-dashboard.js)<br>" +
+            "3. Backend <b>pdx-admin.jsw</b> only (delete any <b>pdx-admin.js</b> from Backend web modules)<br>" +
+            "4. Backend <b>http-functions.js</b> — click + next to Backend → <b>Expose site API</b><br>" +
+            "5. Site is <b>Published</b>";
+        }
       }
-    }, 12000);
+    }, 3000);
   </script>
 </body>
 </html>

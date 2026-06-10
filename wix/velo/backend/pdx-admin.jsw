@@ -1,4 +1,8 @@
-import { supabaseRest, resolveImageUrl } from "backend/supabase-client";
+import { supabaseRest, resolveImageUrl, uploadStorageObject, createSignedStorageUrl } from "backend/supabase-client";
+
+// WIX: Backend → Web Modules → ONLY file named "pdx-admin.jsw"
+// There must NOT be a pdx-admin.js in this Backend folder — that breaks the build.
+// HTTP API lives separately: http-functions/pdx-api.js
 
 // TODO: Re-enable auth (verifyAdminAccessToken) before production.
 
@@ -167,6 +171,79 @@ function creditCardBillToCsv(exportData) {
   }
   lines.push(["Total", "", "", "", "", ...category_keys.map((k) => ccFormatMoneyCsv(category_totals[k])), ccFormatMoneyCsv(grand_total)].map(ccCsvCell).join(","));
   return "\uFEFF" + lines.join("\n");
+}
+
+function ccXmlEsc(value) {
+  if (value == null || value === "") return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function ccSpreadsheetCell(value, asNumber) {
+  if (asNumber && value != null && value !== "" && !Number.isNaN(Number(value))) {
+    return `<Cell><Data ss:Type="Number">${Number(value)}</Data></Cell>`;
+  }
+  return `<Cell><Data ss:Type="String">${ccXmlEsc(value)}</Data></Cell>`;
+}
+
+function ccSpreadsheetRow(values, numberIndexes) {
+  const nums = numberIndexes || new Set();
+  return `<Row>${values.map((v, i) => ccSpreadsheetCell(v, nums.has(i))).join("")}</Row>`;
+}
+
+/** Excel 2003 XML — opens in Excel without npm libraries. */
+function creditCardBillToSpreadsheetXml(exportData) {
+  const { header, rows, category_keys, category_totals, grand_total } = exportData;
+  const catLabels = EXPORT_CATEGORIES.map((c) => c.label);
+  const dataHeaders = ["Date", "Vendor", "Employee", "Company", "Description", ...catLabels, "Total"];
+  const moneyIndexes = new Set([5 + catLabels.length]);
+  for (let i = 5; i < 5 + catLabels.length; i++) moneyIndexes.add(i);
+
+  const summaryIndexes = new Set([6, 9, 12]);
+  const parts = [
+    '<?xml version="1.0"?>',
+    '<?mso-application progid="Excel.Sheet"?>',
+    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">',
+    '<Worksheet ss:Name="Credit Card Bill"><Table>',
+    ccSpreadsheetRow([header.title]),
+    ccSpreadsheetRow(["Employee", header.employee_name, "", "", "", "From:", header.date_from, "", "To:", header.date_to]),
+    ccSpreadsheetRow(
+      ["", "", "", "", "", "Total per Spreadsheet:", header.spreadsheet_total, "", "Total on bill:", header.statement_total ?? "", "", "Difference:", header.difference ?? ""],
+      summaryIndexes
+    ),
+    ccSpreadsheetRow([""]),
+    ccSpreadsheetRow(dataHeaders),
+  ];
+
+  for (const row of rows) {
+    parts.push(
+      ccSpreadsheetRow(
+        [
+          row.date,
+          row.vendor,
+          row.employee_initials,
+          row.company,
+          row.description,
+          ...category_keys.map((k) => row.amounts[k] || ""),
+          row.total,
+        ],
+        moneyIndexes
+      )
+    );
+  }
+
+  parts.push(
+    ccSpreadsheetRow(
+      ["Total", "", "", "", "", ...category_keys.map((k) => category_totals[k]), grand_total],
+      moneyIndexes
+    ),
+    "</Table></Worksheet></Workbook>"
+  );
+
+  return parts.join("\n");
 }
 
 // --- End credit card export ---
@@ -478,10 +555,65 @@ export async function exportCreditCardBill(dateFrom, dateTo, employeeId, stateme
   });
 }
 
-/** CSV body for HTTP download fallback (Excel opens this fine). */
+/** CSV body for HTTP download (Excel opens this fine). */
 export async function getCreditCardBillCsvBody(dateFrom, dateTo, employeeId, statementTotal) {
   const data = await exportCreditCardBill(dateFrom, dateTo, employeeId, statementTotal);
   return creditCardBillToCsv(data);
+}
+
+/** Excel XML (.xls) for HTTP download — no client-side libraries needed. */
+export async function getCreditCardBillXlsBody(dateFrom, dateTo, employeeId, statementTotal) {
+  const data = await exportCreditCardBill(dateFrom, dateTo, employeeId, statementTotal);
+  return creditCardBillToSpreadsheetXml(data);
+}
+
+const EXPORT_STORAGE_BUCKET = "exports";
+
+function exportFilenameHint(data) {
+  const name = data.header?.employee_name;
+  if (name && name !== "All employees") {
+    return String(name).replace(/[^\w.-]+/g, "_").slice(0, 40);
+  }
+  return "All_employees";
+}
+
+async function storeExportFile(body, filename, contentType) {
+  const path = `admin/${Date.now()}_${filename.replace(/[^\w.-]+/g, "_")}`;
+  await uploadStorageObject(EXPORT_STORAGE_BUCKET, path, body, contentType);
+  const url = await createSignedStorageUrl(EXPORT_STORAGE_BUCKET, path, 3600);
+  if (!url) throw new Error("Could not create download link — is the Supabase exports bucket set up?");
+  return { url, filename, path };
+}
+
+/**
+ * Upload export to Supabase Storage and return signed URLs (works without Wix HTTP functions).
+ */
+export async function getCreditCardBillDownloadUrls(dateFrom, dateTo, employeeId, statementTotal) {
+  const data = await exportCreditCardBill(dateFrom, dateTo, employeeId, statementTotal);
+  const hint = exportFilenameHint(data);
+  const xlsName = `credit_card_bill_${hint}_${dateFrom}_${dateTo}.xls`;
+  const csvName = `credit_card_bill_${hint}_${dateFrom}_${dateTo}.csv`;
+  const xlsBody = creditCardBillToSpreadsheetXml(data);
+  const csvBody = creditCardBillToCsv(data);
+
+  const [xls, csv] = await Promise.all([
+    storeExportFile(xlsBody, xlsName, "application/vnd.ms-excel"),
+    storeExportFile(csvBody, csvName, "text/csv; charset=utf-8"),
+  ]);
+
+  return {
+    filename: xls.filename,
+    csvFilename: csv.filename,
+    xlsUrl: withDownloadParam(xls.url, xls.filename),
+    csvUrl: withDownloadParam(csv.url, csv.filename),
+    expiresIn: 3600,
+  };
+}
+
+function withDownloadParam(url, filename) {
+  if (!url) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}download=${encodeURIComponent(filename)}`;
 }
 
 /**
@@ -503,6 +635,8 @@ export async function handlePdxAdminRequest(action, params = {}) {
     case "export": return exportExpenseData(params.payPeriodStart, params.payPeriodEnd);
     case "exportCreditCardBill":
       return exportCreditCardBill(params.dateFrom, params.dateTo, params.employeeId, params.statementTotal);
+    case "getExportDownloadUrls":
+      return getCreditCardBillDownloadUrls(params.dateFrom, params.dateTo, params.employeeId, params.statementTotal);
     default:
       throw new Error(`Unknown action: ${action}`);
   }
