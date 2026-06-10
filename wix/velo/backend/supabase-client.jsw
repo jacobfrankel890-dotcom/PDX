@@ -129,6 +129,64 @@ export async function uploadStorageObject(bucket, storagePath, content, contentT
 }
 
 /**
+ * Signed upload URL so the HTML embed can PUT a statement file directly to Supabase
+ * (avoids sending large PDF base64 through Wix postMessage).
+ */
+export async function createSignedUploadUrl(bucket, storagePath) {
+  const baseUrl = (await getSecret("SUPABASE_URL")).replace(/\/$/, "");
+  const storageV1 = `${baseUrl}/storage/v1`;
+  const serviceKey = await getSecret("SUPABASE_SERVICE_ROLE_KEY");
+  const encodedPath = storagePath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  const response = await fetch(`${storageV1}/object/upload/sign/${bucket}/${encodedPath}`, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+      "x-upsert": "true",
+    },
+    body: JSON.stringify({}),
+  });
+
+  const text = await response.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (_) {
+    throw new Error(text.slice(0, 160) || "Could not create upload URL");
+  }
+
+  if (!response.ok) {
+    const hint = /bucket/i.test(text) ? " — run supabase/cc-statements-migration.sql in Supabase SQL editor" : "";
+    throw new Error((data.message || data.error || text.slice(0, 160) || "Could not create upload URL") + hint);
+  }
+
+  const relUrl = data.url || "";
+  let signedUrl = data.signedUrl || "";
+  let token = data.token || "";
+
+  if (!signedUrl && relUrl) {
+    const absolute = relUrl.startsWith("http")
+      ? relUrl
+      : `${storageV1}${relUrl.startsWith("/") ? relUrl : `/${relUrl}`}`;
+    signedUrl = absolute;
+    try {
+      if (!token) token = new URL(absolute).searchParams.get("token") || "";
+    } catch (_) {}
+  }
+
+  if (!signedUrl) {
+    throw new Error("Invalid upload sign response from Supabase");
+  }
+
+  return { signedUrl, token, path: storagePath };
+}
+
+/**
  * Full URL for avatar or receipt — http(s) passthrough, else sign storage path.
  */
 export async function resolveImageUrl(urlOrPath, bucket = "receipts") {
@@ -175,4 +233,40 @@ export async function verifyAdminAccessToken(accessToken) {
   }
 
   return user;
+}
+
+/** Short-lived invoke config for PDF AI parse (browser calls edge fn — avoids Wix 14s backend limit). */
+export async function getStatementAnalyzeInvoke() {
+  const baseUrl = (await getSecret("SUPABASE_URL")).replace(/\/$/, "");
+  const anonKey = await getSecret("SUPABASE_ANON_KEY");
+  return {
+    analyzeUrl: `${baseUrl}/functions/v1/analyze-statement`,
+    apikey: anonKey,
+  };
+}
+
+/** Invoke analyze-statement edge function (backend only). */
+export async function invokeAnalyzeStatement({ fileBase64, mimeType, fileName, storagePath } = {}) {
+  const baseUrl = (await getSecret("SUPABASE_URL")).replace(/\/$/, "");
+  const serviceKey = await getSecret("SUPABASE_SERVICE_ROLE_KEY");
+  const response = await fetch(`${baseUrl}/functions/v1/analyze-statement`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ fileBase64, mimeType, fileName, storagePath }),
+  });
+  const text = await response.text();
+  let json = {};
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch (_) {
+    throw new Error(text.slice(0, 200) || "Statement analysis failed");
+  }
+  if (!response.ok || !json.ok) {
+    throw new Error(json.error || "Statement analysis failed");
+  }
+  return json;
 }

@@ -1,8 +1,8 @@
-import { supabaseRest, resolveImageUrl, uploadStorageObject, createSignedStorageUrl } from "backend/supabase-client";
+import { supabaseRest, resolveImageUrl, uploadStorageObject, createSignedStorageUrl, createSignedUploadUrl, invokeAnalyzeStatement, getStatementAnalyzeInvoke } from "backend/supabase-client";
 
 // WIX: Backend → Web Modules → ONLY file named "pdx-admin.jsw"
 // There must NOT be a pdx-admin.js in this Backend folder — that breaks the build.
-// HTTP API lives separately: http-functions/pdx-api.js
+// HTTP API lives separately: http-functions.js
 
 // TODO: Re-enable auth (verifyAdminAccessToken) before production.
 
@@ -616,6 +616,186 @@ function withDownloadParam(url, filename) {
   return `${url}${sep}download=${encodeURIComponent(filename)}`;
 }
 
+// --- Credit card statement reconciliation ---
+
+function rcRoundMoney(n) {
+  return Math.round(Number(n || 0) * 100) / 100;
+}
+
+function rcNormMerchant(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function rcDaysBetween(a, b) {
+  if (!a || !b) return 99;
+  const da = new Date(`${a}T12:00:00`);
+  const db = new Date(`${b}T12:00:00`);
+  return Math.abs(Math.round((da - db) / 86400000));
+}
+
+function rcMerchantScore(a, b) {
+  const x = rcNormMerchant(a);
+  const y = rcNormMerchant(b);
+  if (!x || !y) return 0;
+  if (x === y) return 1;
+  if (x.includes(y) || y.includes(x)) return 0.75;
+  const xw = new Set(x.split(" ").filter((w) => w.length > 2));
+  const yw = new Set(y.split(" ").filter((w) => w.length > 2));
+  let overlap = 0;
+  xw.forEach((w) => { if (yw.has(w)) overlap += 1; });
+  return overlap ? overlap / Math.max(xw.size, yw.size, 1) : 0;
+}
+
+/**
+ * Match Chase statement lines to submitted app expenses.
+ */
+export async function reconcileCreditCardStatement(dateFrom, dateTo, employeeId, statementTotal, transactions) {
+  const items = await fetchLineItemsForStatement(dateFrom, dateTo, employeeId || null);
+
+  const appLines = (items || []).map((item) => ({
+    line_item_id: item.id,
+    user_id: item.user_id,
+    employee: [item.profile?.first_name, item.profile?.last_name].filter(Boolean).join(" "),
+    date: item.expense_date ? String(item.expense_date).slice(0, 10) : null,
+    vendor: item.description || item.related_to || "",
+    amount: rcRoundMoney(item.row_total),
+    matched: false,
+  }));
+
+  const stmtLines = (transactions || []).map((t, index) => ({
+    id: `stmt_${index}`,
+    date: t.date ? String(t.date).slice(0, 10) : null,
+    merchant: t.merchant || t.description || "",
+    amount: rcRoundMoney(Math.abs(Number(t.amount))),
+    category: t.category || null,
+    matched: false,
+  }));
+
+  const matches = [];
+
+  for (const stmt of stmtLines) {
+    let bestIdx = -1;
+    let bestScore = 0;
+    for (let i = 0; i < appLines.length; i++) {
+      const app = appLines[i];
+      if (app.matched) continue;
+      if (Math.abs(app.amount - stmt.amount) > 0.02) continue;
+      const dateDiff = rcDaysBetween(app.date, stmt.date);
+      if (dateDiff > 5) continue;
+      const score = rcMerchantScore(app.vendor, stmt.merchant) + (dateDiff === 0 ? 0.25 : dateDiff <= 2 ? 0.12 : 0);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx >= 0 && bestScore >= 0.2) {
+      appLines[bestIdx].matched = true;
+      stmt.matched = true;
+      matches.push({
+        statement: stmt,
+        expense: appLines[bestIdx],
+        confidence: Math.round(bestScore * 100) / 100,
+      });
+    }
+  }
+
+  const missingOnApp = stmtLines.filter((s) => !s.matched);
+  const missingOnBill = appLines.filter((a) => !a.matched);
+  const statementSum = rcRoundMoney(stmtLines.reduce((sum, t) => sum + t.amount, 0));
+  const appSum = rcRoundMoney(appLines.reduce((sum, t) => sum + t.amount, 0));
+  const billTotal = statementTotal != null ? rcRoundMoney(statementTotal) : statementSum;
+
+  return {
+    summary: {
+      statement_count: stmtLines.length,
+      app_count: appLines.length,
+      matched_count: matches.length,
+      missing_on_app_count: missingOnApp.length,
+      missing_on_bill_count: missingOnBill.length,
+      statement_total: billTotal,
+      statement_parsed_total: statementSum,
+      app_total: appSum,
+      difference: rcRoundMoney(billTotal - appSum),
+    },
+    matches,
+    missing_on_app: missingOnApp,
+    missing_on_bill: missingOnBill,
+  };
+}
+
+/** Upload a small PDF via backend (fallback when signed URL fails). */
+export async function uploadStatementPdf(fileBase64, fileName) {
+  if (!fileBase64) throw new Error("fileBase64 required");
+  const safe = String(fileName || "statement.pdf").replace(/[^\w.-]+/g, "_").slice(0, 80);
+  const storagePath = `uploads/${Date.now()}_${safe}`;
+  const raw = typeof atob === "function" ? atob(fileBase64) : Buffer.from(fileBase64, "base64").toString("binary");
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  await uploadStorageObject("statements", storagePath, bytes, "application/pdf");
+  return { storagePath };
+}
+
+/** Signed upload URL for statement PDFs — embed uploads directly to Supabase storage. */
+export async function prepareStatementUpload(fileName) {
+  const safe = String(fileName || "statement.pdf").replace(/[^\w.-]+/g, "_").slice(0, 80);
+  const storagePath = `uploads/${Date.now()}_${safe}`;
+  const signed = await createSignedUploadUrl("statements", storagePath);
+  return {
+    storagePath: signed.path || storagePath,
+    signedUrl: signed.signedUrl,
+    token: signed.token,
+  };
+}
+
+/** Config for browser → Supabase edge function (PDF AI parse). */
+export async function getStatementAnalyzeInvokeConfig() {
+  return getStatementAnalyzeInvoke();
+}
+
+/** Call Supabase edge function to parse PDF statements with AI. */
+export async function analyzeStatementFile(fileBase64, mimeType, fileName, storagePath) {
+  return invokeAnalyzeStatement({ fileBase64, mimeType, fileName, storagePath });
+}
+
+export async function saveCreditCardStatement(payload) {
+  const rows = await supabaseRest("cc_statements", {
+    method: "POST",
+    body: {
+      card_type: payload.cardType || null,
+      statement_end: payload.statementEnd || null,
+      date_from: payload.dateFrom,
+      date_to: payload.dateTo,
+      statement_total: payload.statementTotal != null ? rcRoundMoney(payload.statementTotal) : null,
+      file_name: payload.fileName || null,
+      storage_path: payload.storagePath || null,
+      parse_source: payload.parseSource === "pdf_vision" ? "pdf_ai" : (payload.parseSource || "manual"),
+      transactions: payload.transactions || [],
+    },
+    prefer: "return=representation",
+  });
+  return rows?.[0] || rows;
+}
+
+export async function createExpenseReminder(userId, merchant, amount, expenseDate, note) {
+  const rows = await supabaseRest("expense_reminders", {
+    method: "POST",
+    body: {
+      user_id: userId,
+      merchant: String(merchant || "Unknown").slice(0, 200),
+      amount: rcRoundMoney(amount),
+      expense_date: expenseDate || null,
+      note: note || null,
+      status: "pending",
+    },
+    prefer: "return=representation",
+  });
+  return rows?.[0] || rows;
+}
+
 /**
  * Single entry point for Velo page code — avoids fragile multi-import bundles.
  */
@@ -637,6 +817,32 @@ export async function handlePdxAdminRequest(action, params = {}) {
       return exportCreditCardBill(params.dateFrom, params.dateTo, params.employeeId, params.statementTotal);
     case "getExportDownloadUrls":
       return getCreditCardBillDownloadUrls(params.dateFrom, params.dateTo, params.employeeId, params.statementTotal);
+    case "reconcileCreditCardStatement":
+      return reconcileCreditCardStatement(
+        params.dateFrom,
+        params.dateTo,
+        params.employeeId,
+        params.statementTotal,
+        params.transactions
+      );
+    case "getStatementAnalyzeInvoke":
+      return getStatementAnalyzeInvokeConfig();
+    case "prepareStatementUpload":
+      return prepareStatementUpload(params.fileName);
+    case "uploadStatementPdf":
+      return uploadStatementPdf(params.fileBase64, params.fileName);
+    case "analyzeStatementFile":
+      return analyzeStatementFile(params.fileBase64, params.mimeType, params.fileName, params.storagePath);
+    case "saveCreditCardStatement":
+      return saveCreditCardStatement(params);
+    case "createExpenseReminder":
+      return createExpenseReminder(
+        params.userId,
+        params.merchant,
+        params.amount,
+        params.expenseDate,
+        params.note
+      );
     default:
       throw new Error(`Unknown action: ${action}`);
   }

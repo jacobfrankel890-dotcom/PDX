@@ -69,6 +69,19 @@
     .btn-download-ready:disabled { opacity: 0.45; pointer-events: none; cursor: wait; }
     .match-ok { color: var(--success); }
     .match-bad { color: var(--danger); }
+    .match-warn { color: #fbbf24; }
+    .recon-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 16px 0; }
+    .recon-stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+    .recon-stat .v { font-size: 1.2rem; font-weight: 700; }
+    .recon-stat .l { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
+    .badge-missing { background: #450a0a; color: #fca5a5; }
+    .badge-matched { background: #14532d; color: #86efac; }
+    .badge-extra { background: #422006; color: #fcd34d; }
+    .upload-zone {
+      border: 2px dashed var(--border); border-radius: 10px; padding: 20px; text-align: center;
+      margin-bottom: 16px; cursor: pointer; background: var(--surface2);
+    }
+    .upload-zone:hover { border-color: var(--accent); }
     .review-header { margin-bottom: 12px; }
     .receipt-gallery {
       display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0;
@@ -118,6 +131,7 @@
       <div class="tabs">
         <button class="tab active" data-tab="pending">Pending approval</button>
         <button class="tab" data-tab="export">Export</button>
+        <button class="tab" data-tab="reconcile">Reconcile</button>
         <button class="tab" data-tab="employees">Employees</button>
       </div>
 
@@ -160,6 +174,32 @@
         </div>
       </div>
 
+      <div id="tab-reconcile" class="hidden">
+        <div class="card">
+          <h2>Credit card reconciliation</h2>
+          <p class="muted" style="margin-bottom:16px">
+            Upload a Chase statement (.xlsx or .pdf). We parse charges, compare to submitted app expenses, and flag anything missing.
+          </p>
+          <div class="filter-bar">
+            <div><label for="reconEmployee">Cardholder</label><select id="reconEmployee"><option value="">All employees</option></select></div>
+            <div><label for="reconCardType">Card type</label><select id="reconCardType"><option value="">Any</option><option value="rho">Rho</option><option value="credit">Credit</option></select></div>
+            <div><label for="reconStart">Match expenses from</label><input type="date" id="reconStart" /></div>
+            <div><label for="reconEnd">Match expenses to</label><input type="date" id="reconEnd" /></div>
+            <div><label for="reconStatementTotal">Statement total (optional)</label><input type="number" id="reconStatementTotal" step="0.01" placeholder="4836.18" /></div>
+          </div>
+          <div class="upload-zone" id="reconUploadZone">
+            <p><strong>Drop Chase statement here</strong> or click to browse</p>
+            <p class="muted" style="margin-top:6px;font-size:0.8rem">.xlsx (instant) · .pdf (AI vision — scanned statements OK)</p>
+            <input type="file" id="reconFileInput" accept=".xlsx,.xls,.csv,.pdf" class="hidden" />
+          </div>
+          <p class="muted" id="reconFileLabel">No file selected</p>
+          <div class="actions">
+            <button class="btn btn-primary" id="reconRunBtn" disabled>Run reconciliation</button>
+          </div>
+          <div id="reconResults"></div>
+        </div>
+      </div>
+
       <div id="tab-employees" class="hidden">
         <div class="card">
           <h2>Employees</h2>
@@ -176,6 +216,8 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script>
     // Matches mobile/lib/types.ts — COMPANIES, ROLES, card types
     const COMPANIES = [
@@ -402,7 +444,7 @@
       return false;
     }
 
-    function callBackendBridge(action, params = {}) {
+    function callBackendBridge(action, params = {}, timeoutMs = 8000) {
       return new Promise((resolve, reject) => {
         const requestId = `req_${++reqId}`;
         callbacks.set(requestId, { resolve, reject });
@@ -412,19 +454,86 @@
             callbacks.delete(requestId);
             reject(new Error("bridge-timeout"));
           }
-        }, 8000);
+        }, timeoutMs);
       });
     }
 
-    async function callBackend(action, params = {}) {
+    async function callBackend(action, params = {}, opts = {}) {
+      const timeoutMs = opts.timeoutMs || 8000;
       if (useHttp) return httpBackend(action, params);
       try {
-        return await callBackendBridge(action, params);
+        return await callBackendBridge(action, params, timeoutMs);
       } catch (e) {
         if (e.message === "bridge-timeout" && (await tryHttpConnect())) {
           return httpBackend(action, params);
         }
         throw e;
+      }
+    }
+
+    function friendlyBackendError(err) {
+      const msg = String(err?.message || err || "");
+      if (/unable to handle the request/i.test(msg)) {
+        return "Wix backend error — republish after updating backend files, or use the .xlsx export from Chase (no AI needed).";
+      }
+      if (/OPENAI_API_KEY/i.test(msg)) {
+        return "OpenAI key missing — add OPENAI_API_KEY to Supabase Edge Function secrets, or use .xlsx instead.";
+      }
+      if (/abort/i.test(msg)) {
+        return "AI parse timed out after 2 minutes — try the .xlsx export from Chase.";
+      }
+      return msg || "Request failed";
+    }
+
+    /** PDF.js — render scanned Chase PDFs to images for OpenAI vision OCR. */
+    async function pdfToPageImages(file, maxPages = 6) {
+      const pdfjs = window.pdfjsLib;
+      if (!pdfjs) throw new Error("PDF library not loaded — refresh the page");
+      pdfjs.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: buf }).promise;
+      const images = [];
+      const count = Math.min(pdf.numPages, maxPages);
+      for (let i = 1; i <= count; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2.25 });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+        images.push(canvas.toDataURL("image/jpeg", 0.88).split(",")[1]);
+      }
+      return images;
+    }
+
+    /** PDF AI parse — browser calls Supabase directly (Wix backend times out after ~14s). */
+    async function analyzeStatementDirect(storagePath, mimeType, fileName, pageImages) {
+      const cfg = await callBackend("getStatementAnalyzeInvoke", {}, { timeoutMs: 15000 });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 180000);
+      try {
+        const res = await fetch(cfg.analyzeUrl, {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${cfg.apikey}`,
+            apikey: cfg.apikey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ storagePath, mimeType, fileName, pageImages }),
+        });
+        const text = await res.text();
+        let json = {};
+        try {
+          json = text ? JSON.parse(text) : {};
+        } catch (_) {
+          throw new Error(text.slice(0, 200) || "Statement analysis failed");
+        }
+        if (!res.ok || !json.ok) throw new Error(json.error || "Statement analysis failed");
+        return json;
+      } finally {
+        clearTimeout(timer);
       }
     }
 
@@ -879,6 +988,308 @@
       await refreshExportCache();
     }
 
+    // --- Credit card reconciliation ---
+
+    let reconTransactions = null;
+    let reconParseMeta = null;
+    let reconFileMeta = null;
+
+    function reconParams() {
+      return {
+        dateFrom: $("reconStart").value,
+        dateTo: $("reconEnd").value,
+        employeeId: $("reconEmployee").value || null,
+        statementTotal: $("reconStatementTotal").value ? Number($("reconStatementTotal").value) : null,
+      };
+    }
+
+    async function loadReconEmployees() {
+      const list = await callBackend("listEmployees");
+      $("reconEmployee").innerHTML = '<option value="">All employees</option>' +
+        (list || []).map((e) => `<option value="${e.id}">${e.first_name} ${e.last_name}</option>`).join("");
+    }
+
+    function parseMoneyCell(v) {
+      if (v == null || v === "") return 0;
+      const n = Number(String(v).replace(/[$,\s]/g, ""));
+      return isFinite(n) ? Math.abs(n) : 0;
+    }
+
+    function excelDateToYmd(v) {
+      if (v == null || v === "") return null;
+      if (typeof v === "number") {
+        const d = XLSX.SSF.parse_date_code(v);
+        if (!d) return null;
+        return `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
+      }
+      const s = String(v).trim();
+      const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+      if (m) {
+        let y = Number(m[3]);
+        if (y < 100) y += 2000;
+        return `${y}-${String(m[1]).padStart(2, "0")}-${String(m[2]).padStart(2, "0")}`;
+      }
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      return null;
+    }
+
+    function parseChaseSpreadsheet(workbook) {
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+      let headerIdx = rows.findIndex((row) =>
+        row.some((c) => /transaction date|trans date|^date$/i.test(String(c))) &&
+        row.some((c) => /amount|details|description/i.test(String(c)))
+      );
+      if (headerIdx < 0) headerIdx = rows.findIndex((row) => row.filter(Boolean).length >= 3);
+      if (headerIdx < 0) throw new Error("Could not find header row in spreadsheet");
+
+      const headers = rows[headerIdx].map((h) => String(h).toLowerCase().trim());
+      const col = (names) => headers.findIndex((h) => names.some((n) => h.includes(n)));
+      const dateCol = col(["transaction date", "trans date", "date"]);
+      const merchantCol = col(["description", "details", "merchant", "vendor"]);
+      const amountCol = col(["amount", "charge"]);
+      if (dateCol < 0 || merchantCol < 0 || amountCol < 0) {
+        throw new Error("Spreadsheet missing Date, Description, or Amount columns");
+      }
+
+      const transactions = [];
+      for (let i = headerIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        const merchant = String(row[merchantCol] || "").trim();
+        const amount = parseMoneyCell(row[amountCol]);
+        const date = excelDateToYmd(row[dateCol]);
+        if (!merchant || !amount) continue;
+        if (/payment thank|autopay|automatic payment|credit$/i.test(merchant)) continue;
+        transactions.push({ date, merchant, amount });
+      }
+      if (!transactions.length) throw new Error("No charge rows found in spreadsheet");
+      return { transactions, parse_source: "xlsx" };
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+        reader.onerror = () => reject(new Error("Could not read file"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handleReconFile(file) {
+      if (!file) return;
+      reconFileMeta = { name: file.name, type: file.type };
+      $("reconFileLabel").textContent = `Selected: ${file.name}`;
+      $("reconRunBtn").disabled = true;
+      $("reconResults").innerHTML = '<div class="loading">Parsing statement…</div>';
+
+      try {
+        const ext = file.name.split(".").pop().toLowerCase();
+        if (ext === "pdf") {
+          $("reconResults").innerHTML = '<div class="loading">Rendering PDF pages…</div>';
+          const pageImages = await pdfToPageImages(file);
+          let storagePath = null;
+          try {
+            $("reconResults").innerHTML = '<div class="loading">Uploading PDF to storage…</div>';
+            const prep = await callBackend("prepareStatementUpload", { fileName: file.name }, { timeoutMs: 20000 });
+            const putRes = await fetch(prep.signedUrl, {
+              method: "PUT",
+              headers: {
+                "Content-Type": file.type || "application/pdf",
+                "x-upsert": "true",
+              },
+              body: file,
+            });
+            if (!putRes.ok) throw new Error("signed-upload-failed");
+            storagePath = prep.storagePath;
+          } catch (_) {
+            if (file.size > 450000) {
+              throw new Error(
+                "PDF upload failed — use the .xlsx export from Chase, or run supabase/cc-statements-migration.sql in Supabase SQL editor"
+              );
+            }
+            $("reconResults").innerHTML = '<div class="loading">Uploading PDF via backend…</div>';
+            const base64 = await fileToBase64(file);
+            const uploaded = await callBackend(
+              "uploadStatementPdf",
+              { fileBase64: base64, fileName: file.name },
+              { timeoutMs: 60000 }
+            );
+            storagePath = uploaded.storagePath;
+          }
+          reconFileMeta.storagePath = storagePath;
+          $("reconResults").innerHTML = `<div class="loading">Reading ${pageImages.length} page(s) with AI vision (may take 1–2 min)…</div>`;
+          const parsed = await analyzeStatementDirect(
+            storagePath,
+            file.type || "application/pdf",
+            file.name,
+            pageImages
+          );
+          reconTransactions = parsed.transactions || [];
+          reconParseMeta = parsed;
+          if (parsed.period_start) $("reconStart").value = parsed.period_start;
+          if (parsed.period_end) $("reconEnd").value = parsed.period_end;
+          if (parsed.statement_total != null) $("reconStatementTotal").value = parsed.statement_total;
+        } else {
+          if (typeof XLSX === "undefined") throw new Error("Excel library not loaded");
+          const buf = await file.arrayBuffer();
+          const wb = XLSX.read(buf, { type: "array" });
+          const parsed = parseChaseSpreadsheet(wb);
+          reconTransactions = parsed.transactions;
+          reconParseMeta = parsed;
+          const dates = reconTransactions.map((t) => t.date).filter(Boolean).sort();
+          if (dates.length) {
+            $("reconStart").value = dates[0];
+            $("reconEnd").value = dates[dates.length - 1];
+          }
+        }
+        $("reconFileLabel").textContent = `${file.name} — ${reconTransactions.length} charges parsed`;
+        $("reconRunBtn").disabled = false;
+        let hint = `Parsed ${reconTransactions.length} charges. Click <strong>Run reconciliation</strong>.`;
+        if (reconParseMeta?.parse_warning) {
+          hint += `<br><span class="error" style="margin-top:8px;display:block">${reconParseMeta.parse_warning}</span>`;
+        }
+        $("reconResults").innerHTML = `<p class="muted">${hint}</p>`;
+      } catch (e) {
+        reconTransactions = null;
+        $("reconResults").innerHTML = `<p class="error">${friendlyBackendError(e)}</p>`;
+      }
+    }
+
+    function renderReconResults(data) {
+      const s = data.summary;
+      const parseGap =
+        s.statement_parsed_total != null && s.statement_total != null
+          ? Math.abs(s.statement_total - s.statement_parsed_total)
+          : 0;
+      let html = `<div class="recon-summary">
+        <div class="recon-stat"><div class="v">${s.matched_count}</div><div class="l">Matched</div></div>
+        <div class="recon-stat"><div class="v match-bad">${s.missing_on_app_count}</div><div class="l">On bill, not in app</div></div>
+        <div class="recon-stat"><div class="v match-warn">${s.missing_on_bill_count}</div><div class="l">In app, not on bill</div></div>
+        <div class="recon-stat"><div class="v">${fmt(s.statement_total)}</div><div class="l">Statement total</div></div>
+        <div class="recon-stat"><div class="v">${fmt(s.statement_parsed_total)}</div><div class="l">Parsed charges sum (${s.statement_count})</div></div>
+        <div class="recon-stat"><div class="v">${fmt(s.app_total)}</div><div class="l">App total</div></div>
+        <div class="recon-stat"><div class="v ${Math.abs(s.difference) < 0.02 ? "match-ok" : "match-bad"}">${fmt(s.difference)}</div><div class="l">Bill vs app</div></div>
+      </div>`;
+      if (parseGap > Math.max(25, (s.statement_total || 0) * 0.03)) {
+        html += `<p class="error" style="margin-bottom:12px;font-size:0.85rem">Parsed line items sum to ${fmt(s.statement_parsed_total)} but statement total is ${fmt(s.statement_total)} — about ${fmt(parseGap)} may be missing. Use the Chase .xlsx for a full audit.</p>`;
+      }
+
+      if (data.missing_on_app.length) {
+        html += `<h3 style="margin:16px 0 8px;font-size:0.95rem">Missing from app <span class="badge badge-missing">flag these</span></h3>
+          <table><thead><tr><th>Date</th><th>Merchant</th><th>Amount</th><th></th></tr></thead><tbody>`;
+        data.missing_on_app.forEach((row, idx) => {
+          html += `<tr>
+            <td>${row.date || "—"}</td>
+            <td>${row.merchant}</td>
+            <td>${fmt(row.amount)}</td>
+            <td><button class="btn btn-danger btn-flag-missing" data-idx="${idx}">Flag employee</button></td>
+          </tr>`;
+        });
+        html += "</tbody></table>";
+      }
+
+      if (data.missing_on_bill.length) {
+        html += `<h3 style="margin:16px 0 8px;font-size:0.95rem">In app but not on statement</h3>
+          <table><thead><tr><th>Date</th><th>Employee</th><th>Vendor</th><th>Amount</th></tr></thead><tbody>`;
+        data.missing_on_bill.forEach((row) => {
+          html += `<tr><td>${row.date || "—"}</td><td>${row.employee}</td><td>${row.vendor}</td><td>${fmt(row.amount)}</td></tr>`;
+        });
+        html += "</tbody></table>";
+      }
+
+      if (data.matches.length) {
+        html += `<h3 style="margin:16px 0 8px;font-size:0.95rem">Matched <span class="badge badge-matched">${data.matches.length}</span></h3>
+          <table><thead><tr><th>Date</th><th>Statement</th><th>App vendor</th><th>Amount</th><th>Conf.</th></tr></thead><tbody>`;
+        data.matches.forEach((m) => {
+          html += `<tr>
+            <td>${m.statement.date || "—"}</td>
+            <td>${m.statement.merchant}</td>
+            <td>${m.expense.vendor}</td>
+            <td>${fmt(m.statement.amount)}</td>
+            <td>${Math.round(m.confidence * 100)}%</td>
+          </tr>`;
+        });
+        html += "</tbody></table>";
+      }
+
+      $("reconResults").innerHTML = html;
+
+      $("reconResults").querySelectorAll(".btn-flag-missing").forEach((btn) => {
+        btn.onclick = async () => {
+          const row = data.missing_on_app[Number(btn.dataset.idx)];
+          const userId = $("reconEmployee").value;
+          if (!userId) {
+            alert("Select the cardholder above before flagging a missing expense.");
+            return;
+          }
+          btn.disabled = true;
+          btn.textContent = "Flagging…";
+          try {
+            await callBackend("createExpenseReminder", {
+              userId,
+              merchant: row.merchant,
+              amount: row.amount,
+              expenseDate: row.date,
+              note: "Flagged from Chase statement reconciliation",
+            });
+            btn.textContent = "Flagged ✓";
+          } catch (e) {
+            btn.disabled = false;
+            btn.textContent = "Flag employee";
+            alert(e.message);
+          }
+        };
+      });
+    }
+
+    async function runReconciliation() {
+      if (!reconTransactions?.length) {
+        alert("Upload a Chase statement first.");
+        return;
+      }
+      const p = reconParams();
+      if (!p.dateFrom || !p.dateTo) {
+        alert("Set the expense date range.");
+        return;
+      }
+      $("reconResults").innerHTML = '<div class="loading">Matching statement to app expenses…</div>';
+      try {
+        const data = await callBackend("reconcileCreditCardStatement", {
+          ...p,
+          transactions: reconTransactions,
+        });
+        await callBackend("saveCreditCardStatement", {
+          cardType: $("reconCardType").value || null,
+          statementEnd: p.dateTo,
+          dateFrom: p.dateFrom,
+          dateTo: p.dateTo,
+          statementTotal: p.statementTotal,
+          fileName: reconFileMeta?.name || null,
+          storagePath: reconFileMeta?.storagePath || null,
+          parseSource: reconParseMeta?.parse_source || "pdf_ai",
+          transactions: reconTransactions,
+        });
+        renderReconResults(data);
+      } catch (e) {
+        $("reconResults").innerHTML = `<p class="error">${e.message}</p>`;
+      }
+    }
+
+    function initReconcileTab() {
+      const now = new Date();
+      $("reconStart").value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      $("reconEnd").value = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+      $("reconUploadZone").onclick = () => $("reconFileInput").click();
+      $("reconFileInput").onchange = (e) => handleReconFile(e.target.files[0]);
+      $("reconUploadZone").ondragover = (e) => { e.preventDefault(); };
+      $("reconUploadZone").ondrop = (e) => {
+        e.preventDefault();
+        handleReconFile(e.dataTransfer.files[0]);
+      };
+      $("reconRunBtn").onclick = runReconciliation;
+    }
+    initReconcileTab();
+
     async function loadAll() {
       hide($("errorBox"));
       try {
@@ -899,7 +1310,7 @@
       tab.addEventListener("click", async () => {
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
         tab.classList.add("active");
-        ["pending","export","employees"].forEach(n => { const el=$(`tab-${n}`); n===tab.dataset.tab?show(el):hide(el); });
+        ["pending","export","reconcile","employees"].forEach(n => { const el=$(`tab-${n}`); n===tab.dataset.tab?show(el):hide(el); });
         try {
           hide($("errorBox"));
           if (tab.dataset.tab === "employees") await loadEmployees();
@@ -907,6 +1318,7 @@
             await loadExportEmployees();
             await previewExport();
           }
+          if (tab.dataset.tab === "reconcile") await loadReconEmployees();
         } catch (e) {
           $("errorBox").textContent = e.message;
           show($("errorBox"));

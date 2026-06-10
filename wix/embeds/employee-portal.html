@@ -146,8 +146,12 @@
     }
 
     function postToParent(msg) {
-      try { window.parent.postMessage(msg, "*"); } catch (_) {}
-      try { window.top.postMessage(msg, "*"); } catch (_) {}
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(msg, "*");
+          window.parent.postMessage(JSON.stringify(msg), "*");
+        }
+      } catch (_) {}
     }
 
     function onConnected() {

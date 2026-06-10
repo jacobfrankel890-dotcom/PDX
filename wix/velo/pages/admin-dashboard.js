@@ -23,6 +23,13 @@ import {
   exportExpenseData,
   exportCreditCardBill,
   getCreditCardBillDownloadUrls,
+  reconcileCreditCardStatement,
+  analyzeStatementFile,
+  prepareStatementUpload,
+  uploadStatementPdf,
+  getStatementAnalyzeInvokeConfig,
+  saveCreditCardStatement,
+  createExpenseReminder,
 } from "backend/pdx-admin";
 
 const EMBED_ID = "#pdxAdminEmbed";
@@ -47,6 +54,26 @@ async function runAdminAction(action, msg) {
       return exportCreditCardBill(msg.dateFrom, msg.dateTo, msg.employeeId, msg.statementTotal);
     case "getExportDownloadUrls":
       return getCreditCardBillDownloadUrls(msg.dateFrom, msg.dateTo, msg.employeeId, msg.statementTotal);
+    case "reconcileCreditCardStatement":
+      return reconcileCreditCardStatement(
+        msg.dateFrom,
+        msg.dateTo,
+        msg.employeeId,
+        msg.statementTotal,
+        msg.transactions
+      );
+    case "getStatementAnalyzeInvoke":
+      return getStatementAnalyzeInvokeConfig();
+    case "prepareStatementUpload":
+      return prepareStatementUpload(msg.fileName);
+    case "uploadStatementPdf":
+      return uploadStatementPdf(msg.fileBase64, msg.fileName);
+    case "analyzeStatementFile":
+      return analyzeStatementFile(msg.fileBase64, msg.mimeType, msg.fileName, msg.storagePath);
+    case "saveCreditCardStatement":
+      return saveCreditCardStatement(msg);
+    case "createExpenseReminder":
+      return createExpenseReminder(msg.userId, msg.merchant, msg.amount, msg.expenseDate, msg.note);
     default:
       throw new Error(`Unknown action: ${action}`);
   }
